@@ -37,5 +37,6 @@
 #include "Decomposition/OrthogonalRecursiveBisection.h"
 
 #include "Octree/OctreeParticle.h"
+#include "Octree/Octree.h"
 
 #endif

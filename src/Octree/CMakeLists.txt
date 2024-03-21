@@ -3,6 +3,7 @@ set (_SRCS
     )
 
 set (_HDRS
+    OctreeContainer.h
     Octree.h
     OctreeParticle.h
     )
