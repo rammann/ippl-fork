@@ -10,3 +10,4 @@ manual/ippl_user_guide.pdf
 *~
 *.~
 build_serial/
+.vscode/
