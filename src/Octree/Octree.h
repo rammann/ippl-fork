@@ -9,6 +9,7 @@
 #include <queue>
 #include "OctreeAdaptors.h"
 
+
 namespace ippl
 {
 namespace OrthoTree
@@ -24,11 +25,12 @@ namespace OrthoTree
 
     public: // typedefs
 
-        static autoce IsLinearTree = nDimension < 15; // Requiredment for Morton ordering
+        static autoce is_linear_tree = nDimension < 15; // Requiredment for Morton ordering
 
         using child_id_type = uint64_t; 
         using morton_grid_id_type = uint32_t; // increase if more depth / higher dimension is desired
         using morton_node_id_type = morton_grid_id_type;
+        using morton_node_id_type_cref = morton_node_id_type;
         using max_element_type = uint32_t;
         using geometry_type = geometry_type_;
         using vector_type = vector_type_;
@@ -311,7 +313,7 @@ namespace OrthoTree
             }
 
             autoc nElementInNodeAvg = static_cast<float>(nElement) / static_cast<float>(nElementMax);
-            autoc nDepthEstimated = std::min(nDepthMax, static_cast<depth_type>(ceil((log2f(nElementInNodeAvg) + 1.0) / static_cast<float>(nDimension))));
+            autoc nDepthEstimated = std::min(nDepthMax, static_cast<depth_type>(std::ceil((log2f(nElementInNodeAvg) + 1.0) / static_cast<float>(nDimension))));
             if (nDepthEstimated * nDimension < 64)
                 return static_cast<size_t>(rMult * (1 << nDepthEstimated * nDimension));
 
@@ -359,19 +361,8 @@ namespace OrthoTree
     public: // Morton aid function
 
         static inline child_id_type getChildPartOfLocation(morton_node_id_type_cref key) noexcept{
-            if constexpr (is_linear_tree)
-            {
-                autoce maskLastBits1 = (morton_node_id_type{ 1 } << nDimension) - 1;
-                return convertMortonIdToChildId(key & maskLastBits1);
-            }
-            else
-            {
-                auto idChild = morton_node_id_type{};
-                for (dim_type iDim = 0; iDim < nDimension; ++iDim)
-                idChild[iDim] = key[iDim];
-
-                return convertMortonIdToChildId(idChild);
-            }
+            autoce maskLastBits1 = (morton_node_id_type{ 1 } << nDimension) - 1;
+            return convertMortonIdToChildId(key & maskLastBits1);
         }
 
         static constexpr morton_grid_id_type part1By2(grid_id_type n) noexcept
@@ -427,13 +418,8 @@ namespace OrthoTree
                     for (dim_type iDimension = 0; iDimension < nDimension; ++iDimension)
                     {
                         autoc shift = iDimension + i * nDimension;
-                        if constexpr (is_linear_tree){
-                            id |= static_cast<morton_grid_id_type>(aidGrid[iDimension] & mask) << (shift - i);
-                        }
-                            
-                        else{
-                            id[shift] = aidGrid[iDimension] & mask;
-                        } 
+                        id |= static_cast<morton_grid_id_type>(aidGrid[iDimension] & mask) << (shift - i);
+                        
                     }
                 }
                 return id;
@@ -452,12 +438,9 @@ namespace OrthoTree
                 auto mask = morton_grid_id_type{ 1 };
                 for (depth_type iDepth = nDepthMax - nDepth, shift = 0; iDepth < nDepthMax; ++iDepth){
                     for (dim_type iDimension = 0; iDimension < nDimension; ++iDimension, ++shift){
-                        if constexpr (is_linear_tree){
-                            aidGrid[iDimension] |= (kNode & mask) >> (shift - iDepth);
-                            mask <<= 1;
-                        }
-                        else
-                            aidGrid[iDimension] |= grid_id_type{ kNode[shift] } << iDepth;
+                        aidGrid[iDimension] |= (kNode & mask) >> (shift - iDepth);
+                        mask <<= 1;
+                        
                     }
                     
                 }
@@ -540,7 +523,7 @@ namespace OrthoTree
                 std::cout << "Node ID = " << key << std::endl;
                 std::cout << "Depth = " << int(GetDepth(key)) << std::endl;
                 std::cout << "Parent ID = " << this->GetParent(key) << std::endl;
-                std::cout << "Grid ID = " << "[ "
+                std::cout << "Grid ID = " << "[ ";
                 for(int i=0;i<3;++i) std::cout << MortonDecode(key,GetDepth(key))[i] << " ";
                 std::cout << "]" << std::endl;
 
