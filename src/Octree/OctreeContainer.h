@@ -21,13 +21,12 @@ namespace ippl {
         class OrthoTreeContainer{
         
         public:
-
             using AD = typename OrthoTree::AD;
             using vector_type = typename OrthoTree::vector_type;
             using box_type = typename OrthoTree::box_type;
             using max_element_type = typename OrthoTree::max_element_type;
             using geometry_type = typename OrthoTree::geometry_type;
-            
+        
         protected:
 
             OrthoTree tree_m;
@@ -37,15 +36,19 @@ namespace ippl {
 
             OrthoTreeContainer() noexcept = default;
 
-            OrthoTreeContainer(OctreeParticle<PLayout const> const& particles,
-                                   depth_type nDepthMax = 0, 
-                                   std::optional<box_type> const& oBoxSpace = std::nullopt, 
-                                   max_element_type nElementMaxInNode = OrthoTree::max_element_default/*, 
-                                   bool fParallelCreate = false*/) noexcept
-
-            : particles_m(particles)
+            OrthoTreeContainer( OctreeParticle<PLayout const> const& particles,
+                                depth_type nDepthMax = 0, 
+                                std::optional<box_type> const& oBoxSpace = std::nullopt, 
+                                max_element_type nElementMaxInNode = OrthoTree::max_element_default/*, 
+                                bool fParallelCreate = false*/) noexcept       
+                : particles_m(particles)     
             {
-                OrthoTree::Create(tree_m, particles, nDepthMax, oBoxSpace, nElementMaxInNode);
+                vector<ippl::Vector<double,3>> points={};
+                for(unsigned int i=0; i<particles_m.getLocalNum(); ++i){
+                    points.push_back(particles_m.R(i));
+                }
+                OrthoTree::Create(tree_m, points, nDepthMax, oBoxSpace, nElementMaxInNode);
+                tree_m.BalanceOctree(points);
             }
             
         public: // Member function

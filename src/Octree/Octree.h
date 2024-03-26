@@ -5,10 +5,7 @@
 #ifndef ORTHOTREE_GUARD
 #define ORTHOTREE_GUARD
 
-#include <span>
-#include <queue>
 #include "OctreeAdaptors.h"
-
 
 namespace ippl
 {
@@ -782,6 +779,224 @@ namespace OrthoTree
 
     }; // class Orthotreebase
 
+    template<dim_type nDimension, 
+             typename vector_type, 
+             typename box_type, 
+             typename adaptor_type = AdaptorGeneral<nDimension, vector_type, box_type, double>, 
+             typename geometry_type = double>
+    
+    class OrthoTreePoint : public OrthoTreeBase<nDimension, vector_type, box_type, adaptor_type, geometry_type>
+    {
+    protected: // base class
+
+        using base = OrthoTreeBase<nDimension, vector_type, box_type, adaptor_type, geometry_type>;
+
+    public: // types
+
+        using AD = typename base::AD;
+        using morton_grid_id_type = typename base::morton_grid_id_type;
+        using morton_grid_id_type_cref = typename base::morton_grid_id_type_cref;
+        using morton_node_id_type = typename base::morton_node_id_type;
+        using morton_node_id_type_cref = typename base::morton_node_id_type_cref;
+        using max_element_type = typename base::max_element_type;
+        using child_id_type = typename base::child_id_type; 
+
+        using Node = typename base::Node;
+        static constexpr max_element_type max_element_default = 21;
+
+    protected: // aid functions
+
+        using LocationIterator = typename vector<std::pair<entity_id_type, morton_grid_id_type>>::iterator;
+
+        /**
+         * @fn addNodes
+         * @param nodeParent parent node object
+         * @param kParent morton key of parent
+         * @param itEndPrev last iteration end
+         * @param itEnd absoulte end
+         * 
+        */
+        void addNodes(Node& nodeParent, morton_node_id_type_cref kParent, LocationIterator& itEndPrev, LocationIterator const& itEnd, morton_grid_id_type_cref idLocationBegin, depth_type nDepthRemain) noexcept
+        {
+            autoc nElement = std::distance(itEndPrev, itEnd);
+
+            // reached leaf node -> add point ids to leaf nodes vid
+            if (nElement < this->m_nElementMax || nDepthRemain == 0)
+            {
+                nodeParent.vid.resize(nElement);
+                std::transform(itEndPrev, itEnd, std::begin(nodeParent.vid), [](autoc& item) { return item.first; });
+                itEndPrev = itEnd;
+                return;
+            }
+
+            --nDepthRemain;
+            autoc shift = nDepthRemain * nDimension;
+            autoc nLocationStep = morton_grid_id_type{ 1 } << shift;
+            autoc flagParent = kParent << nDimension;
+
+            while (itEndPrev != itEnd)
+            {
+                autoc idChildActual = base::convertMortonIdToChildId((itEndPrev->second - idLocationBegin) >> shift);
+                autoc itEndActual = std::partition_point(itEndPrev, itEnd, [&](autoc& idPoint)
+                {
+                return idChildActual == base::convertMortonIdToChildId((idPoint.second - idLocationBegin) >> shift);
+                });
+
+                autoc mChildActual = morton_grid_id_type(idChildActual);
+                morton_grid_id_type const kChild = flagParent | mChildActual;
+                morton_grid_id_type const idLocationBeginChild = idLocationBegin + mChildActual * nLocationStep;
+
+                auto& nodeChild = this->createChild(nodeParent, idChildActual, kChild);
+                nodeChild.m_parent=kParent;
+                this->addNodes(nodeChild, kChild, itEndPrev, itEndActual, idLocationBeginChild, nDepthRemain);
+            }
+        }
+
+    public: // Constructors
+
+        OrthoTreePoint() = default;
+        static void Create(OrthoTreePoint& tree, span<vector_type const> const& vpt, depth_type nDepthMaxIn = 0, std::optional<box_type> const& oBoxSpace = std::nullopt, max_element_type nElementMaxInNode = max_element_default) noexcept
+        {
+            autoc boxSpace = oBoxSpace.has_value() ? *oBoxSpace : AD::box_of_points(vpt);
+            autoc n = vpt.size();
+
+            autoc nDepthMax = nDepthMaxIn == 0 ? base::EstimateMaxDepth(n, nElementMaxInNode) : nDepthMaxIn;
+            tree.Init(boxSpace, nDepthMax, nElementMaxInNode);
+            base::reserveContainer(tree.m_nodes, base::EstimateNodeNumber(n, nDepthMax, nElementMaxInNode));
+            if (vpt.empty())
+                return;
+
+            autoc kRoot = base::GetRootKey();
+            auto& nodeRoot = cont_at(tree.m_nodes, kRoot);
+            
+            autoc vidPoint = base::generatePointId(n);
+            auto aidLocation = vector<std::pair<entity_id_type, morton_grid_id_type>>(n);
+
+            std::transform(/*ept,*/ vpt.begin(), vpt.end(), vidPoint.begin(), aidLocation.begin(), [&](autoc& pt, autoc id) -> std::pair<entity_id_type, morton_grid_id_type>
+            {
+                return { id, tree.getLocationId(pt) };
+            });
+
+            std::sort(/*eps,*/ std::begin(aidLocation), std::end(aidLocation), [&](autoc& idL, autoc& idR) { return idL.second < idR.second; });
+            auto itBegin = std::begin(aidLocation);
+            tree.addNodes(nodeRoot, kRoot, itBegin, std::end(aidLocation), morton_node_id_type{ 0 }, nDepthMax);
+        }
+    
+    public: // Balancing Functions
+        /*
+        Balance the tree by filling all leaf nodes into a queue and making sure their coarse neighbours exist. If they don't
+        the next existing leaf ancestor is refined, its new children inserted into the queue and the the leaf node is checked again.
+        If all coarse neighbours exist, the leaf node is popped out of queue.
+        */ 
+
+        void BalanceOctree(span<vector_type const> const& vpt={}){
+
+            std::cout<< "Starting Tree Balancing" << std::endl << "--------------------------------" << std::endl;
+            
+            /// Put leaf Nodes in a queue with the deepest leaves at the front of the queue
+            std::queue<morton_node_id_type_cref> unprocessed_nodes={};
+            std::vector<morton_node_id_type_cref> leaf_nodes=this->GetLeafNodes();
+            std::sort(std::begin(leaf_nodes),std::end(leaf_nodes), [](morton_node_id_type_cref l, morton_node_id_type_cref r){return l>r;});
+            for(auto leaf:leaf_nodes) unprocessed_nodes.push(leaf);
+            
+            /// Continue the refinement until the queue is empty
+            while(!unprocessed_nodes.empty()){    
+                
+                std::cout<< "Processing node: " << unprocessed_nodes.front() << std::endl << std::endl;
+
+                /// boolean value to determine if the node has all coarse neighbours 
+                bool processed = true;
+                
+                /// Gather all potential neighbours of the first node in the queue
+                std::vector<morton_node_id_type_cref> potential_neighbours=this->GetPotentialColleagues(unprocessed_nodes.front());
+                
+                /// Loop over the potential neighbours to check if their parent exist or if their next ancestor needs to be refined
+                for(auto pnbr:potential_neighbours){
+                    //std::cout<< "    Checking potential neighbour " << pnbr;
+                    
+                    /// If the neighbour shares the parent, its a sibling node -> done
+                    if((pnbr>>3) == this->GetParent(unprocessed_nodes.front())){
+                        //std::cout<< ", is a sibling " <<std::endl;
+                        continue;
+                    } 
+                
+                    /// Check if the potential neighbour's parent (aka the coarse neighbour) exists
+                    else if(this->GetNodes().contains(pnbr>>3)){
+                        //std::cout<<", coarse partent exists "<<std::endl;
+                        continue;
+                    }
+
+                    /// If the coarse neighbour doesn't exists, the next ancestor is found and refined
+                    else{
+
+                        /// neighbouring node needs to be refined and this node needs to be checked again
+                        processed=false;
+
+                        /// Finding next existing ancestor and refining it
+                        morton_node_id_type_cref ancestor=this->GetNextAncestor(pnbr); 
+                        //std::cout<<", coarse neighbour doesn't exist - next ancestor is " << ancestor <<" - refining" << std::endl;
+                        vector<morton_node_id_type> nNewNodes = this->refineNode(this->GetNodetoChange(ancestor), ancestor, vpt); 
+
+                        // New nodes need to be pushed into the queue
+                        for(auto node:nNewNodes){
+                            unprocessed_nodes.push(node);
+                        }
+                    }          
+                }
+                if(processed)unprocessed_nodes.pop();
+            }
+        }
+        /*
+        Function that refines the nodeParent into its children and sorts the ids amound the children.
+        */
+        vector<morton_node_id_type_cref> refineNode(Node& nodeParent, morton_node_id_type_cref kParent, span<vector_type const> const& vpt){
+        
+            /// Calculate the bitshift for the new leaf nodes
+            const depth_type new_depth = this->GetDepth(kParent)+1;
+            const depth_type nDepthRemain = this->GetDepthMax() - new_depth;
+            autoc shift = nDepthRemain * nDimension;
+
+            /// Get information from the parent node
+            autoc parentbox_origin = nodeParent.box.Min;
+            auto aidLocation = vector<std::pair<entity_id_type, morton_grid_id_type>>(nodeParent.vid.size());
+            autoc flagParent = kParent << nDimension;
+
+            
+            vector<morton_node_id_type> nNewNodes={};
+            
+            /// save {point_id, node_key} tuple in "aidLocation"
+            std::transform(nodeParent.vid.begin(), nodeParent.vid.end(), aidLocation.begin(), [&](autoc id) -> std::pair<entity_id_type, morton_grid_id_type>
+            {
+                autoc gridid = this->getRelativeGridIdPoint(AD::subtract(vpt[id],parentbox_origin));
+                autoc childid = this->MortonEncode(gridid)>>shift;
+                return { id, (childid + flagParent)};
+            });
+
+            /// Parent Node's vid needs to be cleared to avoid double counting, the vids are always saved in leaf nodes
+            nodeParent.vid={};
+
+            /// iteration over the new leaf nodes
+            for(int idChild=0;idChild<std::pow(2,nDimension);++idChild){
+
+                /// calculate child ids
+                morton_grid_id_type const kChild = flagParent | idChild;
+                Node& nodeChild = this->createChild(nodeParent, idChild, kChild);
+                nodeChild.m_parent=kParent;
+
+                /// Fill vids into corresponding leaf node
+                for(auto nLocPair:aidLocation){
+                    if(nLocPair.second==kChild){
+                        nodeChild.vid.push_back(nLocPair.first);
+                    }
+                }
+                
+                nNewNodes.push_back(kChild);
+            }
+            return nNewNodes;
+        }
+
+
+    }; // class OrthoTreePoint
 
 
 } // namespace OrthoTree
