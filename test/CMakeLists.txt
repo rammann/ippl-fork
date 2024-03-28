@@ -28,6 +28,7 @@ add_subdirectory (region)
 add_subdirectory (random)
 add_subdirectory (serialization)
 add_subdirectory (octree)
+add_subdirectory (orthotree)
 
 # vi: set et ts=4 sw=4 sts=4:
 

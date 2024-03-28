@@ -10,50 +10,67 @@
 
 namespace ippl {
 
-    namespace OrthoTree{
+    namespace Octree{
 
         /**
-         * @class OrthoTreeContainer: Tree container class
-         * @tparam OrthoTree: The type of Orthotree, for now this is just a balanced Octree
+         * @class OctreeContainer: Tree container class
+         * @tparam Octree: The type of Orthotree, for now this is just a balanced Octree
          * @tparam PLayout: The IPPL particle layout, containing the view of positions and charge attributes
         */
-        template<typename OrthoTree, class PLayout=ippl::ParticleSpatialLayout<double, 3>>
-        class OrthoTreeContainer{
+        template<typename Octree, class PLayout=ippl::ParticleSpatialLayout<double, 3>>
+        class OctreeContainer{
         
-        public:
-            using AD = typename OrthoTree::AD;
-            using vector_type = typename OrthoTree::vector_type;
-            using box_type = typename OrthoTree::box_type;
-            using max_element_type = typename OrthoTree::max_element_type;
-            using geometry_type = typename OrthoTree::geometry_type;
-        
-        protected:
+        public: // Typenames
 
-            OrthoTree tree_m;
+            using AD                    = typename Octree::AD;
+            using vector_type           = typename Octree::vector_type;
+            using box_type              = typename Octree::box_type;
+            using max_element_type      = typename Octree::max_element_type;
+            using geometry_type         = typename Octree::geometry_type;
+        
+        protected: // Member variables
+
+            Octree tree_m;
             OctreeParticle<PLayout> particles_m;
+            vector<vector_type const> vpt={};
 
         public: // Constructors
 
-            OrthoTreeContainer() noexcept = default;
+            OctreeContainer() noexcept = default;
 
-            OrthoTreeContainer( OctreeParticle<PLayout const> const& particles,
-                                depth_type nDepthMax = 0, 
-                                std::optional<box_type> const& oBoxSpace = std::nullopt, 
-                                max_element_type nElementMaxInNode = OrthoTree::max_element_default/*, 
-                                bool fParallelCreate = false*/) noexcept       
-                : particles_m(particles)     
-            {
-                vector<ippl::Vector<double,3>> points={};
-                for(unsigned int i=0; i<particles_m.getLocalNum(); ++i){
-                    points.push_back(particles_m.R(i));
+            OctreeContainer(
+                OctreeParticle<PLayout>&        particles,
+                depth_type                      nDepthMax=0,
+                std::optional<box_type> const&  oBoxSpace = std::nullopt, 
+                max_element_type                nElementMaxInNode = Octree::max_element_default) noexcept
+                {
+                    particles_m.initialize(particles.getLayout());
+                    particles_m.create(particles.getLocalNum());
+                    //particles_m.R = particles.R;
+                    //particles_m.rho = particles.rho;
+                    //particles.tindex = particles.tindex;
+                                        
+                    std::cout <<  particles.getLocalNum() << std::endl;    
+
+                    for(unsigned int i=0; i<particles.getLocalNum(); ++i){
+                        vpt.push_back(particles.R(i));
+                        std::cout << vpt[i][0] << " " << vpt[i][1] << " " << vpt[i][2] << std::endl;
+                        //particles_m.R(i) = particles.R(i);
+                        //particles_m.rho(i) = particles.rho(i);
+                    }
+                    
+                    std::cout << "here" << std::endl;
+                    
+                    //tree_m = Octree(vpt, nDepthMax, oBoxSpace, nElementMaxInNode);
+                    Octree::Create(tree_m, vpt, nDepthMax, oBoxSpace, nElementMaxInNode);
+                    //tree_m.BalanceOctree(vpt);
+                    
                 }
-                OrthoTree::Create(tree_m, points, nDepthMax, oBoxSpace, nElementMaxInNode);
-                tree_m.BalanceOctree(points);
-            }
             
-        public: // Member function
+            
+        public: // Member functions
 
-            constexpr OrthoTree const& GetCore() const noexcept {return tree_m;}
+            constexpr Octree const& GetCore() const noexcept {return tree_m;}
             constexpr OctreeParticle<PLayout> const& GetData() const noexcept {return particles_m;}
         };
 

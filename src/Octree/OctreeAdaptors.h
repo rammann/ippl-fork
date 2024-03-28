@@ -39,7 +39,7 @@
 
 namespace ippl
 {
-namespace OrthoTree
+namespace Octree
 {
 
     // Container accessing function

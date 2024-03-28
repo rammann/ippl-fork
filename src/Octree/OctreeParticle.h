@@ -24,6 +24,7 @@ namespace ippl{
         
         ippl::ParticleAttrib<double> rho; // charge
 
+        OctreeParticle () noexcept = default;
         OctreeParticle (PLayout& L, unsigned int i) : ippl::ParticleBase<PLayout>(L), tindex(i) {
             this->addAttribute(rho);
         }

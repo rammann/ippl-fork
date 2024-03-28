@@ -39,4 +39,7 @@
 #include "Octree/OctreeParticle.h"
 #include "Octree/Octree.h"
 
+#include "OrthoTree/OrthoTree.h"
+#include "OrthoTree/OrthoTreeContainer.h"
+
 #endif

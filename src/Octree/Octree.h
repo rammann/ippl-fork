@@ -2,21 +2,23 @@
  * Octree class for IPPL
  * It is based on the freely available implementation : https://github.com/attcs/Octree
 */
-#ifndef ORTHOTREE_GUARD
-#define ORTHOTREE_GUARD
+#ifndef OCTREE_GUARD
+#define OCTREE_GUARD
 
 #include "OctreeAdaptors.h"
+#include <Kokkos_Vector.hpp>
+#include <Kokkos_UnorderedMap.hpp>
 
 namespace ippl
 {
-namespace OrthoTree
+namespace Octree
 {
     
     /**
-     * @class OrthoTreeBase: Base class for the tree
+     * @class OctreeBase: Base class for the tree
     */
     template<dim_type nDimension, typename vector_type_, typename box_type_, typename adaptor_type = AdaptorGeneral<nDimension, vector_type_, box_type_, double>, typename geometry_type_ = double>
-    class OrthoTreeBase
+    class OctreeBase
     {
         static_assert(nDimension == 3, "implementation limited to dim = 3 case");
 
@@ -24,24 +26,21 @@ namespace OrthoTree
 
         static autoce is_linear_tree = nDimension < 15; // Requiredment for Morton ordering
 
-        using child_id_type = uint64_t; 
-        using morton_grid_id_type = uint32_t; // increase if more depth / higher dimension is desired
-        using morton_node_id_type = morton_grid_id_type;
-        using morton_node_id_type_cref = morton_node_id_type;
-        using max_element_type = uint32_t;
-        using geometry_type = geometry_type_;
-        using vector_type = vector_type_;
-        using box_type = box_type_;
-        using AD = adaptor_type;
+        using child_id_type             = uint64_t; 
+        using morton_node_id_type       = uint32_t; // increase if more depth / higher dimension is desired
+        using max_element_type          = uint32_t;
+        using geometry_type             = geometry_type_;
+        using vector_type               = vector_type_; // point type : vector<double,3>
+        using box_type                  = box_type_;
+        using AD                        = adaptor_type;
 
     protected:
-        // Max children per node
-        static autoce m_nChild = pow_ce(2, nDimension); 
-
-        // Type system determined maximal depth.
-        static autoce m_nDepthMaxTheoretical = depth_type((CHAR_BIT * sizeof(morton_node_id_type) - 1/*sentinal bit*/) / nDimension);
+        
+        static autoce m_nChild = pow_ce(2, nDimension);  // Max children per node
+        static autoce m_nDepthMaxTheoretical = depth_type((CHAR_BIT * sizeof(morton_node_id_type) - 1/*sentinal bit*/) / nDimension); // Type system determined maximal depth.
 
     public:
+        
         /**
          * @class Node
          * @param children_m vector of morton ids corresponding to children nodes
@@ -52,36 +51,48 @@ namespace OrthoTree
         {
         private:
 
-            vector<morton_node_id_type> m_children; // vector of morton ids of children
+            Kokkos::vector<morton_node_id_type> m_children;
+            //vector<morton_node_id_type> m_children; // vector of morton ids of children
         
         public: 
 
-            vector<entity_id_type> m_vid = {}; // contains ids of points if leaf node
-            box_type box = {}; // extent of node
-            morton_node_id_type m_parent; // morton id of parent node
+            //vector<entitiy_id_type>       vid = {}
+            Kokkos::vector<entity_id_type>  vid = {}; // contains ids of points if leaf node
+            box_type                        box = {}; // extent of node
+            morton_node_id_type             m_parent; // morton id of parent node
         
         public: 
             
-            constexpr void AddChild(morton_node_id_type_cref kChild) noexcept { 
-                m_children.emplace_back(kChild); 
+            constexpr void AddChild(morton_node_id_type kChild) noexcept { 
+                m_children.push_back(kChild); 
             }
             
-            constexpr void AddChildInOrder(morton_node_id_type_cref kChild) noexcept {
-                auto it = std::end(m_children);
-                it = std::lower_bound(m_children.begin(), m_children.end(), kChild);
+            constexpr void AddChildInOrder(morton_node_id_type kChild) noexcept {
+                /*
+                auto it     = std::end(m_children);
+                it          = std::lower_bound(m_children.begin(), m_children.end(), kChild);
+                if (it != m_children.end() && *it == kChild) return;
+                m_children.insert(it, kChild);
+                */
+                auto it = std::lower_bound(m_children.begin(), m_children.end(), kChild);
                 if (it != m_children.end() && *it == kChild) return;
                 m_children.insert(it, kChild);
             }
 
-            constexpr bool HasChild(morton_node_id_type_cref kChild) const  noexcept {
-                return std::ranges::binary_search(m_children, kChild);
+            constexpr bool HasChild(morton_node_id_type kChild) const  noexcept {
+                //return std::ranges::binary_search(m_children, kChild);
+                auto it = m_children.find(kChild);
+                if(it == m_children.end()) 
+                    return false;
+                else 
+                    return true;
             }
 
             constexpr bool IsAnyChildExist() const noexcept {
                  return !m_children.empty(); 
             }
             
-            constexpr vector<morton_node_id_type> const& GetChildren() const noexcept {
+            constexpr Kokkos::vector<morton_node_id_type> const& GetChildren() const noexcept {
                  return m_children; 
             }
         }; // class Node
@@ -91,6 +102,7 @@ namespace OrthoTree
         // Container type for linear tree (< 15 dims)
         template<typename data_type>
         using container_type = unordered_map<morton_node_id_type, data_type>;
+        //using container_type = Kokkos::UnorderedMap<morton_node_id_type, data_type>;
 
         // Member Variables
         container_type<Node> m_nodes;
@@ -108,7 +120,6 @@ namespace OrthoTree
 
         template<size_t N>
         static inline child_id_type convertMortonIdToChildId(bitset_arithmetic<N> const& bs) noexcept{
-            assert(bs <= bitset_arithmetic<N>(std::numeric_limits<size_t>::max()));
             return bs.to_ullong();
         }
         
@@ -163,7 +174,7 @@ namespace OrthoTree
             return aid;
         }
 
-        inline Node& createChild(Node& nodeParent, child_id_type iChild, morton_node_id_type_cref kChild)noexcept
+        inline Node& createChild(Node& nodeParent, child_id_type iChild, morton_node_id_type kChild)noexcept
         {
             assert(iChild < this->m_nChild);
             if(!nodeParent.HasChild(kChild)){
@@ -217,7 +228,7 @@ namespace OrthoTree
             return nodeChild;
         }
 
-        constexpr morton_grid_id_type getLocationId(vector_type const& pt) const noexcept {
+        constexpr morton_node_id_type getLocationId(vector_type const& pt) const noexcept {
             return MortonEncode(this->getGridIdPoint(pt));
         }
 
@@ -236,7 +247,7 @@ namespace OrthoTree
         }
         
         template<bool bCheckUniqness>
-        bool insert(morton_node_id_type_cref kNode, morton_node_id_type_cref kNodeSmallest, entity_id_type id, bool fInsertToLeaf) noexcept
+        bool insert(morton_node_id_type kNode, morton_node_id_type kNodeSmallest, entity_id_type id, bool fInsertToLeaf) noexcept
         {
             if (kNode == kNodeSmallest)
             {
@@ -326,7 +337,7 @@ namespace OrthoTree
             return std::clamp(static_cast<depth_type>(std::log2(nLeaf) / static_cast<double>(nDimension)), depth_type(2), depth_type(10));
         }
 
-        static inline morton_node_id_type GetHash(depth_type depth, morton_node_id_type_cref key) noexcept{
+        static inline morton_node_id_type GetHash(depth_type depth, morton_node_id_type key) noexcept{
             assert(key < (morton_node_id_type(1) << (depth * nDimension)));
             return (morton_node_id_type{ 1 } << (depth * nDimension)) | key;
         }
@@ -350,19 +361,19 @@ namespace OrthoTree
             return 0;
         }
 
-        static inline morton_node_id_type RemoveSentinelBit(morton_node_id_type_cref key, std::optional<depth_type> const& onDepth = std::nullopt) noexcept{
+        static inline morton_node_id_type RemoveSentinelBit(morton_node_id_type key, std::optional<depth_type> const& onDepth = std::nullopt) noexcept{
             autoc nDepth = onDepth.has_value() ? *onDepth : GetDepth(key);
             return key - (morton_node_id_type{ 1 } << nDepth);
         }
     
     public: // Morton aid function
 
-        static inline child_id_type getChildPartOfLocation(morton_node_id_type_cref key) noexcept{
+        static inline child_id_type getChildPartOfLocation(morton_node_id_type key) noexcept{
             autoce maskLastBits1 = (morton_node_id_type{ 1 } << nDimension) - 1;
             return convertMortonIdToChildId(key & maskLastBits1);
         }
 
-        static constexpr morton_grid_id_type part1By2(grid_id_type n) noexcept
+        static constexpr morton_node_id_type part1By2(grid_id_type n) noexcept
         {
             // n = ----------------------9876543210 : Bits initially
             // n = ------98----------------76543210 : After (1)
@@ -373,11 +384,11 @@ namespace OrthoTree
             n = (n ^ (n << 8)) & 0x0300f00f; // (2)
             n = (n ^ (n << 4)) & 0x030c30c3; // (3)
             n = (n ^ (n << 2)) & 0x09249249; // (4)
-            return std::is_same<morton_grid_id_type, bitset_arithmetic<nDimension>>::value ? morton_grid_id_type(n) : static_cast<morton_grid_id_type>(n);
+            return std::is_same<morton_node_id_type, bitset_arithmetic<nDimension>>::value ? morton_node_id_type(n) : static_cast<morton_node_id_type>(n);
         }
 
         // Separates low 16 bits of input by one bit
-        static constexpr morton_grid_id_type part1By1(grid_id_type n) noexcept
+        static constexpr morton_node_id_type part1By1(grid_id_type n) noexcept
         {
             // n = ----------------fedcba9876543210 : Bits initially
             // n = --------fedcba98--------76543210 : After (1)
@@ -388,15 +399,15 @@ namespace OrthoTree
             n = (n ^ (n << 4)) & 0x0f0f0f0f; // (2)
             n = (n ^ (n << 2)) & 0x33333333; // (3)
             n = (n ^ (n << 1)) & 0x55555555; // (4)
-            return std::is_same<morton_grid_id_type, bitset_arithmetic<nDimension>>::value ? morton_grid_id_type(n) : static_cast<morton_grid_id_type>(n);
+            return std::is_same<morton_node_id_type, bitset_arithmetic<nDimension>>::value ? morton_node_id_type(n) : static_cast<morton_node_id_type>(n);
         }
 
     public: // Morton En- / Decoding functions
 
-        static inline morton_grid_id_type MortonEncode(array<grid_id_type, nDimension> const& aidGrid) noexcept
+        static inline morton_node_id_type MortonEncode(array<grid_id_type, nDimension> const& aidGrid) noexcept
         {
             if constexpr (nDimension == 1)
-                return morton_grid_id_type(aidGrid[0]);
+                return morton_node_id_type(aidGrid[0]);
             else if constexpr (nDimension == 2)
                 return (part1By1(aidGrid[1]) << 1) + part1By1(aidGrid[0]);
             else if constexpr (nDimension == 3)
@@ -407,7 +418,7 @@ namespace OrthoTree
                 for (dim_type iDimension = 1; iDimension < nDimension; ++iDimension)
                 msb |= aidGrid[iDimension];
 
-                morton_grid_id_type id = 0;
+                morton_node_id_type id = 0;
                 grid_id_type mask = 1;
                 for (dim_type i = 0; msb; mask <<= 1, msb >>= 1, ++i)
                 {
@@ -415,7 +426,7 @@ namespace OrthoTree
                     for (dim_type iDimension = 0; iDimension < nDimension; ++iDimension)
                     {
                         autoc shift = iDimension + i * nDimension;
-                        id |= static_cast<morton_grid_id_type>(aidGrid[iDimension] & mask) << (shift - i);
+                        id |= static_cast<morton_node_id_type>(aidGrid[iDimension] & mask) << (shift - i);
                         
                     }
                 }
@@ -423,7 +434,7 @@ namespace OrthoTree
             }
         }
 
-        static array<grid_id_type, nDimension> MortonDecode(morton_node_id_type_cref kNode, depth_type nDepthMax) noexcept
+        static array<grid_id_type, nDimension> MortonDecode(morton_node_id_type kNode, depth_type nDepthMax) noexcept
         {
             auto aidGrid = array<grid_id_type, nDimension>{};
             if constexpr (nDimension == 1)
@@ -432,7 +443,7 @@ namespace OrthoTree
             {
                 autoc nDepth = GetDepth(kNode);
 
-                auto mask = morton_grid_id_type{ 1 };
+                auto mask = morton_node_id_type{ 1 };
                 for (depth_type iDepth = nDepthMax - nDepth, shift = 0; iDepth < nDepthMax; ++iDepth){
                     for (dim_type iDimension = 0; iDimension < nDimension; ++iDimension, ++shift){
                         aidGrid[iDimension] |= (kNode & mask) >> (shift - iDepth);
@@ -449,9 +460,9 @@ namespace OrthoTree
     public: // Getters
         
         inline auto const& GetNodes() const noexcept { return m_nodes; }
-        inline auto & GetNodetoChange(morton_node_id_type_cref key) { return cont_at(m_nodes, key); }
-        inline auto const& GetNode(morton_node_id_type_cref key) const noexcept { return cont_at(m_nodes, key); }
-        inline auto const& GetParent(morton_node_id_type_cref key) const noexcept {return cont_at(m_nodes, key).m_parent;}
+        inline auto & GetNodetoChange(morton_node_id_type key) { return cont_at(m_nodes, key); }
+        inline auto const& GetNode(morton_node_id_type key) const noexcept { return cont_at(m_nodes, key); }
+        inline auto const& GetParent(morton_node_id_type key) const noexcept {return cont_at(m_nodes, key).m_parent;}
         inline auto const& GetBox() const noexcept { return m_box; }
         inline auto GetDepthMax() const noexcept { return m_nDepthMax; }
         inline auto GetResolutionMax() const noexcept { return m_nRasterResolutionMax; }
@@ -487,12 +498,12 @@ namespace OrthoTree
                 this->m_aMinPoint[iDimension] = static_cast<double>(AD::point_comp_c(AD::box_min_c(this->m_box), iDimension));
         }
 
-        using fnProcedure = std::function<void(morton_node_id_type_cref, Node const&)>;
-        using fnProcedureUnconditional = std::function<void(morton_node_id_type_cref, Node const&, bool)>;
-        using fnSelector = std::function<bool(morton_node_id_type_cref, Node const&)>;
-        using fnSelectorUnconditional = std::function<bool(morton_node_id_type_cref, Node const&)>;
+        using fnProcedure = std::function<void(morton_node_id_type, Node const&)>;
+        using fnProcedureUnconditional = std::function<void(morton_node_id_type, Node const&, bool)>;
+        using fnSelector = std::function<bool(morton_node_id_type, Node const&)>;
+        using fnSelectorUnconditional = std::function<bool(morton_node_id_type, Node const&)>;
 
-        void VisitNodes(morton_node_id_type_cref kRoot, fnProcedure const& procedure, fnSelector const& selector) const noexcept
+        void VisitNodes(morton_node_id_type kRoot, fnProcedure const& procedure/*, fnSelector const& selector=[](){return true;}*/) const noexcept
         {
             auto q = queue<morton_node_id_type>();
             
@@ -502,19 +513,19 @@ namespace OrthoTree
                 autoc& node = cont_at(m_nodes, key);
                 procedure(key, node);
 
-                for (morton_node_id_type_cref kChild : node.GetChildren()){
+                for (morton_node_id_type kChild : node.GetChildren()){
                 
-                    if (selector(kChild, cont_at(m_nodes, kChild)))
-                        q.push(kChild);
+                    //if (selector(kChild, cont_at(m_nodes, kChild)))
+                    q.push(kChild);
                 
                 }
 
             }
         }
 
-        void PrintStructure(morton_node_id_type_cref kRoot = GetRootKey()) const noexcept{
+        void PrintStructure(morton_node_id_type kRoot = GetRootKey()) const noexcept{
             
-            VisitNodes(kRoot, [&](morton_node_id_type_cref key, Node const& node){
+            VisitNodes(kRoot, [&](morton_node_id_type key, Node const& node){
                   
                 // Node info
                 std::cout << "Node ID = " << key << std::endl;
@@ -526,7 +537,7 @@ namespace OrthoTree
 
 
                 // Box extent
-                std::cout << " Box = [(";
+                std::cout << "Box = [(";
                 for(int i=0;i<3;++i) std::cout << node.box.Min[i] << ",";
                 std::cout << "),(";                 
                 for(int i=0;i<3;++i) std::cout << node.box.Max[i] << ",";
@@ -564,7 +575,7 @@ namespace OrthoTree
                 }
                 else{
                     for(int i=0;i<node.vid.size();i++){
-                        std::cout<<node.vid.at(i)<<" ";
+                        std::cout<<node.vid[i]<<" ";
                     }
                 }
                 std::cout << std::endl;
@@ -576,10 +587,10 @@ namespace OrthoTree
             return;
         }
 
-        std::vector<morton_node_id_type> GetLeafNodes(morton_node_id_type kRoot=GetRootKey()) const noexcept{
+        Kokkos::vector<morton_node_id_type> GetLeafNodes(morton_node_id_type kRoot=GetRootKey()) const noexcept{
             
-            std::vector<morton_node_id_type> leafnodes = {};
-            VisitNodes(kRoot, [&](morton_node_id_type_cref key, Node const& node){ if(!node.IsAnyChildExist()){leafnodes.push_back(key);} });
+            Kokkos::vector<morton_node_id_type> leafnodes = {};
+            VisitNodes(kRoot, [&](morton_node_id_type key, Node const& node){ if(!node.IsAnyChildExist()){leafnodes.push_back(key);} });
         
             return leafnodes;
         }
@@ -590,10 +601,10 @@ namespace OrthoTree
          * @return vector of ids of colleagues of node with @param key
          * ! ONLY WORK FOR THE 3D CASE 
         */
-        std::vector<morton_node_id_type_cref> GetColleagues(morton_node_id_type_cref key) const noexcept{
+        Kokkos::vector<morton_node_id_type> GetColleagues(morton_node_id_type key) const noexcept{
             
             auto aid = this->MortonDecode(key,GetDepth(key));
-            std::vector<morton_node_id_type_cref> neighbours={};
+            Kokkos::vector<morton_node_id_type> neighbours={};
 
             for(int x=-1;x<2;++x){
                 for(int y=-1;y<2;++y){
@@ -613,10 +624,10 @@ namespace OrthoTree
          * @return vector of ids of potential colleagues (might not exists)
          * ! ONLY WORKDS FOR 3D CASE
         */
-        std::vector<morton_node_id_type_cref> GetPotentialColleagues(morton_node_id_type_cref key) const noexcept{
+        Kokkos::vector<morton_node_id_type> GetPotentialColleagues(morton_node_id_type key) const noexcept{
             
             auto aid = this->MortonDecode(key,GetDepth(key));
-            std::vector<morton_node_id_type_cref> neighbours={};
+            Kokkos::vector<morton_node_id_type> neighbours={};
             
             for(int x=-1;x<2;++x){
                 for(int y=-1;y<2;++y){
@@ -638,10 +649,10 @@ namespace OrthoTree
          * @param key morton id
          * @return vector of ids of coarse neighbours
         */
-        std::vector<morton_node_id_type_cref> GetCoarseNeighbours(morton_node_id_type_cref key) const noexcept{
+        Kokkos::vector<morton_node_id_type> GetCoarseNeighbours(morton_node_id_type key) const noexcept{
             
             auto node = this->GetNode(key);
-            vector<morton_node_id_type_cref> coarse_neighbours{};
+            Kokkos::vector<morton_node_id_type> coarse_neighbours{};
             auto parent_colleagues = this->GetColleagues(this->GetParent(key));
 
             for(auto parent_neighbour:parent_colleagues){
@@ -660,7 +671,7 @@ namespace OrthoTree
          * @param key morton id
          * @return morton id of next existing ancestor
         */
-        morton_node_id_type_cref GetNextAncestor(morton_node_id_type_cref key) const noexcept{
+        morton_node_id_type GetNextAncestor(morton_node_id_type key) const noexcept{
             
             if(m_nodes.contains(key)) 
                 return key;
@@ -677,19 +688,19 @@ namespace OrthoTree
          * @param kRoot key of node to start from (defaults to the root)
          * @return vector of point ids
         */
-        vector<entity_id_type> CollectAllIdInBFS(morton_node_id_type_cref kRoot = GetRootKey()) const noexcept
+        vector<entity_id_type> CollectAllIdInBFS(morton_node_id_type kRoot = GetRootKey()) const noexcept
         {
             auto ids = vector<entity_id_type>();
             ids.reserve(m_nodes.size() * std::max<size_t>(2, m_nElementMax / 2));
 
-            VisitNodes(kRoot, [&ids](morton_node_id_type_cref, autoc& node)
+            VisitNodes(kRoot, [&ids](morton_node_id_type, autoc& node)
             { 
                 ids.insert(std::end(ids), std::begin(node.vid), std::end(node.vid));
             });
             return ids;
         }
         
-        box_type CalculateExtent(morton_node_id_type_cref keyNode) const noexcept
+        box_type CalculateExtent(morton_node_id_type keyNode) const noexcept
         {
             auto boxNode = box_type();
             auto& ptMinBoxNode = AD::box_min(boxNode);
@@ -708,7 +719,7 @@ namespace OrthoTree
             autoc nRasterResolution = pow_ce(2, nDepth);
             autoc rMax = 1.0 / static_cast<double>(nRasterResolution);
 
-            autoce one = morton_grid_id_type{ 1 };
+            autoce one = morton_node_id_type{ 1 };
             auto keyShifted = keyNode;// RemoveSentinelBit(key, nDepth);
             for (depth_type iDepth = 0; iDepth < nDepth; ++iDepth)
             {
@@ -717,7 +728,7 @@ namespace OrthoTree
                 LOOPIVDEP
                 for (dim_type iDimension = 0; iDimension < nDimension; ++iDimension)
                 {
-                    autoc fApply = ((keyShifted >> iDimension) & one) > morton_grid_id_type{};
+                    autoc fApply = ((keyShifted >> iDimension) & one) > morton_node_id_type{};
                     AD::point_comp(ptMinBoxNode, iDimension) += static_cast<geometry_type>((aSize[iDimension] * r)) * fApply;
                 }
                 keyShifted >>= nDimension;
@@ -785,19 +796,16 @@ namespace OrthoTree
              typename adaptor_type = AdaptorGeneral<nDimension, vector_type, box_type, double>, 
              typename geometry_type = double>
     
-    class OrthoTreePoint : public OrthoTreeBase<nDimension, vector_type, box_type, adaptor_type, geometry_type>
+    class OctreePoint : public OctreeBase<nDimension, vector_type, box_type, adaptor_type, geometry_type>
     {
     protected: // base class
 
-        using base = OrthoTreeBase<nDimension, vector_type, box_type, adaptor_type, geometry_type>;
+        using base = OctreeBase<nDimension, vector_type, box_type, adaptor_type, geometry_type>;
 
     public: // types
 
         using AD = typename base::AD;
-        using morton_grid_id_type = typename base::morton_grid_id_type;
-        using morton_grid_id_type_cref = typename base::morton_grid_id_type_cref;
         using morton_node_id_type = typename base::morton_node_id_type;
-        using morton_node_id_type_cref = typename base::morton_node_id_type_cref;
         using max_element_type = typename base::max_element_type;
         using child_id_type = typename base::child_id_type; 
 
@@ -806,7 +814,7 @@ namespace OrthoTree
 
     protected: // aid functions
 
-        using LocationIterator = typename vector<std::pair<entity_id_type, morton_grid_id_type>>::iterator;
+        using LocationIterator = typename vector<std::pair<entity_id_type, morton_node_id_type>>::iterator;
 
         /**
          * @fn addNodes
@@ -816,7 +824,7 @@ namespace OrthoTree
          * @param itEnd absoulte end
          * 
         */
-        void addNodes(Node& nodeParent, morton_node_id_type_cref kParent, LocationIterator& itEndPrev, LocationIterator const& itEnd, morton_grid_id_type_cref idLocationBegin, depth_type nDepthRemain) noexcept
+        void addNodes(Node& nodeParent, morton_node_id_type kParent, LocationIterator& itEndPrev, LocationIterator const& itEnd, morton_node_id_type idLocationBegin, depth_type nDepthRemain) noexcept
         {
             autoc nElement = std::distance(itEndPrev, itEnd);
 
@@ -831,7 +839,7 @@ namespace OrthoTree
 
             --nDepthRemain;
             autoc shift = nDepthRemain * nDimension;
-            autoc nLocationStep = morton_grid_id_type{ 1 } << shift;
+            autoc nLocationStep = morton_node_id_type{ 1 } << shift;
             autoc flagParent = kParent << nDimension;
 
             while (itEndPrev != itEnd)
@@ -842,9 +850,9 @@ namespace OrthoTree
                 return idChildActual == base::convertMortonIdToChildId((idPoint.second - idLocationBegin) >> shift);
                 });
 
-                autoc mChildActual = morton_grid_id_type(idChildActual);
-                morton_grid_id_type const kChild = flagParent | mChildActual;
-                morton_grid_id_type const idLocationBeginChild = idLocationBegin + mChildActual * nLocationStep;
+                autoc mChildActual = morton_node_id_type(idChildActual);
+                morton_node_id_type const kChild = flagParent | mChildActual;
+                morton_node_id_type const idLocationBeginChild = idLocationBegin + mChildActual * nLocationStep;
 
                 auto& nodeChild = this->createChild(nodeParent, idChildActual, kChild);
                 nodeChild.m_parent=kParent;
@@ -854,8 +862,14 @@ namespace OrthoTree
 
     public: // Constructors
 
-        OrthoTreePoint() = default;
-        static void Create(OrthoTreePoint& tree, span<vector_type const> const& vpt, depth_type nDepthMaxIn = 0, std::optional<box_type> const& oBoxSpace = std::nullopt, max_element_type nElementMaxInNode = max_element_default) noexcept
+        OctreePoint() = default;
+        OctreePoint(span<vector_type const> const& vpt, depth_type nDepthMax, std::optional<box_type> const& oBoxSpace = std::nullopt, max_element_type nElementMaxInNode = max_element_default) noexcept
+        {
+            Create(*this, vpt, nDepthMax, oBoxSpace, nElementMaxInNode);
+        }
+
+        
+        static void Create(OctreePoint& tree, span<vector_type const> const& vpt /*auto R*/, depth_type nDepthMaxIn = 0, std::optional<box_type> const& oBoxSpace = std::nullopt, max_element_type nElementMaxInNode = max_element_default) noexcept
         {
             autoc boxSpace = oBoxSpace.has_value() ? *oBoxSpace : AD::box_of_points(vpt);
             autoc n = vpt.size();
@@ -870,9 +884,9 @@ namespace OrthoTree
             auto& nodeRoot = cont_at(tree.m_nodes, kRoot);
             
             autoc vidPoint = base::generatePointId(n);
-            auto aidLocation = vector<std::pair<entity_id_type, morton_grid_id_type>>(n);
+            auto aidLocation = vector<std::pair<entity_id_type, morton_node_id_type>>(n);
 
-            std::transform(/*ept,*/ vpt.begin(), vpt.end(), vidPoint.begin(), aidLocation.begin(), [&](autoc& pt, autoc id) -> std::pair<entity_id_type, morton_grid_id_type>
+            std::transform(/*ept,*/ vpt.begin(), vpt.end(), vidPoint.begin(), aidLocation.begin(), [&](autoc& pt, autoc id) -> std::pair<entity_id_type, morton_node_id_type>
             {
                 return { id, tree.getLocationId(pt) };
             });
@@ -880,6 +894,8 @@ namespace OrthoTree
             std::sort(/*eps,*/ std::begin(aidLocation), std::end(aidLocation), [&](autoc& idL, autoc& idR) { return idL.second < idR.second; });
             auto itBegin = std::begin(aidLocation);
             tree.addNodes(nodeRoot, kRoot, itBegin, std::end(aidLocation), morton_node_id_type{ 0 }, nDepthMax);
+
+            tree.PrintStructure();
         }
     
     public: // Balancing Functions
@@ -894,9 +910,9 @@ namespace OrthoTree
             std::cout<< "Starting Tree Balancing" << std::endl << "--------------------------------" << std::endl;
             
             /// Put leaf Nodes in a queue with the deepest leaves at the front of the queue
-            std::queue<morton_node_id_type_cref> unprocessed_nodes={};
-            std::vector<morton_node_id_type_cref> leaf_nodes=this->GetLeafNodes();
-            std::sort(std::begin(leaf_nodes),std::end(leaf_nodes), [](morton_node_id_type_cref l, morton_node_id_type_cref r){return l>r;});
+            std::queue<morton_node_id_type> unprocessed_nodes={};
+            Kokkos::vector<morton_node_id_type> leaf_nodes=this->GetLeafNodes();
+            std::sort(std::begin(leaf_nodes),std::end(leaf_nodes), [](morton_node_id_type l, morton_node_id_type r){return l>r;});
             for(auto leaf:leaf_nodes) unprocessed_nodes.push(leaf);
             
             /// Continue the refinement until the queue is empty
@@ -908,7 +924,7 @@ namespace OrthoTree
                 bool processed = true;
                 
                 /// Gather all potential neighbours of the first node in the queue
-                std::vector<morton_node_id_type_cref> potential_neighbours=this->GetPotentialColleagues(unprocessed_nodes.front());
+                Kokkos::vector<morton_node_id_type> potential_neighbours=this->GetPotentialColleagues(unprocessed_nodes.front());
                 
                 /// Loop over the potential neighbours to check if their parent exist or if their next ancestor needs to be refined
                 for(auto pnbr:potential_neighbours){
@@ -933,9 +949,9 @@ namespace OrthoTree
                         processed=false;
 
                         /// Finding next existing ancestor and refining it
-                        morton_node_id_type_cref ancestor=this->GetNextAncestor(pnbr); 
+                        morton_node_id_type ancestor=this->GetNextAncestor(pnbr); 
                         //std::cout<<", coarse neighbour doesn't exist - next ancestor is " << ancestor <<" - refining" << std::endl;
-                        vector<morton_node_id_type> nNewNodes = this->refineNode(this->GetNodetoChange(ancestor), ancestor, vpt); 
+                        Kokkos::vector<morton_node_id_type> nNewNodes = this->refineNode(this->GetNodetoChange(ancestor), ancestor, vpt); 
 
                         // New nodes need to be pushed into the queue
                         for(auto node:nNewNodes){
@@ -949,7 +965,7 @@ namespace OrthoTree
         /*
         Function that refines the nodeParent into its children and sorts the ids amound the children.
         */
-        vector<morton_node_id_type_cref> refineNode(Node& nodeParent, morton_node_id_type_cref kParent, span<vector_type const> const& vpt){
+        Kokkos::vector<morton_node_id_type> refineNode(Node& nodeParent, morton_node_id_type kParent, span<vector_type const> const& vpt){
         
             /// Calculate the bitshift for the new leaf nodes
             const depth_type new_depth = this->GetDepth(kParent)+1;
@@ -958,14 +974,14 @@ namespace OrthoTree
 
             /// Get information from the parent node
             autoc parentbox_origin = nodeParent.box.Min;
-            auto aidLocation = vector<std::pair<entity_id_type, morton_grid_id_type>>(nodeParent.vid.size());
+            auto aidLocation = vector<std::pair<entity_id_type, morton_node_id_type>>(nodeParent.vid.size());
             autoc flagParent = kParent << nDimension;
 
             
-            vector<morton_node_id_type> nNewNodes={};
+            Kokkos::vector<morton_node_id_type> nNewNodes={};
             
             /// save {point_id, node_key} tuple in "aidLocation"
-            std::transform(nodeParent.vid.begin(), nodeParent.vid.end(), aidLocation.begin(), [&](autoc id) -> std::pair<entity_id_type, morton_grid_id_type>
+            std::transform(nodeParent.vid.begin(), nodeParent.vid.end(), aidLocation.begin(), [&](autoc id) -> std::pair<entity_id_type, morton_node_id_type>
             {
                 autoc gridid = this->getRelativeGridIdPoint(AD::subtract(vpt[id],parentbox_origin));
                 autoc childid = this->MortonEncode(gridid)>>shift;
@@ -979,7 +995,7 @@ namespace OrthoTree
             for(int idChild=0;idChild<std::pow(2,nDimension);++idChild){
 
                 /// calculate child ids
-                morton_grid_id_type const kChild = flagParent | idChild;
+                morton_node_id_type const kChild = flagParent | idChild;
                 Node& nodeChild = this->createChild(nodeParent, idChild, kChild);
                 nodeChild.m_parent=kParent;
 
@@ -996,10 +1012,21 @@ namespace OrthoTree
         }
 
 
-    }; // class OrthoTreePoint
+    }; // class OctreePoint
 
 
-} // namespace OrthoTree
+// Aliases
+
+template <dim_type nDimension, typename geometry_type = double>
+struct BoundingBoxND{
+    ippl::Vector<geometry_type, nDimension> Min;
+    ippl::Vector<geometry_type, nDimension> Max;
+};
+
+using BoundingBox3D = BoundingBoxND<3>;
+using Octree = ippl::Octree::OctreePoint<3, ippl::Vector<double,3>, BoundingBox3D>;
+
+} // namespace Octree
 } // namespace ippl
 
 #include "OctreeContainer.h"
