@@ -19,6 +19,7 @@ struct BoundingBox{
 }; 
 
 using dim_type                  = unsigned short int;
+using child_id_type             = unsigned int;
 
 // Node Types
 using morton_node_id_type       = unsigned int;
@@ -74,9 +75,14 @@ public: // Member Functions
         return children_m;
     }
 
-};
+}; // Class OrthoTreeNode
 
+
+// access of the map with key is done as follows : value = map.value_at(map.find(key))
+// map.value_at(idx) return the value at idx (!=key) 
+// map.find(key) returns the idx of key
 using container_type = Kokkos::UnorderedMap<morton_node_id_type, OrthoTreeNode>;
+
 
 class OrthoTree
 {
@@ -93,8 +99,10 @@ private:
 public: // Constructors
 
     OrthoTree () = default;
+
     OrthoTree (particle_type const& particles, depth_type MaxDepth, box_type Box, size_t MaxElements)
     {
+
         this->box_m             = Box;
         this->maxdepth_m        = MaxDepth;
         this->maxelements_m     = MaxElements;
@@ -122,70 +130,87 @@ public: // Constructors
         // Vector of aid locations
         Kokkos::vector<Kokkos::pair<entity_id_type, morton_node_id_type>> aidLocations(n);
 
-        // transformation of (id, position(id)) -> (id, aidlocation(id))
-        std::transform( positions.begin(), positions.end(), vidPoint.begin(), aidLocations.begin(),
+        // transformation of (id, position(id)) -> (id, morton(id))
+        std::transform(positions.begin(), positions.end(), vidPoint.begin(), aidLocations.begin(),
         [=](position_type pt, entity_id_type id) -> Kokkos::pair<entity_id_type, morton_node_id_type>
         {
             return {id, this->GetLocationId(pt)};
         });
+        std::sort(aidLocations.begin(), aidLocations.end(), [&](auto const& idL, auto const idR) {return idL.second < idR.second; });
+
+        auto itBegin = aidLocations.begin();
+        addNodes(NodeRoot, kRoot, itBegin, aidLocations.end(), morton_node_id_type{0}, MaxDepth);
+
     }
 
 public: // Aid Functions
 
-    unsigned int EstimateNodeNumber(unsigned int nParticles, depth_type MaxDepth, unsigned int nMaxElements){
+    morton_node_id_type EstimateNodeNumber(entity_id_type nParticles, depth_type MaxDepth, entity_id_type nMaxElements){
         
         if (nParticles < 10) return 10;
         
         const double rMult = 1.5;
 
-        
         // for smaller problem size
         if ((MaxDepth + 1) * dim_m < 64){
-            size_t nMaxChild = size_t{ 1 } << (MaxDepth * dim_m);
-            auto const nElementsInNode = nParticles / nMaxChild;
+            size_t nMaxChild            = size_t{ 1 } << (MaxDepth * dim_m);
+            auto const nElementsInNode  = nParticles / nMaxChild;
             if (nElementsInNode > nMaxElements / 2) return nMaxChild;
         }
 
         // for larget problem size
-        auto const nElementInNodeAvg = static_cast<float>(nParticles) / static_cast<float>(nMaxElements);
-        auto const nDepthEstimated = std::min(MaxDepth, static_cast<depth_type>(std::ceil((log2f(nElementInNodeAvg) + 1.0) / static_cast<float>(dim_m))));
+        auto const nElementInNodeAvg    = static_cast<float>(nParticles) / static_cast<float>(nMaxElements);
+        auto const nDepthEstimated      = std::min(MaxDepth, static_cast<depth_type>(std::ceil((log2f(nElementInNodeAvg) + 1.0) / static_cast<float>(dim_m))));
+        
         if (nDepthEstimated * dim_m < 64) return static_cast<size_t>(rMult * (1 << nDepthEstimated * dim_m));
+
         return static_cast<size_t>(rMult * nElementInNodeAvg);
+
     }
 
     ippl::Vector<double,3> GetRasterizer(box_type Box, grid_id_type nDivide){
+
         const double ndiv = static_cast<double>(nDivide);
         ippl::Vector<double,3> rasterizer;
         for(dim_type i=0; i<dim_m; ++i){
-            double boxsize = Box.Max[i] - Box.Min[i];
-            rasterizer[i] = boxsize == 0 ? 1.0 : (ndiv/boxsize);
+            double boxsize  = Box.Max[i] - Box.Min[i];
+            rasterizer[i]   = boxsize == 0 ? 1.0 : (ndiv/boxsize);
         }
-        std::cout << rasterizer << std::endl;
+        
         return rasterizer;
+
     }
 
     morton_node_id_type GetLocationId(position_type pt){
+
         return MortonEncode(GetGridId(pt));
+
     }
 
     ippl::Vector<grid_id_type,3> GetGridId(position_type pt){
+
         ippl::Vector<grid_id_type,3> aid;
         for(dim_type i=0; i<dim_m; ++i){
-            double r_i = pt[i] - box_m.Min[i];
-            double raster_id = r_i * rasterizer_m[i];
-            aid[i] = static_cast<grid_id_type>(raster_id);
+            double r_i          = pt[i] - box_m.Min[i];
+            double raster_id    = r_i * rasterizer_m[i];
+            aid[i]              = static_cast<grid_id_type>(raster_id);
         }
+
         return aid;
+
     }
 
     // Only works for dim = 3 for now
     morton_node_id_type MortonEncode(ippl::Vector<grid_id_type,3> aidGrid){
+
         assert(dim_m == 3);
+
         return (part1By2(aidGrid[2]) << 2) + (part1By2(aidGrid[1]) << 1) + part1By2(aidGrid[0]);
+
     }
 
-    static constexpr morton_node_id_type part1By2(grid_id_type n) noexcept
-    {
+    static constexpr morton_node_id_type part1By2(grid_id_type n) noexcept{
+
         // n = ----------------------9876543210 : Bits initially
         // n = ------98----------------76543210 : After (1)
         // n = ------98--------7654--------3210 : After (2)
@@ -196,20 +221,105 @@ public: // Aid Functions
         n = (n ^ (n << 4)) & 0x030c30c3; // (3)
         n = (n ^ (n << 2)) & 0x09249249; // (4)
         return static_cast<morton_node_id_type>(n);
+
+    }
+
+    //using LocationIterator = typename Kokkos::vector<Kokkos::pair<entity_id_type, morton_node_id_type>>::const_iterator;
+
+    void addNodes(OrthoTreeNode& nodeParent, morton_node_id_type kParent, auto& itEndPrev, auto const& itEnd, morton_node_id_type idLocationBegin, depth_type nDepthRemain){
+
+        const auto nElement = static_cast<size_t>(itEnd - itEndPrev);;
+        //auto const nElement = Kokkos::Experimental::distance(itEndPrev, itEnd);
+
+        // reached leaf node -> fill points into vid_m vector
+        if(nElement < this->maxelements_m || nDepthRemain == 0){
+            nodeParent.vid_m.resize(nElement);
+            std::transform(itEndPrev, itEnd, nodeParent.vid_m.begin(), [](auto const item){return item.first;});
+            itEndPrev = itEnd;
+            return;
+        }
+
+        --nDepthRemain;
+
+        auto const shift = nDepthRemain * dim_m;
+        auto const nLocationStep = morton_node_id_type{1} << shift;
+        auto const flagParent = kParent << dim_m;
+        
+        while(itEndPrev != itEnd){
+            auto const idChildActual = morton_node_id_type((itEndPrev->second - idLocationBegin) >> shift);
+            auto const itEndActual = std::partition_point(itEndPrev, itEnd, [&](auto const idPoint)
+            {
+                return idChildActual == morton_node_id_type((idPoint.second - idLocationBegin) >> shift);
+            });
+
+            auto const mChildActual = morton_node_id_type(idChildActual);
+            morton_node_id_type const kChild = flagParent | mChildActual;
+            morton_node_id_type const idLocationBeginChild = idLocationBegin + mChildActual * nLocationStep;
+            OrthoTreeNode& nodeChild = this->createChild(nodeParent,/* idChildActual,*/ kChild);
+            nodeChild.parent_m = kParent;
+            this->addNodes(nodeChild, kChild, itEndPrev, itEndActual, idLocationBeginChild, nDepthRemain);
+        }
+    }
+
+    depth_type GetDepth(morton_node_id_type key){
+        
+        // Keep shifting off three bits at a time, increasing depth counter
+        for (depth_type d = 0; IsValidKey(key); ++d, key >>= dim_m)
+            if (key == 1) // If only sentinel bit remains, exit with node depth
+            return d;
+
+        assert(false); // Bad key
+        return 0;
+
+    }
+
+    bool IsValidKey(uint64_t key) { return key; }
+
+    OrthoTreeNode& createChild(OrthoTreeNode& nodeParent,/* child_id_type iChild,*/ morton_node_id_type kChild){
+        
+        if(!nodeParent.HasChild(kChild)) nodeParent.AddChildInOrder(kChild);
+
+        // inserts {kChild, Node} pair into the unorderd map nodes_m
+        nodes_m.insert(kChild, OrthoTreeNode());
+
+        OrthoTreeNode& nodeChild = nodes_m.value_at(nodes_m.find(kChild)); // reference to newly created node
+        
+        position_type ptNodeMin = this->box_m.Min;
+        position_type ptNodeMax;
+
+        auto const nDepth   = this->GetDepth(kChild);
+        auto mask           = morton_node_id_type{ 1 } << (nDepth * dim_m -1);
+
+        double rScale = 1.0;
+        for(depth_type iDepth=0; iDepth < nDepth; ++iDepth){
+            rScale *= 0.5;
+            for(dim_type iDimension = dim_m; iDimension > 0; --iDimension){
+                bool const isGreater = (kChild & mask);
+                ptNodeMin[iDimension-1] += isGreater * (this->box_m.Max[iDimension - 1] - this->box_m.Min[iDimension - 1]) * rScale;
+                mask >>= 1;
+            }
+        }
+        
+        for(dim_type iDimension = 0; iDimension < dim_m; ++iDimension){
+            ptNodeMax[iDimension] = ptNodeMin[iDimension] + (this->box_m.Max[iDimension] - this->box_m.Min[iDimension]) * rScale;
+        }
+        
+        for(dim_type iDimension = 0; iDimension < dim_m; ++iDimension){
+            nodeChild.boundingbox_m.Min[iDimension] = ptNodeMin[iDimension];
+            nodeChild.boundingbox_m.Max[iDimension] = ptNodeMax[iDimension];
+        }
+
+        return nodeChild;
     }
 
 
-};
+
+}; // Class OrthoTree
 
 
 
 
 
 
-
-
-
-
-
-}
+} // Namespace ippl
 #endif
