@@ -1,3 +1,12 @@
+/**
+ * Implementation of an octree in IPPL
+ * The octree currently relies on certain std library functions, namely:
+ * - std::transform             Kokkos::transform exists but is still "Experimental" and seems buggy
+ * - std::partitition_point     Kokkos::partition_point exists but is still "Experimental" and seems buggy
+ * - std::sort                  Kokkos::sort does not exist
+*/
+
+
 #ifndef ORTHOTREE_GUARD
 #define ORTHOTREE_GUARD
 
@@ -34,7 +43,9 @@ using box_type                  = BoundingBox;
 using depth_type                = unsigned int;
 
 
-
+/**
+ * @class OrthoTreeNode
+*/
 class OrthoTreeNode
 {
 public: // Member Variables
@@ -51,6 +62,8 @@ public: // Member Functions
     }
 
     void AddChildInOrder(morton_node_id_type kChild){
+        
+        //std::cout << "Adding Child in Order with key " << kChild << "\n";
         morton_node_id_type idx = children_m.lower_bound(0,children_m.size(), kChild);
         if(idx != children_m.size() && children_m[idx] == kChild) return;
         if(idx == children_m.size()-1){
@@ -67,11 +80,11 @@ public: // Member Functions
         else return true;
     }
 
-    bool IsAnyChildExist(){
+    bool IsAnyChildExist() const{
         return !children_m.empty();
     }
 
-    Kokkos::vector<morton_node_id_type>& GetChildren(){
+    Kokkos::vector<morton_node_id_type>const& GetChildren() const{
         return children_m;
     }
 
@@ -139,11 +152,84 @@ public: // Constructors
         std::sort(aidLocations.begin(), aidLocations.end(), [&](auto const& idL, auto const idR) {return idL.second < idR.second; });
 
         auto itBegin = aidLocations.begin();
-        addNodes(NodeRoot, kRoot, itBegin, aidLocations.end(), morton_node_id_type{0}, MaxDepth);
+        addNodes(nodes_m.value_at(nodes_m.find(kRoot)), kRoot, itBegin, aidLocations.end(), morton_node_id_type{0}, MaxDepth);
 
     }
 
-public: // Aid Functions
+private: // Aid Function for Constructor
+    
+    void addNodes(OrthoTreeNode& nodeParent, morton_node_id_type kParent, auto& itEndPrev, auto const& itEnd, morton_node_id_type idLocationBegin, depth_type nDepthRemain){
+
+        const auto nElement = static_cast<size_t>(itEnd - itEndPrev);;
+        //auto const nElement = Kokkos::Experimental::distance(itEndPrev, itEnd);
+
+        // reached leaf node -> fill points into vid_m vector
+        if(nElement < this->maxelements_m || nDepthRemain == 0){
+            nodeParent.vid_m.resize(nElement);
+            std::transform(itEndPrev, itEnd, nodeParent.vid_m.begin(), [](auto const item){return item.first;});
+            itEndPrev = itEnd;
+            return;
+        }
+
+        --nDepthRemain;
+
+        auto const shift = nDepthRemain * dim_m;
+        auto const nLocationStep = morton_node_id_type{1} << shift;
+        auto const flagParent = kParent << dim_m;
+        
+        while(itEndPrev != itEnd){
+            auto const idChildActual = morton_node_id_type((itEndPrev->second - idLocationBegin) >> shift);
+            auto const itEndActual = std::partition_point(itEndPrev, itEnd, [&](auto const idPoint)
+            {
+                return idChildActual == morton_node_id_type((idPoint.second - idLocationBegin) >> shift);
+            });
+
+            auto const mChildActual = morton_node_id_type(idChildActual);
+            morton_node_id_type const kChild = flagParent | mChildActual;
+            morton_node_id_type const idLocationBeginChild = idLocationBegin + mChildActual * nLocationStep;
+            OrthoTreeNode& nodeChild = this->createChild(nodeParent,/* idChildActual,*/ kChild);
+            nodeChild.parent_m = kParent;
+            this->addNodes(nodeChild, kChild, itEndPrev, itEndActual, idLocationBeginChild, nDepthRemain);
+        }
+    }
+
+    OrthoTreeNode& createChild(OrthoTreeNode& nodeParent,/* child_id_type iChild,*/ morton_node_id_type kChild){
+        
+        //std::cout << "creating child with key = " << kChild << "\n";
+        if(!nodeParent.HasChild(kChild)) nodeParent.AddChildInOrder(kChild);
+
+        // inserts {kChild, Node} pair into the unorderd map nodes_m
+        nodes_m.insert(kChild, OrthoTreeNode());
+
+        OrthoTreeNode& nodeChild = nodes_m.value_at(nodes_m.find(kChild)); // reference to newly created node
+        
+        position_type ptNodeMin = this->box_m.Min;
+        position_type ptNodeMax;
+
+        auto const nDepth   = this->GetDepth(kChild);
+        auto mask           = morton_node_id_type{ 1 } << (nDepth * dim_m -1);
+
+        double rScale = 1.0;
+        for(depth_type iDepth=0; iDepth < nDepth; ++iDepth){
+            rScale *= 0.5;
+            for(dim_type iDimension = dim_m; iDimension > 0; --iDimension){
+                bool const isGreater = (kChild & mask);
+                ptNodeMin[iDimension-1] += isGreater * (this->box_m.Max[iDimension - 1] - this->box_m.Min[iDimension - 1]) * rScale;
+                mask >>= 1;
+            }
+        }
+        
+        for(dim_type iDimension = 0; iDimension < dim_m; ++iDimension){
+            ptNodeMax[iDimension] = ptNodeMin[iDimension] + (this->box_m.Max[iDimension] - this->box_m.Min[iDimension]) * rScale;
+        }
+        
+        for(dim_type iDimension = 0; iDimension < dim_m; ++iDimension){
+            nodeChild.boundingbox_m.Min[iDimension] = ptNodeMin[iDimension];
+            nodeChild.boundingbox_m.Max[iDimension] = ptNodeMax[iDimension];
+        }
+
+        return nodeChild;
+    }
 
     morton_node_id_type EstimateNodeNumber(entity_id_type nParticles, depth_type MaxDepth, entity_id_type nMaxElements){
         
@@ -181,6 +267,8 @@ public: // Aid Functions
 
     }
 
+public: // Morton Encoding Functions
+
     morton_node_id_type GetLocationId(position_type pt){
 
         return MortonEncode(GetGridId(pt));
@@ -201,11 +289,28 @@ public: // Aid Functions
     }
 
     // Only works for dim = 3 for now
-    morton_node_id_type MortonEncode(ippl::Vector<grid_id_type,3> aidGrid){
+    morton_node_id_type MortonEncode(ippl::Vector<grid_id_type,3> aidGrid) const{
 
         assert(dim_m == 3);
 
         return (part1By2(aidGrid[2]) << 2) + (part1By2(aidGrid[1]) << 1) + part1By2(aidGrid[0]);
+
+    }
+
+    ippl::Vector<grid_id_type,3> MortonDecode(morton_node_id_type kNode, depth_type nDepthMax) const{
+        
+        ippl::Vector<grid_id_type, 3> aidGrid;
+        auto const nDepth = GetDepth(kNode);
+
+        auto mask = morton_node_id_type{ 1 };
+        for (depth_type iDepth = nDepthMax - nDepth, shift = 0; iDepth < nDepthMax; ++iDepth){
+            for (dim_type iDimension = 0; iDimension < dim_m; ++iDimension, ++shift){
+                aidGrid[iDimension] |= (kNode & mask) >> (shift - iDepth);
+                mask <<= 1;
+            }
+        }
+
+        return aidGrid;
 
     }
 
@@ -224,44 +329,121 @@ public: // Aid Functions
 
     }
 
-    //using LocationIterator = typename Kokkos::vector<Kokkos::pair<entity_id_type, morton_node_id_type>>::const_iterator;
+public: // Node Info Functions
 
-    void addNodes(OrthoTreeNode& nodeParent, morton_node_id_type kParent, auto& itEndPrev, auto const& itEnd, morton_node_id_type idLocationBegin, depth_type nDepthRemain){
 
-        const auto nElement = static_cast<size_t>(itEnd - itEndPrev);;
-        //auto const nElement = Kokkos::Experimental::distance(itEndPrev, itEnd);
-
-        // reached leaf node -> fill points into vid_m vector
-        if(nElement < this->maxelements_m || nDepthRemain == 0){
-            nodeParent.vid_m.resize(nElement);
-            std::transform(itEndPrev, itEnd, nodeParent.vid_m.begin(), [](auto const item){return item.first;});
-            itEndPrev = itEnd;
-            return;
-        }
-
-        --nDepthRemain;
-
-        auto const shift = nDepthRemain * dim_m;
-        auto const nLocationStep = morton_node_id_type{1} << shift;
-        auto const flagParent = kParent << dim_m;
+    bool IsValidKey(uint64_t key) const{ 
         
-        while(itEndPrev != itEnd){
-            auto const idChildActual = morton_node_id_type((itEndPrev->second - idLocationBegin) >> shift);
-            auto const itEndActual = std::partition_point(itEndPrev, itEnd, [&](auto const idPoint)
-            {
-                return idChildActual == morton_node_id_type((idPoint.second - idLocationBegin) >> shift);
-            });
-
-            auto const mChildActual = morton_node_id_type(idChildActual);
-            morton_node_id_type const kChild = flagParent | mChildActual;
-            morton_node_id_type const idLocationBeginChild = idLocationBegin + mChildActual * nLocationStep;
-            OrthoTreeNode& nodeChild = this->createChild(nodeParent,/* idChildActual,*/ kChild);
-            nodeChild.parent_m = kParent;
-            this->addNodes(nodeChild, kChild, itEndPrev, itEndActual, idLocationBeginChild, nDepthRemain);
-        }
+        return key; 
+    
     }
 
-    depth_type GetDepth(morton_node_id_type key){
+    void VisitNodes(morton_node_id_type kRoot, auto procedure) const{
+        
+        auto q = std::queue<morton_node_id_type>();
+
+        for(q.push(kRoot); !q.empty(); q.pop()){
+
+            auto const& key = q.front();
+            auto const& node = nodes_m.value_at(nodes_m.find(key));
+            procedure(key, node);
+
+            Kokkos::vector<morton_node_id_type> children = node.GetChildren();
+            for(unsigned int i=0; i<children.size(); ++i){
+                q.push(children[i]);
+
+            }
+
+        }
+
+    }
+
+    void PrintStructure(morton_node_id_type kRoot = 1) const {
+        VisitNodes(kRoot, [&](morton_node_id_type key, OrthoTreeNode const& node){
+            
+            // Node info
+            std::cout << "Node ID       = " << key << "\n";
+            std::cout << "Depth         = " << int(GetDepth(key)) << "\n";
+            std::cout << "Parent ID     = " << node.parent_m << "\n";
+            std::cout << "Children IDs  = ";
+            Kokkos::vector<morton_node_id_type> children = node.GetChildren();
+            for(unsigned int idx=0;idx<children.size();++idx) std::cout << children[idx] << " ";
+            std::cout << "\n";
+            std::cout << "Grid ID       = " << "[ ";
+            for(int i=0;i<3;++i) std::cout << MortonDecode(key,GetDepth(key))[i] << " ";
+            std::cout << "] \n";
+
+            // Box extent
+            std::cout << "Box           = [(";
+            for(int i=0;i<3;++i) std::cout << node.boundingbox_m.Min[i] << ",";
+            std::cout << "),(";                 
+            for(int i=0;i<3;++i) std::cout << node.boundingbox_m.Max[i] << ",";
+            std::cout << ")] \n";
+
+            // Colleagues
+            std::cout << "Colleagues    : ";
+            Kokkos::vector<morton_node_id_type> colleagues = this->GetColleagues(key);
+            for(unsigned int idx=0; idx<colleagues.size(); ++idx){
+                std::cout << colleagues[idx] << " ";
+            }
+            std::cout << "\n";
+
+            // Coarse Nbrs
+            if(key != kRoot){
+                std::cout << "Coarse Nbrs   : ";
+                Kokkos::vector<morton_node_id_type> coarseNbrs = this->GetCoarseNbrs(key);
+                for(unsigned int idx=0; idx<coarseNbrs.size(); ++idx){
+                    std::cout << coarseNbrs[idx] << " ";
+                }
+                std::cout << "\n";
+            }
+
+            // Points
+            std::cout << "Points        : ";
+            if(node.IsAnyChildExist()){
+                Kokkos::vector<entity_id_type> points = this->CollectIds(key);
+                for(unsigned int idx=0; idx<points.size(); ++idx) std::cout << points[idx] << " ";
+            }
+            else{
+                for(unsigned int idx=0; idx<node.vid_m.size(); ++idx) std::cout << node.vid_m[idx] << " ";
+            }
+
+            std::cout << "\n\n";
+        
+        });
+    }
+
+    enum BoxRelation : int8_t {Overlapped = -1, Adjacent = 0, Separated = 1};
+    BoxRelation boxRelation(box_type& e1, box_type& e2) const{
+        
+        enum BoxRelationCandidate : uint8_t  { OverlappedC = 0x1, AdjacentC = 0x2, SeparatedC = 0x4 };
+        int8_t rel = 0;
+        
+        for(dim_type iDimension = 0; iDimension < dim_m; ++ iDimension){
+            if      ((e1.Min[iDimension] <  e2.Max[iDimension]) && (e1.Max[iDimension] >  e2.Min[iDimension])) rel |= BoxRelationCandidate::OverlappedC;
+            else if ((e1.Min[iDimension] == e2.Max[iDimension]) || (e1.Max[iDimension] == e2.Min[iDimension])) rel |= BoxRelationCandidate::AdjacentC;
+            else if ((e1.Min[iDimension] >  e2.Max[iDimension]) || (e1.Max[iDimension] <  e2.Min[iDimension])) return BoxRelation::Separated;
+        }
+
+        return (rel & BoxRelationCandidate::AdjacentC) == BoxRelationCandidate::AdjacentC ? BoxRelation::Adjacent : BoxRelation::Overlapped;
+    
+    }
+
+    
+
+    
+
+    
+
+public: // Getters
+
+    OrthoTreeNode& GetNode(morton_node_id_type key) const{
+        
+        return nodes_m.value_at(nodes_m.find(key));
+
+    }
+    
+    depth_type GetDepth(morton_node_id_type key) const{
         
         // Keep shifting off three bits at a time, increasing depth counter
         for (depth_type d = 0; IsValidKey(key); ++d, key >>= dim_m)
@@ -269,47 +451,113 @@ public: // Aid Functions
             return d;
 
         assert(false); // Bad key
+        
         return 0;
 
     }
 
-    bool IsValidKey(uint64_t key) { return key; }
+    OrthoTreeNode const& GetParent(morton_node_id_type key){
 
-    OrthoTreeNode& createChild(OrthoTreeNode& nodeParent,/* child_id_type iChild,*/ morton_node_id_type kChild){
+        assert(key != 1);
+
+        return nodes_m.value_at(nodes_m.find(key >> 3));
+
+    }
+
+    Kokkos::vector<morton_node_id_type> GetColleagues(morton_node_id_type key) const{
         
-        if(!nodeParent.HasChild(kChild)) nodeParent.AddChildInOrder(kChild);
+        if(key == 1) return Kokkos::vector<morton_node_id_type>{};
 
-        // inserts {kChild, Node} pair into the unorderd map nodes_m
-        nodes_m.insert(kChild, OrthoTreeNode());
+        ippl::Vector<grid_id_type,3> aidGrid = MortonDecode(key, GetDepth(key));
+        Kokkos::vector<morton_node_id_type> colleagues={};
 
-        OrthoTreeNode& nodeChild = nodes_m.value_at(nodes_m.find(kChild)); // reference to newly created node
-        
-        position_type ptNodeMin = this->box_m.Min;
-        position_type ptNodeMax;
+        for(int z=-1; z<=1; ++z){
+            for(int y=-1; y<=1; ++y){
+                for(int x=-1; x<=1; ++x){
 
-        auto const nDepth   = this->GetDepth(kChild);
-        auto mask           = morton_node_id_type{ 1 } << (nDepth * dim_m -1);
+                    morton_node_id_type nbrKey = MortonEncode( ippl::Vector<grid_id_type,3> {aidGrid[0]+x, aidGrid[1]+y, aidGrid[2]+z} ) + Kokkos::pow(8,GetDepth(key));
+                    if(nodes_m.exists(nbrKey)) colleagues.push_back(nbrKey);
 
-        double rScale = 1.0;
-        for(depth_type iDepth=0; iDepth < nDepth; ++iDepth){
-            rScale *= 0.5;
-            for(dim_type iDimension = dim_m; iDimension > 0; --iDimension){
-                bool const isGreater = (kChild & mask);
-                ptNodeMin[iDimension-1] += isGreater * (this->box_m.Max[iDimension - 1] - this->box_m.Min[iDimension - 1]) * rScale;
-                mask >>= 1;
+                }
             }
         }
+
+        return colleagues;
+
+    }
+
+    Kokkos::vector<morton_node_id_type> GetCoarseNbrs(morton_node_id_type key) const{
+
+        assert(key != 1);
         
-        for(dim_type iDimension = 0; iDimension < dim_m; ++iDimension){
-            ptNodeMax[iDimension] = ptNodeMin[iDimension] + (this->box_m.Max[iDimension] - this->box_m.Min[iDimension]) * rScale;
-        }
-        
-        for(dim_type iDimension = 0; iDimension < dim_m; ++iDimension){
-            nodeChild.boundingbox_m.Min[iDimension] = ptNodeMin[iDimension];
-            nodeChild.boundingbox_m.Max[iDimension] = ptNodeMax[iDimension];
+        OrthoTreeNode& node = this->GetNode(key);
+        Kokkos::vector<morton_node_id_type> coarseNbrs;
+        Kokkos::vector<morton_node_id_type> parentColleagues = this->GetColleagues(key >> dim_m);
+
+        for(unsigned int idx=0; idx<parentColleagues.size(); ++idx){
+            
+            OrthoTreeNode& coarseNode = this->GetNode(parentColleagues[idx]);
+            
+            if(boxRelation(coarseNode.boundingbox_m, node.boundingbox_m) == BoxRelation::Adjacent){
+                coarseNbrs.push_back(parentColleagues[idx]);
+            }
+
         }
 
-        return nodeChild;
+        return coarseNbrs;
+
+    }
+
+    Kokkos::vector<entity_id_type> CollectIds(morton_node_id_type kRoot=1)const{
+        
+        Kokkos::vector<entity_id_type> ids;
+        ids.reserve(nodes_m.size() * Kokkos::max<size_t>(2, maxelements_m / 2));
+
+        VisitNodes(kRoot, [&ids](morton_node_id_type, OrthoTreeNode const& node)
+        {
+            for(unsigned int idx=0; idx<node.vid_m.size(); ++idx){
+                ids.push_back(node.vid_m[idx]);
+            }
+        });
+        
+        return ids;
+
+    }
+
+    Kokkos::vector<morton_node_id_type> GetLeafNodes(morton_node_id_type kRoot=1) const{
+
+        Kokkos::vector<morton_node_id_type> leafNodes;
+        leafNodes.reserve(static_cast<morton_node_id_type>(nodes_m.size()/2));
+
+        VisitNodes(kRoot, [&leafNodes](morton_node_id_type key, OrthoTreeNode const& node){if(!node.IsAnyChildExist()){leafNodes.push_back(key);} });
+
+        return leafNodes;
+    }
+
+    Kokkos::vector<morton_node_id_type> GetPotentialColleagues(morton_node_id_type key) const{
+
+        ippl::Vector<grid_id_type,3> aidGrid = MortonDecode(key, GetDepth(key));
+        Kokkos::vector<morton_node_id_type> potentialColleagues;
+
+        for(int z=-1; z<=1; ++z){
+            for(int y=-1; y<=1; ++y){
+                for(int x=-1; x<=1; ++x){
+
+                    ippl::Vector<grid_id_type,3> newGrid = ippl::Vector<grid_id_type,3>{aidGrid[0]+x, aidGrid[1]+y, aidGrid[2]+z};
+                    
+                    if (not(newGrid[0]<0 || newGrid[0]>=std::pow(2,GetDepth(key)) || newGrid[1]<0 || newGrid[1]>=std::pow(2,GetDepth(key)) || newGrid[2]<0 || newGrid[2]>=std::pow(2,GetDepth(key)))){
+                        
+                        morton_node_id_type potentialColleague = MortonEncode(newGrid) + Kokkos::pow(8, GetDepth(key));
+                        potentialColleagues.push_back(potentialColleague);
+                        
+                    }
+
+                }
+            }
+        }
+
+        return potentialColleagues;
+
     }
 
 

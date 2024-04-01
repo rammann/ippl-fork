@@ -24,14 +24,23 @@ int main(int argc, char* argv[]) {
         typedef ippl::ParticleSpatialLayout<double, 3> playout_type;
         playout_type PLayout;
         ippl::OctreeParticle particles(PLayout, 5);
-        particles.create(3);
-        particles.R(0) = ippl::Vector<double,3>{0.1,0.1,0.1};
-        particles.R(1) = ippl::Vector<double,3>{0.2,0.2,0.2};
-        particles.R(2) = ippl::Vector<double,3>{0.3,0.3,0.3};
+        unsigned int nsources = 50;
 
-        ippl::OrthoTree tree(particles, 3, ippl::BoundingBox{{0,0,0},{2,2,2}}, 2);
+        std::mt19937_64 eng;
+        std::uniform_real_distribution<double> unif(0, 1);
+
+
+        particles.create(nsources);
+        for (unsigned int i=0; i<nsources; ++i){
+            ippl::Vector<double, 3> r = {unif(eng), unif(eng), unif(eng)};
+            //std::cout << r[0] << " " << r[1] << " " << r[2] << std::endl;
+            particles.R(i)                 = r;
+            particles.rho(i)               = 0.0;
+        }
+
+        ippl::OrthoTree tree(particles, 4, ippl::BoundingBox{{0,0,0},{1,1,1}}, 3);
+        tree.PrintStructure();
         
-
         /* LocationIterator distance TEST 
         
         Kokkos::vector<double> vec(100);
