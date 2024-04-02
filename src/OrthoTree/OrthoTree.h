@@ -4,6 +4,7 @@
  * - std::transform             Kokkos::transform exists but is still "Experimental" and seems buggy
  * - std::partitition_point     Kokkos::partition_point exists but is still "Experimental" and seems buggy
  * - std::sort                  Kokkos::sort does not exist
+ * - std::queue
 */
 
 
@@ -154,6 +155,46 @@ public: // Constructors
         auto itBegin = aidLocations.begin();
         addNodes(nodes_m.value_at(nodes_m.find(kRoot)), kRoot, itBegin, aidLocations.end(), morton_node_id_type{0}, MaxDepth);
 
+        //BalanceTree(positions);
+
+    }
+
+    void BalanceTree(Kokkos::vector<position_type> positions){
+        
+        std::queue<morton_node_id_type>         unprocessedNodes    = {};
+        Kokkos::vector<morton_node_id_type>     leafNodes           = this->GetLeafNodes();
+        
+        std::sort(leafNodes.begin(), leafNodes.end(), [](morton_node_id_type l, morton_node_id_type r){return l>r;});
+        for(unsigned int idx=0; idx<leafNodes.size(); ++idx) unprocessedNodes.push(leafNodes[idx]);
+
+        while(!unprocessedNodes.empty()){
+
+            bool processed = true;
+
+            Kokkos::vector<morton_node_id_type> potentialNeighbours = this->GetPotentialColleagues(unprocessedNodes.front());
+
+            for(unsigned int idx=0; idx<potentialNeighbours.size();++idx){
+
+                if ((potentialNeighbours[idx]>>dim_m) == (unprocessedNodes.front()>>dim_m)) continue;
+                        
+                else if (nodes_m.exists(potentialNeighbours[idx] >> dim_m)) continue;
+
+                else {
+
+                    processed = false;
+
+                    morton_node_id_type ancestor = this->GetNextAncestor(potentialNeighbours[idx]);
+
+                    Kokkos::vector<morton_node_id_type> NewNodes = this->RefineNode(nodes_m.value_at(nodes_m.find(ancestor)), ancestor, positions);
+
+                    for (unsigned int idx=0; idx<NewNodes.size(); ++idx) unprocessedNodes.push(NewNodes[idx]);
+                }  
+            }
+
+            if(processed) unprocessedNodes.pop();
+        
+        }
+
     }
 
 private: // Aid Function for Constructor
@@ -267,6 +308,47 @@ private: // Aid Function for Constructor
 
     }
 
+    Kokkos::vector<morton_node_id_type> RefineNode(OrthoTreeNode& NodeParent, morton_node_id_type kParent, Kokkos::vector<position_type> positions){
+
+        const depth_type            newDepth        = this->GetDepth(kParent)+1;
+        const depth_type            nDepthRemain    = maxdepth_m - newDepth;
+        const morton_node_id_type   shift           = nDepthRemain * dim_m;
+
+        const position_type ParentBoxOrigin = NodeParent.boundingbox_m.Min;
+        Kokkos::vector<Kokkos::pair<entity_id_type,morton_node_id_type>> aidLocation(NodeParent.vid_m.size());
+        const morton_node_id_type FlagParent = kParent << dim_m;
+
+        Kokkos::vector<morton_node_id_type> NewNodes={};
+
+        std::transform(NodeParent.vid_m.begin(), NodeParent.vid_m.end(), aidLocation.begin(), [&](entity_id_type id) -> Kokkos::pair<entity_id_type, morton_node_id_type>
+        {
+            ippl::Vector<grid_id_type,3> gridId = this->GetRelativeGridId(positions[id],ParentBoxOrigin);
+            const morton_node_id_type childId = this->MortonEncode(gridId)>>shift;
+            return { id, (childId + FlagParent)};
+        });
+
+        NodeParent.vid_m = {};
+
+        for (unsigned int childId=0; childId<Kokkos::pow(2,dim_m); ++childId){
+            
+            morton_node_id_type const kChild = FlagParent | childId;
+            OrthoTreeNode& nodeChild = this->createChild(NodeParent, kChild);
+            nodeChild.parent_m=kParent;
+
+            for (unsigned int idx=0; idx<aidLocation.size(); ++idx){
+
+                if (aidLocation[idx].second == kChild) nodeChild.vid_m.push_back(aidLocation[idx].first);
+
+            }
+
+            NewNodes.push_back(kChild);
+
+        }
+
+        return NewNodes;
+
+    }
+
 public: // Morton Encoding Functions
 
     morton_node_id_type GetLocationId(position_type pt){
@@ -278,6 +360,7 @@ public: // Morton Encoding Functions
     ippl::Vector<grid_id_type,3> GetGridId(position_type pt){
 
         ippl::Vector<grid_id_type,3> aid;
+        
         for(dim_type i=0; i<dim_m; ++i){
             double r_i          = pt[i] - box_m.Min[i];
             double raster_id    = r_i * rasterizer_m[i];
@@ -286,6 +369,19 @@ public: // Morton Encoding Functions
 
         return aid;
 
+    }
+
+    ippl::Vector<grid_id_type, 3> GetRelativeGridId(position_type pt, position_type origin){
+
+        ippl::Vector<grid_id_type,3> aid;
+        
+        for(dim_type i=0; i<dim_m; ++i){
+            double r_i          = pt[i] - origin[i];
+            double raster_id    = r_i * rasterizer_m[i];
+            aid[i]              = static_cast<grid_id_type>(raster_id);
+        }
+
+        return aid;
     }
 
     // Only works for dim = 3 for now
@@ -447,9 +543,8 @@ public: // Getters
         
         // Keep shifting off three bits at a time, increasing depth counter
         for (depth_type d = 0; IsValidKey(key); ++d, key >>= dim_m)
-            if (key == 1) // If only sentinel bit remains, exit with node depth
-            return d;
-
+            if (key == 1) return d; // If only sentinel bit remains, exit with node depth
+            
         assert(false); // Bad key
         
         return 0;
@@ -559,6 +654,19 @@ public: // Getters
         return potentialColleagues;
 
     }
+
+    morton_node_id_type GetNextAncestor(morton_node_id_type key) const noexcept{
+            
+        if (nodes_m.exists(key)) return key;
+        
+        else if (key == 0) return 1;
+
+        else return GetNextAncestor(key>>dim_m);
+            
+    }
+
+
+
 
 
 
