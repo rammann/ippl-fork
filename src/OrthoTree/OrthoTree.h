@@ -155,7 +155,8 @@ public: // Constructors
         auto itBegin = aidLocations.begin();
         addNodes(nodes_m.value_at(nodes_m.find(kRoot)), kRoot, itBegin, aidLocations.end(), morton_node_id_type{0}, MaxDepth);
 
-        //BalanceTree(positions);
+
+        BalanceTree(positions);
 
     }
 
