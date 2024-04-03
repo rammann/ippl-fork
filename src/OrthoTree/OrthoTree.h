@@ -24,9 +24,10 @@ namespace ippl
 
 // Types
 
+template <unsigned short int dim>
 struct BoundingBox{
-    ippl::Vector<double, 3> Min;
-    ippl::Vector<double, 3> Max;
+    ippl::Vector<double, dim> Min;
+    ippl::Vector<double, dim> Max;
 }; 
 
 using dim_type                  = unsigned short int;
@@ -41,7 +42,7 @@ using particle_type             = OrthoTreeParticle<ippl::ParticleSpatialLayout<
 using entity_id_type            = size_t;
 using position_type             = ippl::Vector<double,3>;
 
-using box_type                  = BoundingBox;
+using box_type                  = BoundingBox<3>;
 using depth_type                = unsigned int;
 
 
@@ -115,7 +116,7 @@ public: // Constructors
 
     OrthoTree () = default;
 
-    OrthoTree (particle_type const& particles, depth_type MaxDepth, box_type Box, size_t MaxElements)
+    OrthoTree (particle_type const& particles, depth_type MaxDepth, size_t MaxElements, box_type Box)
     {
 
         this->box_m             = Box;

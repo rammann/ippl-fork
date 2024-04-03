@@ -39,5 +39,6 @@
 
 #include "OrthoTree/OrthoTree.h"
 #include "OrthoTree/OrthoTreeParticle.h"
+#include "OrthoTree/TreeOpenPoissonSolver.h"
 
 #endif

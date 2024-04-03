@@ -5,6 +5,7 @@ set (_SRCS
 set (_HDRS
     OrthoTree.h
     OrthoTreeParticle.h
+    TreeOpenPoissonSolver.h
     )
 
 include_directories (

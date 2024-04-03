@@ -19,13 +19,11 @@ namespace ippl{
     class OrthoTreeParticle : public ippl::ParticleBase<PLayout> {
     
     public:
-
-        unsigned int tindex; // index of first targetpoint
         
         ippl::ParticleAttrib<double> rho; // charge
 
         OrthoTreeParticle () noexcept = default;
-        OrthoTreeParticle (PLayout& L, unsigned int i) : ippl::ParticleBase<PLayout>(L), tindex(i) {
+        OrthoTreeParticle (PLayout& L, unsigned int i) : ippl::ParticleBase<PLayout>(L){
             this->addAttribute(rho);
         }
 
