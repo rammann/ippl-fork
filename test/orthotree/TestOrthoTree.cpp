@@ -23,7 +23,7 @@ int main(int argc, char* argv[]) {
         /* OCTREE CONSTRUCTION TEST */
         typedef ippl::ParticleSpatialLayout<double, 3> playout_type;
         playout_type PLayout;
-        ippl::OctreeParticle particles(PLayout, 5);
+        ippl::OrthoTreeParticle particles(PLayout, 5);
         unsigned int nsources = 50;
 
         std::mt19937_64 eng;

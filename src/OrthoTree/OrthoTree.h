@@ -15,7 +15,8 @@
 #include <Kokkos_UnorderedMap.hpp>
 #include <Kokkos_Pair.hpp>
 #include <Kokkos_StdAlgorithms.hpp>
-
+#include <queue>
+#include "OrthoTreeParticle.h"
 
 
 namespace ippl
@@ -36,7 +37,7 @@ using morton_node_id_type       = unsigned int;
 using grid_id_type              = unsigned int;
 
 // Particle Types
-using particle_type             = OctreeParticle<ippl::ParticleSpatialLayout<double,3>>;
+using particle_type             = OrthoTreeParticle<ippl::ParticleSpatialLayout<double,3>>;
 using entity_id_type            = size_t;
 using position_type             = ippl::Vector<double,3>;
 

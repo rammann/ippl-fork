@@ -36,10 +36,8 @@
 // // IPPL Load balancing
 #include "Decomposition/OrthogonalRecursiveBisection.h"
 
-#include "Octree/OctreeParticle.h"
-#include "Octree/Octree.h"
 
 #include "OrthoTree/OrthoTree.h"
-#include "OrthoTree/OrthoTreeContainer.h"
+#include "OrthoTree/OrthoTreeParticle.h"
 
 #endif
