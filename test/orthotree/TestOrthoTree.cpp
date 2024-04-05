@@ -16,35 +16,35 @@ int main(int argc, char* argv[]) {
         typedef ippl::ParticleSpatialLayout<double, 3> playout_type;
         playout_type PLayout;
 
-        ippl::OrthoTreeParticle source_particles(PLayout, 0);
-        unsigned int nsources = 50;
-        source_particles.create(nsources);
+        ippl::OrthoTreeParticle particles(PLayout);
+        unsigned int points = 100;
+        unsigned int tidx = 50;
+        particles.create(points);
 
-        ippl::OrthoTreeParticle target_particles(PLayout, 0);
-        unsigned int ntargets = nsources;
-        target_particles.create(ntargets);
 
         std::mt19937_64 eng;
         std::uniform_real_distribution<double> unif(0, 1);
-        for(unsigned int idx=0; idx<ntargets; ++idx){
-            ippl::Vector<double,3> r1 = {unif(eng), unif(eng), unif(eng)};
-            ippl::Vector<double,3> r2 = {unif(eng), unif(eng), unif(eng)};
-            source_particles.R(idx) = r1;
-            target_particles.R(idx) = r2;
-            source_particles.rho(idx) = 0.0;
-            target_particles.rho(idx) = 0.0;
+        for(unsigned int idx=0; idx<points; ++idx){
+            ippl::Vector<double,3> r = {unif(eng), unif(eng), unif(eng)};
+            particles.R(idx) = r;
+            particles.rho(idx) = idx<tidx? unif(eng): 0.0;
         }
 
 
         // Tree Params
-        ippl::ParameterList params;
-        params.add("maxdepth",          5);
-        params.add("maxleafelements",   5);
-        params.add("boxmin",            0.0);
-        params.add("boxmax",            1.0);
+        ippl::ParameterList treeparams;
+        treeparams.add("maxdepth",          5);
+        treeparams.add("maxleafelements",   5);
+        treeparams.add("boxmin",            0.0);
+        treeparams.add("boxmax",            1.0);
+
+        // Solver Params
+        ippl::ParameterList solverparams;
+        solverparams.add("eps", 0.001);
 
         
-        ippl::TreeOpenPoissonSolver tree(source_particles, 20, params);
+        ippl::TreeOpenPoissonSolver solver(particles, tidx, treeparams, solverparams);
+        solver.Solve();
 
 
 

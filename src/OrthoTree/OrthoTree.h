@@ -536,6 +536,12 @@ public: // Node Info Functions
 
 public: // Getters
 
+    dim_type GetDim() const{
+        
+        return dim_m;
+        
+    }
+
     OrthoTreeNode& GetNode(morton_node_id_type key) const{
         
         return nodes_m.value_at(nodes_m.find(key));

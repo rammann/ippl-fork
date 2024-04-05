@@ -23,7 +23,7 @@ namespace ippl{
         ippl::ParticleAttrib<double> rho; // charge
 
         OrthoTreeParticle () noexcept = default;
-        OrthoTreeParticle (PLayout& L, unsigned int i) : ippl::ParticleBase<PLayout>(L){
+        OrthoTreeParticle (PLayout& L) : ippl::ParticleBase<PLayout>(L){
             this->addAttribute(rho);
         }
 
