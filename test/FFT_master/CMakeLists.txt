@@ -13,16 +13,36 @@ link_directories (
 set (IPPL_LIBS ippl)
 set (COMPILE_FLAGS ${OPAL_CXX_FLAGS})
 
-
-add_executable (TestNUFFT1 TestNUFFT1.cpp)
+add_executable (TestFFTCC TestFFTCC.cpp)
 target_link_libraries (
-    TestNUFFT1
+    TestFFTCC
     ${IPPL_LIBS}
     ${MPI_CXX_LIBRARIES}
 )
-add_executable (TestNUFFT2 TestNUFFT2.cpp)
+
+add_executable (TestFFTRC TestFFTRC.cpp)
 target_link_libraries (
-    TestNUFFT2
+    TestFFTRC
+    ${IPPL_LIBS}
+    ${MPI_CXX_LIBRARIES}
+)
+
+add_executable (TestSine TestSine.cpp)
+target_link_libraries (
+    TestSine
+    ${IPPL_LIBS}
+    ${MPI_CXX_LIBRARIES}
+)
+add_executable (TestCos TestCos.cpp)
+target_link_libraries (
+    TestCos
+    ${IPPL_LIBS}
+    ${MPI_CXX_LIBRARIES}
+)
+
+add_executable (TestCos1 TestCos1.cpp)
+target_link_libraries (
+    TestCos1
     ${IPPL_LIBS}
     ${MPI_CXX_LIBRARIES}
 )

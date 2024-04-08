@@ -21,10 +21,10 @@
 
 #include "FieldLayout/FieldLayout.h"
 
-#ifdef ENABLE_FFT
+//#ifdef ENABLE_FFT
+//#include "FFT/FFT.h"
+//#endif
 #include "FFT/FFT.h"
-#endif
-
 // // IPPL Meshes
 // #include "Meshes/UniformCartesian.h"
 
