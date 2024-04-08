@@ -64,11 +64,19 @@ if (USE_ALTERNATIVE_VARIANT)
 endif()
 
 
-option (ENABLE_FFT "Enable FFT transform" OFF)
+option (ENABLE_FFT "Enable FFT transform" ON)
 if (ENABLE_FFT)
     add_definitions (-DENABLE_FFT)
     find_package (Heffte 2.2.0 REQUIRED)
     message (STATUS "Found Heffte_DIR: ${Heffte_DIR}")
+endif ()
+
+# NUFFT CMAKE ADDITION FOR DMK (RYAN MASTERTHESIS)
+option (ENABLE_NUFFT "Enable NUFFT transform" ON)
+if (ENABLE_NUFFT)
+    add_definitions (-DENABLE_NUFFT)
+    find_package(CUFINUFFT REQUIRED)
+    message (STATUS "Found CUFINUFFT_DIR: ${CUFINUFFT_DIR}")
 endif ()
 
 option (ENABLE_SOLVERS "Enable IPPL solvers" OFF)

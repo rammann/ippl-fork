@@ -44,7 +44,7 @@ int main(int argc, char* argv[]) {
 
         
         ippl::TreeOpenPoissonSolver solver(particles, tidx, treeparams, solverparams);
-        solver.Solve();
+        //solver.Solve();
 
 
 
