@@ -72,13 +72,16 @@ if (ENABLE_FFT)
 endif ()
 
 # NUFFT CMAKE ADDITION FOR DMK (RYAN MASTERTHESIS)
+set(ENABLE_NUFFT ON)
 option (ENABLE_NUFFT "Enable NUFFT transform" ON)
 if (ENABLE_NUFFT)
     add_definitions (-DENABLE_NUFFT)
-    find_package(CUFINUFFT REQUIRED)
-    message (STATUS "Found CUFINUFFT_DIR: ${CUFINUFFT_DIR}")
+    #find_package(finufft REQUIRED)
+    include_directories("${CMAKE_SOURCE_DIR}/../finufft/include")
+    link_directories("${CMAKE_SOURCE_DIR}/../lib")
+    message (STATUS "Found FINUFFT_DIR: ${FINUFFT_DIR}")
 endif ()
-
+ 
 option (ENABLE_SOLVERS "Enable IPPL solvers" OFF)
 
 add_subdirectory (src)
