@@ -22,7 +22,6 @@
 #include <finufft.h>
 #include <memory>
 #include <type_traits>
-#include<Particle/ParticleAttrib.h>
 
 #include "Utility/IpplException.h"
 #include "Utility/ParameterList.h"
@@ -333,6 +332,7 @@ namespace ippl {
   
 
 #include "FFT/FFT.hpp"
+#include "FFT/NUFFT.h"
 
 #endif  // IPPL_FFT_FFT_H
 
