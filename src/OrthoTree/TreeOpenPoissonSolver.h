@@ -67,8 +67,8 @@ namespace ippl
         
             std::cout << "Farfield \n";
             
-            unsigned int nf = Kokkos::ceil(6/Kokkos::numbers::pi * Kokkos::log(1/eps_m));
-            unsigned int Nf = Kokkos::pow(nf, dim_m);
+            //unsigned int nf = Kokkos::ceil(6/Kokkos::numbers::pi * Kokkos::log(1/eps_m));
+            //unsigned int Nf = Kokkos::pow(nf, dim_m);
         }
 
          

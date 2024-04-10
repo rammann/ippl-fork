@@ -31,6 +31,7 @@ option (USE_STATIC_LIBRARIES "Link with static libraries if available" ON)
 message (STATUS "Build type is: " ${CMAKE_BUILD_TYPE})
 
 find_package(Kokkos 4.0.0 REQUIRED)
+message (STATUS "Found Kokkos_DIR: ${Kokkos_DIR}")
 
 # Select flags.
 set (CMAKE_CXX_STANDARD 20)
@@ -72,6 +73,11 @@ if (ENABLE_FFT)
 endif ()
 
 # NUFFT CMAKE ADDITION FOR DMK (RYAN MASTERTHESIS)
+
+#set(FINUFFT_INCLUDE_DIR /Users/ryan/Documents/Masterthesis/code_dev/ippl-build-scripts/finufft/include)
+#set(FINUFFT_LIBRARY_DIR /Users/ryan/Documents/Masterthesis/code_dev/ippl-build-scripts/finufft/build)
+#set(FINUFFT_DIR /Users/ryan/Documents/Masterthesis/code_dev/ippl-build-scripts/finufft/)
+
 set(ENABLE_NUFFT ON)
 option (ENABLE_NUFFT "Enable NUFFT transform" ON)
 if (ENABLE_NUFFT)

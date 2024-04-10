@@ -7,7 +7,7 @@
                 "${workspaceFolder}/src/**",
                 "/opt/homebrew/Cellar/mpich/4.2.0/include/**",
                 "/Users/ryan/Documents/Masterthesis/code_dev/ippl-build-scripts/kokkos/Kokkos_serial/include/**",
-                "/Users/ryan/Documents/Masterthesis/code_dev/ippl-build-scripts/heffte/heffte-master/include/**",
+                "/Users/ryan/Documents/Masterthesis/code_dev/ippl-build-scripts/heffte/heffte_serial/include/**",
                 "/Users/ryan/Documents/Masterthesis/code_dev/ippl-build-scripts/finufft/include/**"
             ],
             "defines": [],

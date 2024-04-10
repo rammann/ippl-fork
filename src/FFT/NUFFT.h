@@ -4,6 +4,7 @@
 #include <functional>
 #include <finufft.h>
 #include <Particle/ParticleAttrib.h>
+#include <complex> 
 
 
 namespace ippl{
@@ -47,9 +48,9 @@ public:
 
     using complexType = typename detail::finufftType<T>::complexType;
     using plan_t = typename detail::finufftType<T>::plan_t;
-    using view_field_type = typename detail::ViewType<complexType, 3, Kokkos::LayoutLeft>::view_type;
-    using view_particle_real_type = typename detail::ViewType<T, 1, Kokkos::LayoutLeft>::view_type;
-    using view_particle_complex_type = typename detail::ViewType<complexType, 1, Kokkos::LayoutLeft>::view_type;
+    using view_field_type = typename detail::ViewType<complexType, 3, Kokkos::LayoutRight>::view_type;
+    using view_particle_real_type = typename detail::ViewType<T, 1, Kokkos::LayoutRight>::view_type;
+    using view_particle_complex_type = typename detail::ViewType<complexType, 1, Kokkos::LayoutRight>::view_type;
 
     NUFFT() = default;
 
@@ -111,7 +112,7 @@ public:
 
         auto tempField = tempField_m;
         auto tempQ = tempQ_m;
-        Kokkos::View<T*,Kokkos::LayoutLeft> tempR[3] = {};
+        Kokkos::View<T*,Kokkos::LayoutRight> tempR[3] = {};
         for(size_t d = 0; d < Dim; ++d) {
             tempR[d] = tempR_m[d];
         }
@@ -127,10 +128,8 @@ public:
                                            const size_t j,
                                            const size_t k)
                              {
-                                 tempField(i-nghost, j-nghost, k-nghost).x =
-                                       fview(i, j, k).real();
-                                 tempField(i-nghost, j-nghost, k-nghost).y = 
-                                       fview(i, j, k).imag();
+                                 tempField(i-nghost, j-nghost, k-nghost).real(fview(i, j, k).real()); //= fview(i, j, k).real();
+                                 tempField(i-nghost, j-nghost, k-nghost).imag(fview(i, j, k).imag()); //= fview(i, j, k).imag();
                              });
 
 
@@ -141,8 +140,8 @@ public:
                                  for(size_t d = 0; d < Dim; ++d) {
                                     tempR[d](i) = (Rview(i)[d] - origin[d]) * (2.0 * pi / Len[d]);
                                  }
-                                 tempQ(i).x = Qview(i);
-                                 tempQ(i).y = 0.0;
+                                 tempQ(i).real(Qview(i)); // = Qview(i);
+                                 tempQ(i).imag(0.0); // = 0.0;
                              });
 
         ier_m = nufft_m.setpts(plan_m, localNp, tempR[0].data(), tempR[1].data(), tempR[2].data(), 0, 
@@ -163,10 +162,8 @@ public:
                                                const size_t j,
                                                const size_t k)
                                  {
-                                     fview(i, j, k).real() =
-                                     tempField(i-nghost, j-nghost, k-nghost).x;
-                                     fview(i, j, k).imag() =
-                                     tempField(i-nghost, j-nghost, k-nghost).y;
+                                     fview(i, j, k).real(tempField(i-nghost, j-nghost, k-nghost).real()); // = tempField(i-nghost, j-nghost, k-nghost).real();
+                                     fview(i, j, k).imag(tempField(i-nghost, j-nghost, k-nghost).imag()); // = tempField(i-nghost, j-nghost, k-nghost).imag();
                                  });
         }
         else if(type_m == 2) {
@@ -174,7 +171,7 @@ public:
                                  localNp,
                                  KOKKOS_LAMBDA(const size_t i)
                                  {
-                                     Qview(i) = tempQ(i).x;
+                                     Qview(i) = tempQ(i).real();
                                  });
         }
     }
