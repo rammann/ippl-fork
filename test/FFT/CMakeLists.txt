@@ -54,7 +54,7 @@ target_link_libraries (
     ${MPI_CXX_LIBRARIES}
     /Users/ryan/Documents/Masterthesis/code_dev/ippl-build-scripts/finufft/build/libfinufft.dylib
     /opt/homebrew/opt/libomp/lib/libomp.dylib
-    #/opt/homebrew/Cellar/fftw/3.3.10_1/lib/libfftw3.a
+#    /opt/homebrew/Cellar/fftw/3.3.10_1/lib/libfftw3.a
 )
 # vi: set et ts=4 sw=4 sts=4:
 

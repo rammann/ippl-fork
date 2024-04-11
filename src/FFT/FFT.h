@@ -19,7 +19,7 @@
 #include <array>
 #include <heffte_fft3d.h>
 #include <heffte_fft3d_r2c.h>
-#include <finufft.h>
+
 #include <memory>
 #include <type_traits>
 

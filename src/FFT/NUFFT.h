@@ -38,7 +38,7 @@ struct finufftType<double> {
 }// namespace ippl::detail
 
 template <size_t Dim, class T, class Mesh, class Centering>
-class NUFFT {
+class NUFFT{
 
 public:
 
@@ -48,9 +48,9 @@ public:
 
     using complexType = typename detail::finufftType<T>::complexType;
     using plan_t = typename detail::finufftType<T>::plan_t;
-    using view_field_type = typename detail::ViewType<complexType, 3, Kokkos::LayoutRight>::view_type;
-    using view_particle_real_type = typename detail::ViewType<T, 1, Kokkos::LayoutRight>::view_type;
-    using view_particle_complex_type = typename detail::ViewType<complexType, 1, Kokkos::LayoutRight>::view_type;
+    using view_field_type = typename detail::ViewType<complexType, 3, Kokkos::LayoutLeft>::view_type;
+    using view_particle_real_type = typename detail::ViewType<T, 1, Kokkos::LayoutLeft>::view_type;
+    using view_particle_complex_type = typename detail::ViewType<complexType, 1, Kokkos::LayoutLeft>::view_type;
 
     NUFFT() = default;
 
@@ -88,6 +88,7 @@ public:
     template<class... Properties>
     void transform(const ParticleAttrib< Vector<T, Dim>, Properties... >& R, ParticleAttrib<T, Properties... >& Q, ComplexField_t& f){
         
+        
         auto fview = f.getView();
         auto Rview = R.getView();
         auto Qview = Q.getView();
@@ -108,11 +109,14 @@ public:
             Len[d] = dx[d] * N[d];
         }
 
+        std::cout << origin[0] << " " << origin[1] << " " << origin[2] << "\n";
+        std::cout << Len[0] << " " << Len[1] << " " << Len[2] << "\n";
+
         const double pi = std::acos(-1.0);
 
         auto tempField = tempField_m;
         auto tempQ = tempQ_m;
-        Kokkos::View<T*,Kokkos::LayoutRight> tempR[3] = {};
+        Kokkos::View<T*,Kokkos::LayoutLeft> tempR[3] = {};
         for(size_t d = 0; d < Dim; ++d) {
             tempR[d] = tempR_m[d];
         }
@@ -138,9 +142,13 @@ public:
                              KOKKOS_LAMBDA(const size_t i)
                              {
                                  for(size_t d = 0; d < Dim; ++d) {
-                                    tempR[d](i) = (Rview(i)[d] - origin[d]) * (2.0 * pi / Len[d]);
+                                    //tempR[d](i) = Rview(i)[d];
+                                    //tempR[d](i) = (Rview(i)[d] - origin[d]) * (2.0 * pi / Len[d]);
+                                    //tempR[d](i) = (Rview(i)[d] - origin[d])  / Len[d];
+                                    tempR[d](i) = -pi + ((2 * pi / Len[d]) * (Rview(i)[d] - origin[d]));
                                  }
                                  tempQ(i).real(Qview(i)); // = Qview(i);
+                                 // tempQ.real() = Qview(i).x;
                                  tempQ(i).imag(0.0); // = 0.0;
                              });
 

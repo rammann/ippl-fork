@@ -53,7 +53,7 @@ namespace ippl
             
             eps_m = solverparams.get<double>("eps");
 
-        
+            std::cout << nsources_m << "\n";
 
         }
     

@@ -63,7 +63,7 @@ struct generate_random {
 
 int main(int argc, char* argv[]){
 
-     /*
+     
     ippl::initialize(argc, argv);
     {
        
@@ -77,7 +77,7 @@ int main(int argc, char* argv[]){
         typedef Bunch<playout_type> bunch_type;
 
         
-        ippl::Vector<int, dim> pt = {512, 512, 512};
+        ippl::Vector<int, dim> pt = {32, 32, 32};
         ippl::Index I(pt[0]);
         ippl::Index J(pt[1]);
         ippl::Index K(pt[2]);
@@ -90,9 +90,9 @@ int main(int argc, char* argv[]){
         ippl::FieldLayout<dim> layout(MPI_COMM_WORLD, owned, isParallel);
 
         std::array<double, dim> dx = {
-        2.0 * pi / double(pt[0]),
-        2.0 * pi / double(pt[1]),
-        2.0 * pi / double(pt[2]),
+        10 * pi / double(pt[0]),
+        10 * pi / double(pt[1]),
+        10 * pi / double(pt[2]),
         };
 
         //std::array<double, dim> dx = {
@@ -103,8 +103,8 @@ int main(int argc, char* argv[]){
         typedef ippl::Vector<double, 3> Vector_t;
 
         Vector_t hx = {dx[0], dx[1], dx[2]};
-        Vector_t origin = {-pi, -pi, -pi};
-        //Vector_t origin = {0, 0, 0};
+        //Vector_t origin = {-2*pi, -2*pi, -2*pi};
+        Vector_t origin = {0, 0, 0};
         ippl::UniformCartesian<double, 3> mesh(owned, hx, origin);
 
         playout_type pl(layout, mesh);
@@ -115,7 +115,7 @@ int main(int argc, char* argv[]){
         using size_type = ippl::detail::size_type;
 
 
-        size_type Np = std::pow(512,3) * 5;
+        size_type Np = std::pow(32,3);
         
         typedef ippl::Field<Kokkos::complex<double>, dim, Mesh_t, Centering_t> field_type;
 
@@ -126,10 +126,11 @@ int main(int argc, char* argv[]){
 
 
         //finufft_default_opts(NULL);
-        
+        fftParams.add("use_finufft_defaults", true); 
+
         typedef ippl::NUFFT<3,double,Mesh_t, Centering_t> NUFFT_type;
 
-        //std::unique_ptr<NUFFT_type> nufft;
+        std::unique_ptr<NUFFT_type> nufft;
         int type = 1;
         
         
@@ -141,9 +142,11 @@ int main(int argc, char* argv[]){
 
         bunch.create(nloc);
         
-        nufft = std::make_unique<NUFFT_type>(layout, nloc, type, fftParams);
+        nufft = std::make_unique<NUFFT_type>(layout, Np, type, fftParams);
+        
         
         Kokkos::Random_XorShift64_Pool<> rand_pool64((size_type)(42));
+        
         Kokkos::parallel_for(nloc,
                             generate_random<Vector_t, Kokkos::Random_XorShift64_Pool<>, dim>(
                             bunch.R.getView(), bunch.Q.getView(), rand_pool64, minU, maxU));
@@ -201,6 +204,6 @@ int main(int argc, char* argv[]){
         
     }
     ippl::finalize();
-*/
+
     return 0;
 }
