@@ -84,7 +84,7 @@ if (ENABLE_NUFFT)
     add_definitions (-DENABLE_NUFFT)
     #find_package(finufft REQUIRED)
     include_directories("${CMAKE_SOURCE_DIR}/../finufft/include")
-    link_directories("${CMAKE_SOURCE_DIR}/../lib")
+    #link_directories("${CMAKE_SOURCE_DIR}/../lib")
     message (STATUS "Found FINUFFT_DIR: ${FINUFFT_DIR}")
 endif ()
  
