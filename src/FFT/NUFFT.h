@@ -143,12 +143,11 @@ public:
                              {
                                  for(size_t d = 0; d < Dim; ++d) {
                                     //tempR[d](i) = Rview(i)[d];
-                                    //tempR[d](i) = (Rview(i)[d] - origin[d]) * (2.0 * pi / Len[d]);
+                                    tempR[d](i) = (Rview(i)[d] - origin[d]) * (2.0 * pi / Len[d]);
                                     //tempR[d](i) = (Rview(i)[d] - origin[d])  / Len[d];
-                                    tempR[d](i) = -pi + ((2 * pi / Len[d]) * (Rview(i)[d] - origin[d]));
+                                    //tempR[d](i) = -pi + ((2 * pi / Len[d]) * (Rview(i)[d] - origin[d]));
                                  }
                                  tempQ(i).real(Qview(i)); // = Qview(i);
-                                 // tempQ.real() = Qview(i).x;
                                  tempQ(i).imag(0.0); // = 0.0;
                              });
 

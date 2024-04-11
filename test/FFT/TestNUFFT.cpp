@@ -66,7 +66,7 @@ int main(int argc, char* argv[]){
      
     ippl::initialize(argc, argv);
     {
-       
+        typedef ippl::Vector<double, 3> Vector_t;
         constexpr unsigned int dim = 3;
         using Mesh_t               = ippl::UniformCartesian<double, dim>;
         using Centering_t          = Mesh_t::DefaultCentering;
@@ -76,13 +76,14 @@ int main(int argc, char* argv[]){
         typedef ippl::ParticleSpatialLayout<double, 3> playout_type;
         typedef Bunch<playout_type> bunch_type;
 
-        
+        // Points per dim and index setup
         ippl::Vector<int, dim> pt = {32, 32, 32};
         ippl::Index I(pt[0]);
         ippl::Index J(pt[1]);
         ippl::Index K(pt[2]);
         ippl::NDIndex<dim> owned(I, J, K);
 
+        
         std::array<bool, dim> isParallel;  // Specifies SERIAL, PARALLEL dims
         isParallel.fill(false);
 
@@ -90,21 +91,14 @@ int main(int argc, char* argv[]){
         ippl::FieldLayout<dim> layout(MPI_COMM_WORLD, owned, isParallel);
 
         std::array<double, dim> dx = {
-        10 * pi / double(pt[0]),
-        10 * pi / double(pt[1]),
-        10 * pi / double(pt[2]),
+        1.5 * pi / double(pt[0]),
+        1.5 * pi / double(pt[1]),
+        1.5 * pi / double(pt[2]),
         };
-
-        //std::array<double, dim> dx = {
-        //    25.0 / double(pt[0]),
-        //    25.0 / double(pt[1]),
-        //    25.0 / double(pt[2]),
-        //};
-        typedef ippl::Vector<double, 3> Vector_t;
 
         Vector_t hx = {dx[0], dx[1], dx[2]};
         //Vector_t origin = {-2*pi, -2*pi, -2*pi};
-        Vector_t origin = {0, 0, 0};
+        Vector_t origin = {-pi, -pi, -pi};
         ippl::UniformCartesian<double, 3> mesh(owned, hx, origin);
 
         playout_type pl(layout, mesh);
@@ -135,8 +129,8 @@ int main(int argc, char* argv[]){
         
         
         
-        Vector_t minU = {-pi, -pi, -pi};
-        Vector_t maxU = {pi, pi, pi};
+        Vector_t minU = origin;
+        Vector_t maxU = {dx[0]*pt[0], dx[1]*pt[1], dx[2]*pt[2]};
 
         size_type nloc = Np/ippl::Comm->size();
 
