@@ -76,7 +76,7 @@ int main(int argc, char* argv[]){
         typedef ippl::ParticleSpatialLayout<double, 3> playout_type;
         typedef Bunch<playout_type> bunch_type;
 
-        // Points per dim and index setup (for complex field?)
+        // Points per dim and index setup for complex field
         ippl::Vector<int, dim> pt = {32, 32, 32};
         ippl::Index I(pt[0]);
         ippl::Index J(pt[1]);
@@ -90,17 +90,20 @@ int main(int argc, char* argv[]){
         // Field Layout
         ippl::FieldLayout<dim> layout(MPI_COMM_WORLD, owned, isParallel);
 
-        // Grid spacing?
+        // Grid spacing
         std::array<double, dim> dx = {
         2 * pi / double(pt[0]),
         2 * pi / double(pt[1]),
         2 * pi / double(pt[2]),
         };
         Vector_t hx = {dx[0], dx[1], dx[2]};
-
-
         Vector_t origin = {0, 0, 0};
         ippl::UniformCartesian<double, 3> mesh(owned, hx, origin);
+        typedef ippl::Field<Kokkos::complex<double>, dim, Mesh_t, Centering_t> field_type;
+
+        field_type field(mesh, layout);
+        field_type field_dft(mesh, layout);
+
 
         //playout_type pl(layout, mesh);
         playout_type pl;
@@ -109,28 +112,22 @@ int main(int argc, char* argv[]){
         bunch.setParticleBC(ippl::BC::NO);
     
         using size_type = ippl::detail::size_type;
-
-
+        
+        // Number of points
         size_type Np = std::pow(16,3);
         
-        typedef ippl::Field<Kokkos::complex<double>, dim, Mesh_t, Centering_t> field_type;
-
-        field_type field(mesh, layout);
-        field_type field_dft(mesh, layout);
-
+        // Default finufft parameters
         ippl::ParameterList fftParams;
-
-
-        //finufft_default_opts(NULL);
         fftParams.add("use_finufft_defaults", true); 
 
         typedef ippl::NUFFT<3,double,Mesh_t, Centering_t> NUFFT_type;
 
         std::unique_ptr<NUFFT_type> nufft;
+        // Type 1 transform
         int type = 1;
         
-        
-        
+
+        // Random point generation
         Vector_t minU = origin;
         Vector_t maxU = {dx[0]*pt[0], dx[1]*pt[1], dx[2]*pt[2]};
 
@@ -140,14 +137,13 @@ int main(int argc, char* argv[]){
         
         nufft = std::make_unique<NUFFT_type>(layout, Np, type, fftParams);
         
-        
         Kokkos::Random_XorShift64_Pool<> rand_pool64((size_type)(42));
         
         Kokkos::parallel_for(nloc,
                             generate_random<Vector_t, Kokkos::Random_XorShift64_Pool<>, dim>(
                             bunch.R.getView(), bunch.Q.getView(), rand_pool64, minU, maxU));
         
-        
+        // Type 1 transform
         nufft->transform(bunch.R, bunch.Q, field);
         
         auto field_result = Kokkos::create_mirror_view_and_copy(
