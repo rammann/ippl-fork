@@ -98,8 +98,8 @@ public:
         auto Qview = Q.getView();
         const int nghost = f.getNghost();
 
+        // Get properties about the domain dimensions
         auto localNp = R.getParticleCount();
-
         const Layout_t& layout = f.getLayout(); 
         const UniformCartesian<T, Dim>& mesh = f.get_mesh();
         const Vector<T, Dim>& dx = mesh.getMeshSpacing();
@@ -146,9 +146,9 @@ public:
                              KOKKOS_LAMBDA(const size_t i)
                              {
                                  for(size_t d = 0; d < Dim; ++d) {
-                                    //tempR[d](i) = Rview(i)[d];
-                                    tempR[d](i) = (Rview(i)[d] - origin[d]) * (2.0 * pi / Len[d]);
-                                    //tempR[d](i) = (Rview(i)[d] - origin[d])  / Len[d];
+                                    tempR[d](i) = Rview(i)[d];
+                                    //tempR[d](i) = (Rview(i)[d]) * (2.0 * pi / Len[d]);
+                                    //tempR[d](i) = (Rview(i)[d])  / Len[d];
                                     //tempR[d](i) = -pi + ((2 * pi / Len[d]) * (Rview(i)[d] - origin[d]));
                                  }
                                  tempQ(i).real(Qview(i)); // = Qview(i);

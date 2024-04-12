@@ -91,14 +91,13 @@ int main(int argc, char* argv[]){
         ippl::FieldLayout<dim> layout(MPI_COMM_WORLD, owned, isParallel);
 
         std::array<double, dim> dx = {
-        1.5 * pi / double(pt[0]),
-        1.5 * pi / double(pt[1]),
-        1.5 * pi / double(pt[2]),
+        2.9 * pi / double(pt[0]),
+        2.9 * pi / double(pt[1]),
+        2.9 * pi / double(pt[2]),
         };
 
         Vector_t hx = {dx[0], dx[1], dx[2]};
-        //Vector_t origin = {-2*pi, -2*pi, -2*pi};
-        Vector_t origin = {-pi, -pi, -pi};
+        Vector_t origin = {0, 0, 0};
         ippl::UniformCartesian<double, 3> mesh(owned, hx, origin);
 
         playout_type pl(layout, mesh);
