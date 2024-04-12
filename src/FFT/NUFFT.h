@@ -16,10 +16,10 @@ struct finufftType {};
 
 template <>
 struct finufftType<float> {
-    std::function<int(int, int, int64_t*, int, int, float, finufftf_plan*, finufft_opts*)> makeplan = finufftf_makeplan; 
-    std::function<int(finufftf_plan, int, float*, float*, float*, int, float*, float*, float*)> setpts = finufftf_setpts; 
-    std::function<int(finufftf_plan, std::complex<float>*, std::complex<float>*)> execute = finufftf_execute; 
-    std::function<int(finufftf_plan)> destroy = finufftf_destroy;
+    std::function<int(int, int, int64_t*, int, int, float, finufftf_plan*, finufft_opts*)> makeplan     = finufftf_makeplan; 
+    std::function<int(finufftf_plan, int, float*, float*, float*, int, float*, float*, float*)> setpts  = finufftf_setpts; 
+    std::function<int(finufftf_plan, std::complex<float>*, std::complex<float>*)> execute               = finufftf_execute; 
+    std::function<int(finufftf_plan)> destroy                                                           = finufftf_destroy;
             
     using complexType = std::complex<float>;
     using plan_t      = finufftf_plan;
@@ -27,16 +27,20 @@ struct finufftType<float> {
 
 template <>
 struct finufftType<double> {
-    std::function<int(int, int, int64_t*, int, int, double, finufft_plan*, finufft_opts*)> makeplan = finufft_makeplan; 
+    std::function<int(int, int, int64_t*, int, int, double, finufft_plan*, finufft_opts*)> makeplan         = finufft_makeplan; 
     std::function<int(finufft_plan, int, double*, double*, double*, int, double*, double*, double*)> setpts = finufft_setpts; 
-    std::function<int(finufft_plan, std::complex<double>*, std::complex<double>*)> execute = finufft_execute; 
-    std::function<int(finufft_plan)> destroy = finufft_destroy; 
+    std::function<int(finufft_plan, std::complex<double>*, std::complex<double>*)> execute                  = finufft_execute; 
+    std::function<int(finufft_plan)> destroy                                                                = finufft_destroy; 
             
     using complexType = std::complex<double>;
     using plan_t      = finufft_plan;
 };
 }// namespace ippl::detail
 
+
+/**
+ * Nufft class based on Sri's implementation on the 131 branch
+*/
 template <size_t Dim, class T, class Mesh, class Centering>
 class NUFFT{
 
@@ -88,7 +92,7 @@ public:
     template<class... Properties>
     void transform(const ParticleAttrib< Vector<T, Dim>, Properties... >& R, ParticleAttrib<T, Properties... >& Q, ComplexField_t& f){
         
-        
+        // Views of the field f, positions R, charge Q for the transform 
         auto fview = f.getView();
         auto Rview = R.getView();
         auto Qview = Q.getView();
