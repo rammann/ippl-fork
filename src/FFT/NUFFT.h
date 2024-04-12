@@ -116,7 +116,7 @@ public:
         std::cout << origin[0] << " " << origin[1] << " " << origin[2] << "\n";
         std::cout << Len[0] << " " << Len[1] << " " << Len[2] << "\n";
 
-        const double pi = std::acos(-1.0);
+        //const double pi = std::acos(-1.0);
 
         auto tempField = tempField_m;
         auto tempQ = tempQ_m;

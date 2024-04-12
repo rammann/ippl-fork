@@ -76,39 +76,42 @@ int main(int argc, char* argv[]){
         typedef ippl::ParticleSpatialLayout<double, 3> playout_type;
         typedef Bunch<playout_type> bunch_type;
 
-        // Points per dim and index setup
+        // Points per dim and index setup (for complex field?)
         ippl::Vector<int, dim> pt = {32, 32, 32};
         ippl::Index I(pt[0]);
         ippl::Index J(pt[1]);
         ippl::Index K(pt[2]);
         ippl::NDIndex<dim> owned(I, J, K);
 
-        
-        std::array<bool, dim> isParallel;  // Specifies SERIAL, PARALLEL dims
+        // Determine SERIAL, PARALLEL dims
+        std::array<bool, dim> isParallel;  
         isParallel.fill(false);
 
-
+        // Field Layout
         ippl::FieldLayout<dim> layout(MPI_COMM_WORLD, owned, isParallel);
 
+        // Grid spacing?
         std::array<double, dim> dx = {
-        2.9 * pi / double(pt[0]),
-        2.9 * pi / double(pt[1]),
-        2.9 * pi / double(pt[2]),
+        2 * pi / double(pt[0]),
+        2 * pi / double(pt[1]),
+        2 * pi / double(pt[2]),
         };
-
         Vector_t hx = {dx[0], dx[1], dx[2]};
+
+
         Vector_t origin = {0, 0, 0};
         ippl::UniformCartesian<double, 3> mesh(owned, hx, origin);
 
-        playout_type pl(layout, mesh);
+        //playout_type pl(layout, mesh);
+        playout_type pl;
 
         bunch_type bunch(pl);
-        bunch.setParticleBC(ippl::BC::PERIODIC);
+        bunch.setParticleBC(ippl::BC::NO);
     
         using size_type = ippl::detail::size_type;
 
 
-        size_type Np = std::pow(32,3);
+        size_type Np = std::pow(16,3);
         
         typedef ippl::Field<Kokkos::complex<double>, dim, Mesh_t, Centering_t> field_type;
 

@@ -80,6 +80,7 @@
         "concepts": "cpp",
         "utility": "cpp",
         "numbers": "cpp",
-        "valarray": "cpp"
+        "valarray": "cpp",
+        "execution": "cpp"
     }
 }
