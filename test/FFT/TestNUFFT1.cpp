@@ -77,7 +77,7 @@ int main(int argc, char* argv[]){
         typedef Bunch<playout_type> bunch_type;
 
         // Points per dim and index setup for complex field
-        ippl::Vector<int, dim> pt = {32, 32, 32};
+        ippl::Vector<int, dim> pt = {10, 10, 10};
         ippl::Index I(pt[0]);
         ippl::Index J(pt[1]);
         ippl::Index K(pt[2]);
@@ -91,13 +91,15 @@ int main(int argc, char* argv[]){
         ippl::FieldLayout<dim> layout(MPI_COMM_WORLD, owned, isParallel);
 
         // Grid spacing
-        std::array<double, dim> dx = {
-        2 * pi / double(pt[0]),
-        2 * pi / double(pt[1]),
-        2 * pi / double(pt[2]),
-        };
+        //std::array<double, dim> dx = {
+        //2 * pi / double(pt[0]),
+        //2 * pi / double(pt[1]),
+        //2 * pi / double(pt[2]),
+        //};
+        std::array<double,dim> dx = {1, 1, 1};
+
         Vector_t hx = {dx[0], dx[1], dx[2]};
-        Vector_t origin = {0, 0, 0};
+        Vector_t origin = {-5, -5, -5};
         ippl::UniformCartesian<double, 3> mesh(owned, hx, origin);
         typedef ippl::Field<Kokkos::complex<double>, dim, Mesh_t, Centering_t> field_type;
 
@@ -128,8 +130,8 @@ int main(int argc, char* argv[]){
         
 
         // Random point generation
-        Vector_t minU = origin;
-        Vector_t maxU = {dx[0]*pt[0], dx[1]*pt[1], dx[2]*pt[2]};
+        Vector_t minU = {-1,-1,-1};
+        Vector_t maxU = {1, 1, 1};
 
         size_type nloc = Np/ippl::Comm->size();
 

@@ -180,7 +180,7 @@ int main(int argc, char *argv[]) {
 
         Kokkos::complex<double> imag = {0.0, 1.0};
 
-        Kokkos::parallel_reduce("NUDFT type2",
+        Kokkos::parallel_reduce("NUFFT type2",
                                 mdrange_type({0, 0, 0},
                                             {fview.extent(0) - 2 * nghost,
                                             fview.extent(1) - 2 * nghost,
