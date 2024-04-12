@@ -12,24 +12,38 @@ int main(int argc, char* argv[]) {
     {
         /* SOLVER INIT TEST*/
         
-        // Particles
+        // Particle layout type
         typedef ippl::ParticleSpatialLayout<double, 3> playout_type;
         playout_type PLayout;
 
-        ippl::OrthoTreeParticle particles(PLayout);
-        unsigned int points = 100;
-        unsigned int tidx = 50;
-        particles.create(points);
+        // Targets
+        ippl::OrthoTreeParticle targets(PLayout);
+        unsigned int nTargets = 100;
+        targets.create(nTargets);
 
+        // Sources
+        ippl::OrthoTreeParticle sources(PLayout);
+        unsigned int nSources = 100;
+        sources.create(nSources);
 
+        // Random generators for position and charge
         std::mt19937_64 eng;
-        std::uniform_real_distribution<double> unif(0, 1);
-        for(unsigned int idx=0; idx<points; ++idx){
-            ippl::Vector<double,3> r = {unif(eng), unif(eng), unif(eng)};
-            particles.R(idx) = r;
-            particles.rho(idx) = idx<tidx? unif(eng): 0.0;
+        std::uniform_real_distribution<double> posDis(0, 1);
+        std::uniform_real_distribution<double> chargeDis(-20,20);
+
+        // Generate target points
+        for(unsigned int idx=0; idx<nTargets; ++idx){
+            ippl::Vector<double,3> r = {posDis(eng), posDis(eng), posDis(eng)};
+            targets.R(idx) = r;
+            targets.rho(idx) = 0.0;
         }
 
+        // Generate source points
+        for(unsigned int idx=0; idx<nSources; ++idx){
+            ippl::Vector<double,3> r = {posDis(eng), posDis(eng), posDis(eng)};
+            sources.R(idx) = r;
+            sources.rho(idx) = chargeDis(eng);
+        }
 
         // Tree Params
         ippl::ParameterList treeparams;
@@ -43,8 +57,8 @@ int main(int argc, char* argv[]) {
         solverparams.add("eps", 0.001);
 
         
-        ippl::TreeOpenPoissonSolver solver(particles, tidx, treeparams, solverparams);
-        //solver.Solve();
+        ippl::TreeOpenPoissonSolver solver(targets, sources, treeparams, solverparams);
+        solver.Solve();
 
 
 
