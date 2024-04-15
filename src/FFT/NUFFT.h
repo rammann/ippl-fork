@@ -48,6 +48,7 @@ public:
 
     typedef FieldLayout<Dim> Layout_t;
     typedef Kokkos::complex<T> KokkosComplex_t;
+    //typedef std::complex<T> KokkosComplex_t;
     typedef Field<KokkosComplex_t,Dim,Mesh,Centering> ComplexField_t;
 
     using complexType = typename detail::finufftType<T>::complexType;
@@ -157,10 +158,10 @@ public:
 
         ier_m = nufft_m.setpts(plan_m, localNp, tempR[0].data(), tempR[1].data(), tempR[2].data(), 0, 
                      NULL, NULL, NULL);
-
+        std::cout << ier_m << "\n";
         ier_m = nufft_m.execute(plan_m, tempQ.data(), tempField.data());
         Kokkos::fence();
-
+        std::cout << ier_m << "\n";
 
         if(type_m == 1) { 
             Kokkos::parallel_for("copy to field data NUFFT",
@@ -183,6 +184,7 @@ public:
                                  KOKKOS_LAMBDA(const size_t i)
                                  {
                                      Qview(i) = tempQ(i).real();
+                                     //std::cout << tempQ(i) << "\n";
                                  });
         }
     }

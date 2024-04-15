@@ -82,6 +82,7 @@ namespace ippl
 
         void Solve(){
             Farfield();
+            FarfieldExplicit();
         }
 
         void Farfield(){
@@ -131,6 +132,9 @@ namespace ippl
             // and Fourier transform of the far-field u(k) = {w * g} (k)
             fourier_field_type field_g(mesh, layout);
             fourier_field_type field_u(mesh, layout);
+            field_u = 0;
+            auto gview = field_g.getView();
+            auto uview = field_u.getView();
 
 
             // C_tilde = C + b*sig is a constant used in w(k) : (3.20) & Lemma 3.4
@@ -160,13 +164,14 @@ namespace ippl
                     const double kz = -static_cast<double>(nf/2) + k;
 
                     // Calculation of w(k)
-                    const double kabs = Kokkos::sqrt(kx * kx + ky * ky + kz * kz);
-                    const double w = 1.0/(Kokkos::pow(Kokkos::numbers::pi,2)) * 
+                    double kabs = Kokkos::sqrt(kx * kx + ky * ky + kz * kz);
+                    double w = 1.0/(Kokkos::pow(Kokkos::numbers::pi,2)) * 
                         Kokkos::pow( (Kokkos::sin(Ct * kabs * 0.5) / kabs) , 2) * 
                         Kokkos::exp(-0.25 * Kokkos::pow(kabs * sig0_m,2));
 
                     // Component wise multiplication
-                    field_u(i,j,k) = w * field_g(i,j,k);
+                    uview(i,j,k) = w * gview(i,j,k);
+                    //std::cout << uview(i,j,k) << "\n";
                 });
             
             
@@ -174,9 +179,25 @@ namespace ippl
             int type2 = 2;
             std::unique_ptr<nufft_type> nufft2 = std::make_unique<nufft_type>(layout, targets_m.getTotalNum(), type2, fftParams);
 
-            
             // Type 2 NUFFT
             nufft2->transform(targets_m.R, targets_m.rho, field_u);
+        }
+
+        void FarfieldExplicit(){
+            Kokkos::View<double*> targetValues("Explicit farfield solution", targets_m.getTotalNum());
+            Kokkos::parallel_for("Compute explicit farfield", targets_m.getTotalNum(), 
+                KOKKOS_LAMBDA(const int t){
+                    for(int s=0; s<sources_m.getTotalNum(); ++s){
+                        double r = Kokkos::sqrt(Kokkos::pow(targets_m.R(t)(0)-sources_m.R(s)(0),2) +
+                                                Kokkos::pow(targets_m.R(t)(1)-sources_m.R(s)(1),2) +
+                                                Kokkos::pow(targets_m.R(t)(2)-sources_m.R(s)(2),2));
+                        targetValues(t) += sources_m.rho(s) * std::erf(r/sig0_m)/r;
+                    }
+                });
+            
+            for(int t=0; t<targets_m.getTotalNum(); ++t){
+                std::cout << targets_m.rho(t) << " " << targetValues(t) << "\n";
+            }
         }
 
          

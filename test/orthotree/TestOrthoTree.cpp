@@ -27,7 +27,7 @@ int main(int argc, char* argv[]) {
         sources.create(nSources);
 
         // Random generators for position and charge
-        std::mt19937_64 eng;
+        std::mt19937_64 eng(12);
         std::uniform_real_distribution<double> posDis(0, 1);
         std::uniform_real_distribution<double> chargeDis(-20,20);
 
