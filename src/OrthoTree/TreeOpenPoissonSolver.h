@@ -29,6 +29,10 @@ namespace ippl
 
         //unsigned int dim_m = 3;
 
+        // radius and sigma at the coarsest level
+        double r0_m;
+        double sig0_m;
+
     public: // Constructors
 
         /**
@@ -67,6 +71,8 @@ namespace ippl
 
             //dim_m = tree_m.GetDim();
 
+            r0_m = (max-min)/2.0;
+            sig0_m = r0_m/(Kokkos::log(1/eps_m));
             
             eps_m = solverparams.get<double>("eps");
 
@@ -80,10 +86,11 @@ namespace ippl
 
         void Farfield(){
             
-            std::cout << "Farfield \n";
+            std::cout << "Farfield" << "\n";
             int nf = static_cast<int>(Kokkos::ceil(6/Kokkos::numbers::pi * Kokkos::log(1/eps_m)));
             //int Nf = static_cast<int>(Kokkos::pow(nf, dim_m));
             constexpr unsigned int dim = 3;
+
 
             // =============== Step 1: Transform sources into Fourier space =============== //
             
@@ -91,7 +98,7 @@ namespace ippl
             using mesh_type                 = ippl::UniformCartesian<double, dim>;
             using centering_type            = mesh_type::DefaultCentering;       
             using vector_type               = ippl::Vector<double, 3>;
-            using field_type                = ippl::Field<Kokkos::complex<double>, dim, mesh_type, centering_type>;
+            using fourier_field_type        = ippl::Field<Kokkos::complex<double>, dim, mesh_type, centering_type>;
             using nufft_type                = ippl::NUFFT<3,double,mesh_type, centering_type>;
             
             // Grid Points in Fourier space
@@ -119,17 +126,46 @@ namespace ippl
                 -static_cast<double>(nf/2)
             };
 
-            // Fourier-space complex field
+            // C_tilde = C + b*sig
+            const double b = 6;
+            const double Ct = 3 * Kokkos::pow(2 * r0_m,2) + b * sig0_m;
+
+            // Fourier-space complex field_g(k) = g_hat(k) = F{ rho(x) }
             mesh_type mesh(owned, hx, origin);
-            field_type field(mesh, layout);
+            fourier_field_type field_g(mesh, layout);
+            fourier_field_type field_u(mesh, layout);
 
             // Use default parameters
             ippl::ParameterList fftParams;
             fftParams.add("use_finufft_defaults", true); 
-            int type = 1; // NUFFT type 1
+            int type1 = 1; // NUFFT type 1
             
-            std::unique_ptr<nufft_type> nufft = std::make_unique<nufft_type>(layout, sources_m.getTotalNum(), type, fftParams);
-            nufft->transform(sources_m.R, sources_m.rho, field);
+            std::unique_ptr<nufft_type> nufft1 = std::make_unique<nufft_type>(layout, sources_m.getTotalNum(), type1, fftParams);
+            nufft1->transform(sources_m.R, sources_m.rho, field_g);
+
+            // Fourier-space far-field u_hat(k) = {g_hat * w} (k)
+            Kokkos::parallel_for("Calculate u_hat = g_hat * w", field_g.getFieldRangePolicy(),
+                KOKKOS_LAMBDA(const int i, const int j, const int k){
+                    
+                    // Convert index (i,j,k) to frequency (k_x,k_y,k_z)
+                    const double kx = -static_cast<double>(nf/2) + i;
+                    const double ky = -static_cast<double>(nf/2) + j;
+                    const double kz = -static_cast<double>(nf/2) + k;
+
+                    // Calculation of w(k)
+                    const double kabs = Kokkos::sqrt(kx * kx + ky * ky + kz * kz);
+                    const double w = 1.0/(Kokkos::pow(Kokkos::numbers::pi,2)) * 
+                        Kokkos::pow( (Kokkos::sin(Ct * kabs * 0.5) / kabs) , 2) * 
+                        Kokkos::exp(-0.25 * Kokkos::pow(kabs * sig0_m,2));
+
+                    // Component wise multiplication
+                    field_u(i,j,k) = w * field_g(i,j,k);
+                });
+            
+            // Prepare Type 2 transform
+            int type2 = 2;
+            std::unique_ptr<nufft_type> nufft2 = std::make_unique<nufft_type>(layout, targets_m.getTotalNum(), type2, fftParams);
+            nufft2->transform(targets_m.R, targets_m.rho, field_u);
             
         }
 
