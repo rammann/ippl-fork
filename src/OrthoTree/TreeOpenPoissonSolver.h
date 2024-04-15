@@ -86,64 +86,71 @@ namespace ippl
 
         void Farfield(){
             
-            std::cout << "Farfield" << "\n";
+            // Number of Fourier nodes as defined in (3.36)
             int nf = static_cast<int>(Kokkos::ceil(6/Kokkos::numbers::pi * Kokkos::log(1/eps_m)));
-            //int Nf = static_cast<int>(Kokkos::pow(nf, dim_m));
             constexpr unsigned int dim = 3;
 
-
-            // =============== Step 1: Transform sources into Fourier space =============== //
             
-            // Define mesh and centering types for the field type
+            // Define types for Fourier space field and NUFFT
             using mesh_type                 = ippl::UniformCartesian<double, dim>;
             using centering_type            = mesh_type::DefaultCentering;       
             using vector_type               = ippl::Vector<double, 3>;
             using fourier_field_type        = ippl::Field<Kokkos::complex<double>, dim, mesh_type, centering_type>;
             using nufft_type                = ippl::NUFFT<3,double,mesh_type, centering_type>;
+
             
-            // Grid Points in Fourier space
+            // Index space
             ippl::Vector<int, dim> pt = {nf, nf, nf};
             ippl::Index I(pt[0]);
             ippl::Index J(pt[1]);
             ippl::Index K(pt[2]);
             ippl::NDIndex<dim> owned(I, J, K);
-            
 
+            
             // Specify parallel dimensions (for MPI?)
             std::array<bool, dim> isParallel;  
             isParallel.fill(false);
-            
 
+            
             // Field Layout
             ippl::FieldLayout<dim> layout(MPI_COMM_WORLD, owned, isParallel);
 
 
-            // Grid spacing of 1 => Fourier space grid [-nf/2, ..., 0, ..., nf/2]^3
+            // Mesh holds the information about the geometry of the field
+            // The mesh is [-nf/2, ..., 0, ..., nf/2]^3
             vector_type hx = {1.0, 1.0, 1.0};
             vector_type origin = {
                 -static_cast<double>(nf/2), 
                 -static_cast<double>(nf/2), 
                 -static_cast<double>(nf/2)
             };
-
-            // C_tilde = C + b*sig
-            const double b = 6;
-            const double Ct = 3 * Kokkos::pow(2 * r0_m,2) + b * sig0_m;
-
-            // Fourier-space complex field_g(k) = g_hat(k) = F{ rho(x) }
             mesh_type mesh(owned, hx, origin);
+
+
+            // Define field for Fourier transform of sources g(k) = F{rho(x)}
+            // and Fourier transform of the far-field u(k) = {w * g} (k)
             fourier_field_type field_g(mesh, layout);
             fourier_field_type field_u(mesh, layout);
 
-            // Use default parameters
+
+            // C_tilde = C + b*sig is a constant used in w(k) : (3.20) & Lemma 3.4
+            const double b = 6;
+            const double Ct = 3 * Kokkos::pow(2 * r0_m,2) + b * sig0_m;
+
+            
+            // Setup Type 1 Nufft for Fourier transform of the sources g(k) = F{rho(x)}(k)
             ippl::ParameterList fftParams;
             fftParams.add("use_finufft_defaults", true); 
             int type1 = 1; // NUFFT type 1
-            
             std::unique_ptr<nufft_type> nufft1 = std::make_unique<nufft_type>(layout, sources_m.getTotalNum(), type1, fftParams);
+
+            
+            // Type 1 NUFFT
             nufft1->transform(sources_m.R, sources_m.rho, field_g);
 
-            // Fourier-space far-field u_hat(k) = {g_hat * w} (k)
+            
+            // Component-wise multiplication of the Fourier-space fields g(k) and w(k)
+            // The result is the Fourier transform of the far field F{u} (k) = {w * g} (k)
             Kokkos::parallel_for("Calculate u_hat = g_hat * w", field_g.getFieldRangePolicy(),
                 KOKKOS_LAMBDA(const int i, const int j, const int k){
                     
@@ -162,11 +169,14 @@ namespace ippl
                     field_u(i,j,k) = w * field_g(i,j,k);
                 });
             
-            // Prepare Type 2 transform
+            
+            // Setup Type 2 NUFFT for transform back onto the target points in real space
             int type2 = 2;
             std::unique_ptr<nufft_type> nufft2 = std::make_unique<nufft_type>(layout, targets_m.getTotalNum(), type2, fftParams);
-            nufft2->transform(targets_m.R, targets_m.rho, field_u);
+
             
+            // Type 2 NUFFT
+            nufft2->transform(targets_m.R, targets_m.rho, field_u);
         }
 
          
