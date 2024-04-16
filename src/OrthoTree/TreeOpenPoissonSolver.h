@@ -90,6 +90,7 @@ namespace ippl
         void Solve(){
             Farfield();
             FarfieldExplicit();
+            DifferenceKernel();
         }
 
         void Farfield(){
@@ -217,6 +218,22 @@ namespace ippl
             for(unsigned int t=0; t<targets_m.getTotalNum(); ++t){
                 std::cout << farfield_m(t) << " " << targetValues(t) << " " << targets_m.rho(t) <<"\n";
             }
+        }
+
+        void DifferenceKernel(){
+            
+            for(unsigned int depth=1; depth <= tree_m.GetMaxDepth(); ++depth){
+                std::cout << "Depth is " << depth << "\n";
+                Kokkos::vector<morton_node_id_type> keys = tree_m.GetNodesAtDepth(depth);
+                for(unsigned int i=0; i<keys.size(); ++i){
+                    std::cout << keys[i] << " ";
+                }
+                std::cout << "\n";
+            }
+                // At each level, get all non-leaf nodes
+                    // For each node compute the outgoing expansion
+
+                    // For each compute the incoming expansion
         }
 
          

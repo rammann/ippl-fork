@@ -674,6 +674,25 @@ public: // Getters
             
     }
 
+    depth_type GetMaxDepth() const noexcept{
+        return this->maxdepth_m;
+    }
+
+    Kokkos::vector<morton_node_id_type> GetNodesAtDepth(depth_type depth) const noexcept {
+        std::cout << "Getting nodes at depth" << "\n";
+        Kokkos::vector<morton_node_id_type> keys = {};
+
+        VisitNodes(1, [&keys](auto key, auto){
+            std::cout << key << " ";
+            if(this->GetDepth(key) == depth){
+                std::cout<<"before"<<"\n";
+                keys.push_back(key);
+                std::cout<<"Pushed back key="<<key<<"\n";
+            }
+        });
+
+        return keys;
+    }
 
 
 
