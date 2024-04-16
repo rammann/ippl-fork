@@ -8,76 +8,81 @@
 
 namespace ippl
 {
-    //template<typename particle_type=OrthoTreeParticle<>>
     class TreeOpenPoissonSolver
     {
 
-    public: // types
+    public: // Types
 
         using particle_type = OrthoTreeParticle<>;
         using playout_type = ippl::ParticleSpatialLayout<double, 3>;
 
     private:
 
+        // Octree 
         OrthoTree tree_m;
         
-        //particle_type particles_m;
+        // Particles
         particle_type sources_m;
         particle_type targets_m;
 
+        // Views of different contributions
+        Kokkos::View<double*> farfield_m;
+        Kokkos::View<double*> difference_m;
+
+
+        // Precision
         double eps_m;
 
-        //unsigned int dim_m = 3;
 
-        // radius and sigma at the coarsest level
+        // Radius of the box and sigma at the coarsest level
         double r0_m;
         double sig0_m;
 
     public: // Constructors
 
-        /**
-         * 1. Init Octree
-         * 2. Setup Solve
-        */
         TreeOpenPoissonSolver(particle_type targets, particle_type sources, ParameterList treeparams, ParameterList solverparams) 
         {
+            // Target and source particles
             targets_m = targets;
             sources_m = sources;
 
+            // Views
+            farfield_m = Kokkos::View<double*>("Farfield contribution", targets.getTotalNum());
+            difference_m = Kokkos::View<double*>("Difference contribution", targets.getTotalNum());
+            
+
+
+            // For the octree a view with all particle positions needs to be created
+            // allParticles = [target(0), target(1), ..., target(#targets-1), sources(0), ..., sources(#sources-1)]
+            // indices      = [0,        1,        , ..., #targets-1,       , #targets ,  ..., #targets + #sources -1 ]
             playout_type PLayout;
-
-
-            // Make one view of all points for the octree construction
-            unsigned int idxSource = targets.getTotalNum(); // Index of first source point in allParticles
             particle_type allParticles(PLayout);
             allParticles.create(targets.getTotalNum() + sources.getTotalNum());
             Kokkos::parallel_for("Fill sources and targets into one view for octree construction",
                 allParticles.getTotalNum(), [=](unsigned int i){
-                    if (i < idxSource) {
+                    if (i < targets.getTotalNum()) {
                         allParticles.R(i) = targets.R(i); 
                         allParticles.rho(i) = 0.0; // charge is not used for the octree
                     }
                     else {
-                        allParticles.R(i) = sources.R(i-idxSource);
+                        allParticles.R(i) = sources.R(i-targets.getTotalNum());
                         allParticles.rho(i) = 0.0;
                     }
                 });
 
-            // Init tree
+            // Tree Construction
             auto min = treeparams.get<double>("boxmin");
             auto max = treeparams.get<double>("boxmax");
             OrthoTree tree_m(allParticles, treeparams.get<int>("maxdepth"), treeparams.get<int>("maxleafelements"), BoundingBox<3>{{min,min,min},{max,max,max}});
-            tree_m.PrintStructure();
+            //tree_m.PrintStructure();
 
-            //dim_m = tree_m.GetDim();
-
+            // Precision
             eps_m = solverparams.get<double>("eps");
             
+            // Radius of the box and sigma at the coarsest level
             r0_m = (max-min)/2.0;
             sig0_m = r0_m/Kokkos::sqrt((Kokkos::log(1/eps_m)));
             
-            
-
         }
     
     public: // Solve
@@ -185,6 +190,13 @@ namespace ippl
 
             // Type 2 NUFFT
             nufft2->transform(targets_m.R, targets_m.rho, field_u);
+
+            // Copy result to farfield view
+            Kokkos::parallel_for("Copy farfield data to view", targets_m.getTotalNum(),
+            KOKKOS_LAMBDA(unsigned int i){
+                farfield_m(i) = targets_m.rho(i);
+                targets_m.rho(i) = 0.0;
+            });
         }
 
         void FarfieldExplicit(){
@@ -203,7 +215,7 @@ namespace ippl
                 });
             
             for(unsigned int t=0; t<targets_m.getTotalNum(); ++t){
-                std::cout << targets_m.rho(t) << " " << targetValues(t) << "\n";
+                std::cout << farfield_m(t) << " " << targetValues(t) << " " << targets_m.rho(t) <<"\n";
             }
         }
 
