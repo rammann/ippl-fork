@@ -158,10 +158,10 @@ public:
 
         ier_m = nufft_m.setpts(plan_m, localNp, tempR[0].data(), tempR[1].data(), tempR[2].data(), 0, 
                      NULL, NULL, NULL);
-        std::cout << ier_m << "\n";
+        //std::cout << ier_m << "\n";
         ier_m = nufft_m.execute(plan_m, tempQ.data(), tempField.data());
         Kokkos::fence();
-        std::cout << ier_m << "\n";
+        //std::cout << ier_m << "\n";
 
         if(type_m == 1) { 
             Kokkos::parallel_for("copy to field data NUFFT",

@@ -72,7 +72,7 @@ namespace ippl
             //dim_m = tree_m.GetDim();
 
             r0_m = (max-min)/2.0;
-            sig0_m = r0_m/(Kokkos::log(1/eps_m));
+            sig0_m = r0_m/Kokkos::sqrt((Kokkos::log(1/eps_m)));
             
             eps_m = solverparams.get<double>("eps");
 
@@ -88,7 +88,7 @@ namespace ippl
         void Farfield(){
             
             // Number of Fourier nodes as defined in (3.36)
-            int nf = static_cast<int>(Kokkos::ceil(6/Kokkos::numbers::pi * Kokkos::log(1/eps_m)));
+            int nf = static_cast<int>(Kokkos::ceil(4 * Kokkos::log(1/eps_m)));
             constexpr unsigned int dim = 3;
 
             
@@ -130,8 +130,8 @@ namespace ippl
 
             // Define field for Fourier transform of sources g(k) = F{rho(x)}
             // and Fourier transform of the far-field u(k) = {w * g} (k)
-            fourier_field_type field_g(mesh, layout);
-            fourier_field_type field_u(mesh, layout);
+            fourier_field_type field_g(mesh, layout,0);
+            fourier_field_type field_u(mesh, layout,0);
             field_u = 0;
             auto gview = field_g.getView();
             auto uview = field_u.getView();
@@ -139,7 +139,7 @@ namespace ippl
 
             // C_tilde = C + b*sig is a constant used in w(k) : (3.20) & Lemma 3.4
             const double b = 6;
-            const double Ct = 3 * Kokkos::pow(2 * r0_m,2) + b * sig0_m;
+            const double Ct = Kokkos::sqrt(3) + b * sig0_m;
 
             
             // Setup Type 1 Nufft for Fourier transform of the sources g(k) = F{rho(x)}(k)
@@ -163,15 +163,17 @@ namespace ippl
                     const double ky = -static_cast<double>(nf/2) + j;
                     const double kz = -static_cast<double>(nf/2) + k;
 
+                    std::cout << kx << " " << ky << " " << kz << "\n";
+
                     // Calculation of w(k)
-                    double kabs = Kokkos::sqrt(kx * kx + ky * ky + kz * kz);
-                    double w = 1.0/(Kokkos::pow(Kokkos::numbers::pi,2)) * 
-                        Kokkos::pow( (Kokkos::sin(Ct * kabs * 0.5) / kabs) , 2) * 
-                        Kokkos::exp(-0.25 * Kokkos::pow(kabs * sig0_m,2));
+                    double kabs = Kokkos::sqrt(kx * kx + ky * ky + kz * kz) + std::numeric_limits<double>::epsilon();
+                    double w =  Kokkos::pow(Kokkos::numbers::pi, -2) * 
+                                Kokkos::pow( (Kokkos::sin(Ct * kabs * 0.5) / kabs) , 2) * 
+                                Kokkos::exp(-0.25 * Kokkos::pow(kabs * sig0_m,2));
 
                     // Component wise multiplication
                     uview(i,j,k) = w * gview(i,j,k);
-                    //std::cout << uview(i,j,k) << "\n";
+                    //std::cout << uview(i,j,k) << " " << w << gview(i,j,k) << "\n";
                 });
             
             
@@ -185,17 +187,20 @@ namespace ippl
 
         void FarfieldExplicit(){
             Kokkos::View<double*> targetValues("Explicit farfield solution", targets_m.getTotalNum());
+
             Kokkos::parallel_for("Compute explicit farfield", targets_m.getTotalNum(), 
-                KOKKOS_LAMBDA(const int t){
-                    for(int s=0; s<sources_m.getTotalNum(); ++s){
+                KOKKOS_LAMBDA(const unsigned int t){
+                    double temp = 0;
+                    for(unsigned int s=0; s<sources_m.getTotalNum(); ++s){
                         double r = Kokkos::sqrt(Kokkos::pow(targets_m.R(t)(0)-sources_m.R(s)(0),2) +
                                                 Kokkos::pow(targets_m.R(t)(1)-sources_m.R(s)(1),2) +
                                                 Kokkos::pow(targets_m.R(t)(2)-sources_m.R(s)(2),2));
-                        targetValues(t) += sources_m.rho(s) * std::erf(r/sig0_m)/r;
+                        temp += sources_m.rho(s) * std::erf(r/sig0_m)/r;
                     }
+                    targetValues(t) = temp;
                 });
             
-            for(int t=0; t<targets_m.getTotalNum(); ++t){
+            for(unsigned int t=0; t<targets_m.getTotalNum(); ++t){
                 std::cout << targets_m.rho(t) << " " << targetValues(t) << "\n";
             }
         }
