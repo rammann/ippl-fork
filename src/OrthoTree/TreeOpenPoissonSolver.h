@@ -71,10 +71,12 @@ namespace ippl
 
             //dim_m = tree_m.GetDim();
 
+            eps_m = solverparams.get<double>("eps");
+            
             r0_m = (max-min)/2.0;
             sig0_m = r0_m/Kokkos::sqrt((Kokkos::log(1/eps_m)));
             
-            eps_m = solverparams.get<double>("eps");
+            
 
         }
     
@@ -88,7 +90,7 @@ namespace ippl
         void Farfield(){
             
             // Number of Fourier nodes as defined in (3.36)
-            int nf = static_cast<int>(Kokkos::ceil(4 * Kokkos::log(1/eps_m)));
+            int nf = static_cast<int>(Kokkos::ceil(4 * Kokkos::log(1/eps_m))) * 2;
             constexpr unsigned int dim = 3;
 
             
@@ -139,7 +141,7 @@ namespace ippl
 
             // C_tilde = C + b*sig is a constant used in w(k) : (3.20) & Lemma 3.4
             const double b = 6;
-            const double Ct = Kokkos::sqrt(3) + b * sig0_m;
+            const double Ct = Kokkos::sqrt(3 * 2 * r0_m) + b * sig0_m;
 
             
             // Setup Type 1 Nufft for Fourier transform of the sources g(k) = F{rho(x)}(k)
@@ -163,7 +165,7 @@ namespace ippl
                     const double ky = -static_cast<double>(nf/2) + j;
                     const double kz = -static_cast<double>(nf/2) + k;
 
-                    std::cout << kx << " " << ky << " " << kz << "\n";
+                    //std::cout << kx << " " << ky << " " << kz << "\n";
 
                     // Calculation of w(k)
                     double kabs = Kokkos::sqrt(kx * kx + ky * ky + kz * kz) + std::numeric_limits<double>::epsilon();

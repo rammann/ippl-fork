@@ -54,7 +54,7 @@ int main(int argc, char* argv[]) {
 
         // Solver Params
         ippl::ParameterList solverparams;
-        solverparams.add("eps", 0.001);
+        solverparams.add("eps", 0.000001);
 
         
         ippl::TreeOpenPoissonSolver solver(targets, sources, treeparams, solverparams);
