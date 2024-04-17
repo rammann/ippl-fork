@@ -19,7 +19,7 @@ namespace ippl
     private:
 
         // Octree 
-        OrthoTree* tree_m;
+        OrthoTree tree_m;
         
         // Particles
         particle_type sources_m;
@@ -40,7 +40,7 @@ namespace ippl
 
     public: // Constructors
 
-        TreeOpenPoissonSolver(particle_type targets, particle_type sources, ParameterList treeparams, ParameterList solverparams) 
+        TreeOpenPoissonSolver(particle_type targets, particle_type sources, ParameterList treeparams, ParameterList solverparams)
         {
             // Target and source particles
             targets_m = targets;
@@ -75,10 +75,9 @@ namespace ippl
             auto max = treeparams.get<double>("boxmax");
             auto maxdepth = treeparams.get<int>("maxdepth");
             auto maxleafele = treeparams.get<int>("maxleafelements");
-            std::cout << "TreeOpenPoissonSolver constructor, maxdepth=" << maxdepth << "\n";
-            //OrthoTree tree_m(allParticles, maxdepth, maxleafele, BoundingBox<3>{{min,min,min},{max,max,max}});
-            tree_m = new OrthoTree(allParticles, maxdepth, maxleafele, BoundingBox<3>{{min,min,min},{max,max,max}});
-
+            //tree_m = new OrthoTree(allParticles, maxdepth, maxleafele, BoundingBox<3>{{min,min,min},{max,max,max}});
+            tree_m = OrthoTree(allParticles, maxdepth, maxleafele, BoundingBox<3>{{min,min,min},{max,max,max}});
+            std::cout << tree_m.GetMaxDepth() << "\n";
             //tree_m.PrintStructure();
 
             // Precision
@@ -226,15 +225,22 @@ namespace ippl
         }
 
         void DifferenceKernel(){
-            tree_m->GetMaxDepth();
+            
+            auto keys = tree_m.GetNodesAtDepth(1);
+
+            for(unsigned int i=0; i<keys.size(); ++i) std::cout << keys[i] << " ";
+            std::cout << "\n";
+
             /*
-            for(unsigned int depth=1; depth <= tree_m.GetMaxDepth(); ++depth){
+            for(unsigned int depth=1; depth <= tree_m->GetMaxDepth(); ++depth){
                 std::cout << "Depth is " << depth << "\n";
-                Kokkos::vector<morton_node_id_type> keys = tree_m.GetNodesAtDepth(depth);
+                
+                Kokkos::vector<morton_node_id_type> keys = tree_m->GetNodesAtDepth(depth);
                 for(unsigned int i=0; i<keys.size(); ++i){
                     std::cout << keys[i] << " ";
                 }
                 std::cout << "\n";
+                
             }*/
                 // At each level, get all non-leaf nodes
                     // For each node compute the outgoing expansion

@@ -110,7 +110,7 @@ private:
     size_t                          maxelements_m;  // Max points per node
     grid_id_type                    rasterresmax_m; // Max boxes per dim
     ippl::Vector<double,3>          rasterizer_m;   // Describes how many nodes make up 1 unit of length per dim
-    const dim_type                  dim_m = 3;      // Dimension (fixed at 3 for now)
+    dim_type                        dim_m = 3;      // Dimension (fixed at 3 for now)
 
 public: // Constructors
 
@@ -121,7 +121,6 @@ public: // Constructors
 
         this->box_m             = Box;
         this->maxdepth_m        = MaxDepth;
-        std::cout << "OrthoTree constructor, maxdepth_m=" << maxdepth_m << "\n";
         this->maxelements_m     = MaxElements;
         this->rasterresmax_m    = Kokkos::exp2(MaxDepth);
         this->rasterizer_m      = GetRasterizer(Box, this->rasterresmax_m);
@@ -458,6 +457,27 @@ public: // Node Info Functions
 
     }
 
+    void VisitSelectedNodes(morton_node_id_type kRoot, auto procedure, auto selector) const{
+        
+        auto q = std::queue<morton_node_id_type>();
+
+        for(q.push(kRoot); !q.empty(); q.pop()){
+
+            auto const& key = q.front();
+            auto const& node = nodes_m.value_at(nodes_m.find(key));
+            procedure(key, node);
+
+            Kokkos::vector<morton_node_id_type> children = node.GetChildren();
+            for(unsigned int i=0; i<children.size(); ++i){
+                
+                if(selector(children[i])) q.push(children[i]);
+
+            }
+
+        }
+
+    }
+
     void PrintStructure(morton_node_id_type kRoot = 1) const {
         VisitNodes(kRoot, [&](morton_node_id_type key, OrthoTreeNode const& node){
             
@@ -676,30 +696,28 @@ public: // Getters
     }
 
     depth_type GetMaxDepth() const noexcept{
-        std::cout << "GetMaxDepth function, maxdepth=" << maxdepth_m << "\n";
         return maxdepth_m;
     }
 
-    /*
+    
     Kokkos::vector<morton_node_id_type> GetNodesAtDepth(depth_type depth) const noexcept {
         std::cout << "Getting nodes at depth" << "\n";
         Kokkos::vector<morton_node_id_type> keys;
         
-        VisitNodes(1, [](auto key, auto){
-            std::cout << key << " ";
+        VisitSelectedNodes(1, [&](auto key, auto){
             
-            if(this->GetDepth(key) == depth){
-                std::cout<<"before"<<"\n";
+            if(GetDepth(key) == depth){
+
+                std::cout << key << " ";
                 keys.push_back(key);
-                std::cout<<"Pushed back key="<<key<<"\n";
 
             }
             
-        });
+        }, [&](auto i){return (GetDepth(i)<=depth);});
         
-        return keys;
+        return keys;    
     }
-    */
+    
 
 
 
