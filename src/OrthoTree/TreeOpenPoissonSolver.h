@@ -19,7 +19,7 @@ namespace ippl
     private:
 
         // Octree 
-        OrthoTree tree_m;
+        OrthoTree* tree_m;
         
         // Particles
         particle_type sources_m;
@@ -73,7 +73,12 @@ namespace ippl
             // Tree Construction
             auto min = treeparams.get<double>("boxmin");
             auto max = treeparams.get<double>("boxmax");
-            OrthoTree tree_m(allParticles, treeparams.get<int>("maxdepth"), treeparams.get<int>("maxleafelements"), BoundingBox<3>{{min,min,min},{max,max,max}});
+            auto maxdepth = treeparams.get<int>("maxdepth");
+            auto maxleafele = treeparams.get<int>("maxleafelements");
+            std::cout << "TreeOpenPoissonSolver constructor, maxdepth=" << maxdepth << "\n";
+            //OrthoTree tree_m(allParticles, maxdepth, maxleafele, BoundingBox<3>{{min,min,min},{max,max,max}});
+            tree_m = new OrthoTree(allParticles, maxdepth, maxleafele, BoundingBox<3>{{min,min,min},{max,max,max}});
+
             //tree_m.PrintStructure();
 
             // Precision
@@ -88,8 +93,8 @@ namespace ippl
     public: // Solve
 
         void Solve(){
-            Farfield();
-            FarfieldExplicit();
+            //Farfield();
+            //FarfieldExplicit();
             DifferenceKernel();
         }
 
@@ -221,7 +226,8 @@ namespace ippl
         }
 
         void DifferenceKernel(){
-            
+            tree_m->GetMaxDepth();
+            /*
             for(unsigned int depth=1; depth <= tree_m.GetMaxDepth(); ++depth){
                 std::cout << "Depth is " << depth << "\n";
                 Kokkos::vector<morton_node_id_type> keys = tree_m.GetNodesAtDepth(depth);
@@ -229,7 +235,7 @@ namespace ippl
                     std::cout << keys[i] << " ";
                 }
                 std::cout << "\n";
-            }
+            }*/
                 // At each level, get all non-leaf nodes
                     // For each node compute the outgoing expansion
 
