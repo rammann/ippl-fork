@@ -111,19 +111,22 @@ private:
     grid_id_type                    rasterresmax_m; // Max boxes per dim
     ippl::Vector<double,3>          rasterizer_m;   // Describes how many nodes make up 1 unit of length per dim
     dim_type                        dim_m = 3;      // Dimension (fixed at 3 for now)
+    entity_id_type                  sourceidx_m;
 
 public: // Constructors
 
     OrthoTree () = default;
 
-    OrthoTree (particle_type const& particles, depth_type MaxDepth, size_t MaxElements, box_type Box)
+    OrthoTree (particle_type const& particles, dim_type sourceidx, depth_type MaxDepth, size_t MaxElements, box_type Box)
     {
 
         this->box_m             = Box;
         this->maxdepth_m        = MaxDepth;
         this->maxelements_m     = MaxElements;
+        this->sourceidx_m       = sourceidx;
         this->rasterresmax_m    = Kokkos::exp2(MaxDepth);
         this->rasterizer_m      = GetRasterizer(Box, this->rasterresmax_m);
+        
 
         const size_t n = particles.getLocalNum(); // use getGlobalNum() instead? 
 
@@ -649,6 +652,38 @@ public: // Getters
 
     }
 
+    Kokkos::vector<entity_id_type> CollectSourceIds(morton_node_id_type kRoot=1)const{
+        
+        Kokkos::vector<entity_id_type> ids;
+        ids.reserve(nodes_m.size() * Kokkos::max<size_t>(2, maxelements_m / 2));
+
+        VisitNodes(kRoot, [&](morton_node_id_type, OrthoTreeNode const& node)
+        {
+            for(unsigned int idx=0; idx<node.vid_m.size(); ++idx){
+                if(node.vid_m[idx] >= sourceidx_m) ids.push_back(node.vid_m[idx]-sourceidx_m);
+            }
+        });
+        
+        return ids;
+
+    }
+
+    Kokkos::vector<entity_id_type> CollectTargetIds(morton_node_id_type kRoot=1)const{
+        
+        Kokkos::vector<entity_id_type> ids;
+        ids.reserve(nodes_m.size() * Kokkos::max<size_t>(2, maxelements_m / 2));
+
+        VisitNodes(kRoot, [&](morton_node_id_type, OrthoTreeNode const& node)
+        {
+            for(unsigned int idx=0; idx<node.vid_m.size(); ++idx){
+                if(node.vid_m[idx] < sourceidx_m) ids.push_back(node.vid_m[idx]);
+            }
+        });
+        
+        return ids;
+
+    }
+
     Kokkos::vector<morton_node_id_type> GetLeafNodes(morton_node_id_type kRoot=1) const{
 
         Kokkos::vector<morton_node_id_type> leafNodes;
@@ -700,15 +735,15 @@ public: // Getters
     }
 
     
-    Kokkos::vector<morton_node_id_type> GetNodesAtDepth(depth_type depth) const noexcept {
-        std::cout << "Getting nodes at depth" << "\n";
+    Kokkos::vector<morton_node_id_type> GetInternalNodeAtDepth(depth_type depth) const noexcept {
+
         Kokkos::vector<morton_node_id_type> keys;
         
         VisitSelectedNodes(1, [&](auto key, auto){
             
-            if(GetDepth(key) == depth){
+            if(GetDepth(key) == depth && GetNode(key).IsAnyChildExist()){
 
-                std::cout << key << " ";
+                //std::cout << key << " ";
                 keys.push_back(key);
 
             }
