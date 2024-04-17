@@ -51,6 +51,7 @@ int main(int argc, char* argv[]) {
         treeparams.add("maxleafelements",   5);
         treeparams.add("boxmin",            0.0);
         treeparams.add("boxmax",            1.0);
+        treeparams.add("sourceidx",         nTargets);
 
         // Solver Params
         ippl::ParameterList solverparams;
