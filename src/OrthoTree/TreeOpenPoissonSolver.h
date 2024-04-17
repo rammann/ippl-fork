@@ -13,8 +13,14 @@ namespace ippl
 
     public: // Types
 
-        using particle_type = OrthoTreeParticle<>;
-        using playout_type = ippl::ParticleSpatialLayout<double, 3>;
+        // Define types for Fourier space field and NUFFT
+        using mesh_type                 = ippl::UniformCartesian<double, 3>;
+        using centering_type            = mesh_type::DefaultCentering;       
+        using vector_type               = ippl::Vector<double, 3>;
+        using fourier_field_type        = ippl::Field<Kokkos::complex<double>, 3, mesh_type, centering_type>;
+        using nufft_type                = ippl::NUFFT<3,double,mesh_type, centering_type>;
+        using particle_type             = OrthoTreeParticle<>;
+        using playout_type              = ippl::ParticleSpatialLayout<double, 3>;
 
     private:
 
@@ -28,6 +34,7 @@ namespace ippl
         // Views of different contributions
         Kokkos::View<double*> farfield_m;
         Kokkos::View<double*> difference_m;
+        Kokkos::View<double*> residual_m;
 
 
         // Precision
@@ -49,6 +56,7 @@ namespace ippl
             // Views
             farfield_m = Kokkos::View<double*>("Farfield contribution", targets.getTotalNum());
             difference_m = Kokkos::View<double*>("Difference contribution", targets.getTotalNum());
+            residual_m = Kokkos::View<double*>("Difference contribution", targets.getTotalNum());
             
 
 
@@ -75,9 +83,8 @@ namespace ippl
             auto max = treeparams.get<double>("boxmax");
             auto maxdepth = treeparams.get<int>("maxdepth");
             auto maxleafele = treeparams.get<int>("maxleafelements");
-            //tree_m = new OrthoTree(allParticles, maxdepth, maxleafele, BoundingBox<3>{{min,min,min},{max,max,max}});
-            tree_m = OrthoTree(allParticles, maxdepth, maxleafele, BoundingBox<3>{{min,min,min},{max,max,max}});
-            std::cout << tree_m.GetMaxDepth() << "\n";
+            auto sourceidx = treeparams.get<unsigned int>("sourceidx");
+            tree_m = OrthoTree(allParticles, sourceidx, maxdepth, maxleafele, BoundingBox<3>{{min,min,min},{max,max,max}});
             //tree_m.PrintStructure();
 
             // Precision
@@ -103,15 +110,7 @@ namespace ippl
             int nf = static_cast<int>(Kokkos::ceil(4 * Kokkos::log(1/eps_m))) * 2;
             constexpr unsigned int dim = 3;
 
-            
-            // Define types for Fourier space field and NUFFT
-            using mesh_type                 = ippl::UniformCartesian<double, dim>;
-            using centering_type            = mesh_type::DefaultCentering;       
-            using vector_type               = ippl::Vector<double, 3>;
-            using fourier_field_type        = ippl::Field<Kokkos::complex<double>, dim, mesh_type, centering_type>;
-            using nufft_type                = ippl::NUFFT<3,double,mesh_type, centering_type>;
 
-            
             // Index space
             ippl::Vector<int, dim> pt = {nf, nf, nf};
             ippl::Index I(pt[0]);
@@ -225,30 +224,102 @@ namespace ippl
         }
 
         void DifferenceKernel(){
+
+            const unsigned int dim = 3;    
+            int nf = static_cast<int>(Kokkos::ceil(6 / Kokkos::numbers::pi * Kokkos::log(1/eps_m)));
             
-            auto keys = tree_m.GetNodesAtDepth(1);
+            for(unsigned int depth=1; depth <= tree_m.GetMaxDepth(); ++depth){
 
-            for(unsigned int i=0; i<keys.size(); ++i) std::cout << keys[i] << " ";
-            std::cout << "\n";
+                double r = r0_m / Kokkos::pow(2, depth);
+                double h = 0.9 * 4 * Kokkos::numbers::pi / (3 * r);
+                
+                Kokkos::vector<morton_node_id_type> nodekeys = tree_m.GetInternalNodeAtDepth(depth);
+                
 
-            /*
-            for(unsigned int depth=1; depth <= tree_m->GetMaxDepth(); ++depth){
-                std::cout << "Depth is " << depth << "\n";
+                Kokkos::parallel_for("Loop over nodes of outoging expansion", nodekeys.size(),
+                    KOKKOS_LAMBDA(unsigned int i){
+
+                        // Get node center 
+                        OrthoTreeNode node = tree_m.GetNode(nodekeys[i]);
+                        ippl::Vector<double,3> center = {
+                            node.boundingbox_m.Min[0] + (node.boundingbox_m.Max[0]-node.boundingbox_m.Min[0]) * 0.5,
+                            node.boundingbox_m.Min[1] + (node.boundingbox_m.Max[1]-node.boundingbox_m.Min[1]) * 0.5,
+                            node.boundingbox_m.Min[2] + (node.boundingbox_m.Max[2]-node.boundingbox_m.Min[2]) * 0.5
+                        };
+
+                        // Collect source ids
+                        Kokkos::vector<entity_id_type> sourceids = tree_m.CollectSourceIds(nodekeys[i]);
+                        
+                        // Create new source points relative to box center for NUFFT
+                        playout_type PLayout;
+                        particle_type relativesources(PLayout);
+                        relativesources.create(sourceids.size());
+                        for(unsigned int i=0; i<sourceids.size(); ++i){
+                            relativesources.R(i) = h * (sources_m.R(sourceids[i]) - center);
+                            relativesources.rho(i) = sources_m.rho(sourceids[i]);
+                        }
+
+                        // Create Fourier-space field for outgoing expansion
+                        // Index space
+                        ippl::Vector<int, dim> pt = {nf, nf, nf};
+                        ippl::Index I(pt[0]);
+                        ippl::Index J(pt[1]);
+                        ippl::Index K(pt[2]);
+                        ippl::NDIndex<dim> owned(I, J, K);
+
+                        
+                        // Specify parallel dimensions (for MPI?)
+                        std::array<bool, dim> isParallel;  
+                        isParallel.fill(false);
+
+                        
+                        // Field Layout
+                        ippl::FieldLayout<dim> layout(MPI_COMM_WORLD, owned, isParallel);
+
+
+                        // Mesh holds the information about the geometry of the field
+                        // The mesh is [-nf/2, ..., 0, ..., nf/2]^3
+                        vector_type hx = {1.0, 1.0, 1.0};
+                        vector_type origin = {
+                            -static_cast<double>(nf/2), 
+                            -static_cast<double>(nf/2), 
+                            -static_cast<double>(nf/2)
+                        };
+                        mesh_type mesh(owned, hx, origin);
+
+
+                        // Fourier-space field for outgoing expansion of this node
+                        fourier_field_type field_phi(mesh, layout,0);
+                        field_phi = 0;
+                        auto phiview = field_phi.getView();
+
+                        // Perform NUFFT1
+                        
+                    });
+
+
                 
-                Kokkos::vector<morton_node_id_type> keys = tree_m->GetNodesAtDepth(depth);
-                for(unsigned int i=0; i<keys.size(); ++i){
-                    std::cout << keys[i] << " ";
-                }
-                std::cout << "\n";
                 
-            }*/
+            }
                 // At each level, get all non-leaf nodes
                     // For each node compute the outgoing expansion
 
                     // For each compute the incoming expansion
         }
 
-         
+        void ResidualKernel(){
+            Kokkos::vector<morton_node_id_type> leafnodes = tree_m.GetLeafNodes();
+
+            Kokkos::parallel_for("Loop over leaf nodes for residual contribution", leafnodes.size(),
+                KOKKOS_LAMBDA(unsigned int i){
+                    OrthoTreeNode leaf = tree_m.GetNode(leafnodes[i]);
+                    // Find colleagues and coarse neighbours
+
+                    // Find all sources withing those neighbours
+
+                    // Calculate Residual Contribution
+                });
+        }
 
 
 
