@@ -235,10 +235,12 @@ namespace ippl
                 
                 Kokkos::vector<morton_node_id_type> nodekeys = tree_m.GetInternalNodeAtDepth(depth);
                 
-
+                // Outgoing expansion at depth
+                Kokkos::View<fourier_field_type*> Phi("Outgoing expansion", nodekeys.size());
                 Kokkos::parallel_for("Loop over nodes of outoging expansion", nodekeys.size(),
                     KOKKOS_LAMBDA(unsigned int i){
-
+                       
+                        
                         // Get node center 
                         OrthoTreeNode node = tree_m.GetNode(nodekeys[i]);
                         ippl::Vector<double,3> center = {
@@ -246,9 +248,11 @@ namespace ippl
                             node.boundingbox_m.Min[1] + (node.boundingbox_m.Max[1]-node.boundingbox_m.Min[1]) * 0.5,
                             node.boundingbox_m.Min[2] + (node.boundingbox_m.Max[2]-node.boundingbox_m.Min[2]) * 0.5
                         };
+                        
 
                         // Collect source ids
                         Kokkos::vector<entity_id_type> sourceids = tree_m.CollectSourceIds(nodekeys[i]);
+
                         
                         // Create new source points relative to box center for NUFFT
                         playout_type PLayout;
@@ -293,18 +297,29 @@ namespace ippl
                         field_phi = 0;
                         auto phiview = field_phi.getView();
 
+
                         // Perform NUFFT1
+                        ippl::ParameterList fftParams;
+                        fftParams.add("use_finufft_defaults", true); 
+                        int type1 = 1; // NUFFT type 1
+                        std::unique_ptr<nufft_type> nufft1 = std::make_unique<nufft_type>(layout, sources_m.getTotalNum(), type1, fftParams);
+
                         
+                        // Type 1 NUFFT
+                        nufft1->transform(relativesources.R, relativesources.rho, field_phi);
+
+                        
+                        // Save in view 
+                        Phi(i) = field_phi; 
                     });
 
+                // Incoming expansion at depth
+                // TODO mortonid -> idx map
 
                 
                 
             }
-                // At each level, get all non-leaf nodes
-                    // For each node compute the outgoing expansion
 
-                    // For each compute the incoming expansion
         }
 
         void ResidualKernel(){
