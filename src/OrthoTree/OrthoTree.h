@@ -91,6 +91,15 @@ public: // Member Functions
         return children_m;
     }
 
+    ippl::Vector<double,3> GetCenter() const{
+        ippl::Vector<double,3> center = {
+                            boundingbox_m.Min[0] + (boundingbox_m.Max[0]-boundingbox_m.Min[0]) * 0.5,
+                            boundingbox_m.Min[1] + (boundingbox_m.Max[1]-boundingbox_m.Min[1]) * 0.5,
+                            boundingbox_m.Min[2] + (boundingbox_m.Max[2]-boundingbox_m.Min[2]) * 0.5
+                        };
+        return center;
+    }
+
 }; // Class OrthoTreeNode
 
 

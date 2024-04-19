@@ -61,7 +61,7 @@ int main(int argc, char* argv[]) {
         ippl::TreeOpenPoissonSolver solver(targets, sources, treeparams, solverparams);
         solver.Solve();
 
-
+        
 
 
 
@@ -80,7 +80,7 @@ int main(int argc, char* argv[]) {
         /* OCTREE CONSTRUCTION TEST 
         typedef ippl::ParticleSpatialLayout<double, 3> playout_type;
         playout_type PLayout;
-        ippl::OrthoTreeParticle particles(PLayout, 5);
+        ippl::OrthoTreeParticle particles(PLayout);
         unsigned int nsources = 50;
 
         std::mt19937_64 eng;
@@ -95,7 +95,7 @@ int main(int argc, char* argv[]) {
             particles.rho(i)               = 0.0;
         }
 
-        ippl::OrthoTree tree(particles, 4, ippl::BoundingBox<3>{{0,0,0},{1,1,1}}, 3);
+        ippl::OrthoTree tree(particles, nsources/2 ,4, 2, ippl::BoundingBox<3>{{0,0,0},{1,1,1}});
         tree.PrintStructure();
         */
 

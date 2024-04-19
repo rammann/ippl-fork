@@ -113,9 +113,9 @@ public:
             N[d] = domain[d].length();
             Len[d] = dx[d] * N[d];
         }
-
-        std::cout << origin[0] << " " << origin[1] << " " << origin[2] << "\n";
-        std::cout << Len[0] << " " << Len[1] << " " << Len[2] << "\n";
+        
+        //std::cout << origin[0] << " " << origin[1] << " " << origin[2] << "\n";
+        //std::cout << Len[0] << " " << Len[1] << " " << Len[2] << "\n";
 
         //const double pi = std::acos(-1.0);
 
