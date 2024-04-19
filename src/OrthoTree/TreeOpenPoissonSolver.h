@@ -5,6 +5,7 @@
 #ifndef TREEOPENPOISSONSOLVER
 #define TREEOPENPOISSONSOLVER
 #include "Utility/ParameterList.h"
+#include <unordered_map>
 
 namespace ippl
 {
@@ -99,9 +100,9 @@ namespace ippl
     public: // Solve
 
         void Solve(){
-            //Farfield();
-            //FarfieldExplicit();
-            DifferenceKernel();
+            Farfield();
+            FarfieldExplicit();
+            //DifferenceKernel();
         }
 
         void Farfield(){
@@ -143,6 +144,7 @@ namespace ippl
             // and Fourier transform of the far-field u(k) = {w * g} (k)
             fourier_field_type field_g(mesh, layout,0);
             fourier_field_type field_u(mesh, layout,0);
+
             field_u = 0;
             auto gview = field_g.getView();
             auto uview = field_u.getView();
@@ -227,15 +229,28 @@ namespace ippl
 
             const unsigned int dim = 3;    
             int nf = static_cast<int>(Kokkos::ceil(6 / Kokkos::numbers::pi * Kokkos::log(1/eps_m)));
-            
+
+            // Iterate through levels of the tree
             for(unsigned int depth=1; depth <= tree_m.GetMaxDepth(); ++depth){
 
+
+                // Depth dependent variables
                 double r = r0_m / Kokkos::pow(2, depth);
                 double h = 0.9 * 4 * Kokkos::numbers::pi / (3 * r);
                 
+
+                // nodekeys is a vector holding the morton ids of the internal nodes at current depth
                 Kokkos::vector<morton_node_id_type> nodekeys = tree_m.GetInternalNodeAtDepth(depth);
+
+
+                // keytoidx maps morton ids to their index in nodekeys
+                std::unordered_map<morton_node_id_type, unsigned int> keytoidx;
+                for(unsigned int i=0; i<nodekeys.size(); ++i)
+                    keytoidx[nodekeys[i]] = i;
+                
                 
                 // Outgoing expansion at depth
+                // TODO Consider using Kokkos::unordered_map
                 Kokkos::View<fourier_field_type*> Phi("Outgoing expansion", nodekeys.size());
                 Kokkos::parallel_for("Loop over nodes of outoging expansion", nodekeys.size(),
                     KOKKOS_LAMBDA(unsigned int i){
@@ -243,11 +258,7 @@ namespace ippl
                         
                         // Get node center 
                         OrthoTreeNode node = tree_m.GetNode(nodekeys[i]);
-                        ippl::Vector<double,3> center = {
-                            node.boundingbox_m.Min[0] + (node.boundingbox_m.Max[0]-node.boundingbox_m.Min[0]) * 0.5,
-                            node.boundingbox_m.Min[1] + (node.boundingbox_m.Max[1]-node.boundingbox_m.Min[1]) * 0.5,
-                            node.boundingbox_m.Min[2] + (node.boundingbox_m.Max[2]-node.boundingbox_m.Min[2]) * 0.5
-                        };
+                        ippl::Vector<double,dim> center = node.GetCenter();
                         
 
                         // Collect source ids
@@ -263,39 +274,9 @@ namespace ippl
                             relativesources.rho(i) = sources_m.rho(sourceids[i]);
                         }
 
-                        // Create Fourier-space field for outgoing expansion
-                        // Index space
-                        ippl::Vector<int, dim> pt = {nf, nf, nf};
-                        ippl::Index I(pt[0]);
-                        ippl::Index J(pt[1]);
-                        ippl::Index K(pt[2]);
-                        ippl::NDIndex<dim> owned(I, J, K);
-
-                        
-                        // Specify parallel dimensions (for MPI?)
-                        std::array<bool, dim> isParallel;  
-                        isParallel.fill(false);
-
-                        
-                        // Field Layout
-                        ippl::FieldLayout<dim> layout(MPI_COMM_WORLD, owned, isParallel);
-
-
-                        // Mesh holds the information about the geometry of the field
-                        // The mesh is [-nf/2, ..., 0, ..., nf/2]^3
-                        vector_type hx = {1.0, 1.0, 1.0};
-                        vector_type origin = {
-                            -static_cast<double>(nf/2), 
-                            -static_cast<double>(nf/2), 
-                            -static_cast<double>(nf/2)
-                        };
-                        mesh_type mesh(owned, hx, origin);
-
-
-                        // Fourier-space field for outgoing expansion of this node
-                        fourier_field_type field_phi(mesh, layout,0);
-                        field_phi = 0;
-                        auto phiview = field_phi.getView();
+                        std::pair FieldLayoutPair = InitFourierField(nf);
+                        fourier_field_type field_phi = FieldLayoutPair.first;
+                        ippl::FieldLayout<dim> layout = FieldLayoutPair.second;
 
 
                         // Perform NUFFT1
@@ -314,12 +295,90 @@ namespace ippl
                     });
 
                 // Incoming expansion at depth
-                // TODO mortonid -> idx map
+                
+                Kokkos::View<fourier_field_type*> Psi("Incoming Expansion", nodekeys.size());
+                // DONE Init incoming expansion fields
+                for(unsigned int n = 0; n<nodekeys.size(); ++n){
+                    Kokkos::vector<morton_node_id_type> colleaguekeys = tree_m.GetColleagues(nodekeys[n]);
+                    Psi(n) = InitFourierField(nf).first;
+                    auto PsiView = Psi(n).getView();
+                    for(unsigned int c=0; c<colleaguekeys.size(); ++c){
+                        unsigned int idxColleague = keytoidx[colleaguekeys[c]];
+                        auto PhiView = Phi(idxColleague).getView();
+                        Kokkos::parallel_for("Calculate incoming expansion", Psi(n).getFieldRangePolicy(),
+                        KOKKOS_LAMBDA(const int i, const int j, const int k){
+                            
+                            // Convert index (i,j,k) to frequency (k_x,k_y,k_z)
+                            const double kx = -static_cast<double>(nf/2) + i;
+                            const double ky = -static_cast<double>(nf/2) + j;
+                            const double kz = -static_cast<double>(nf/2) + k;
+
+                            // TODO Perform incoming expansion
+                            double w = Kokkos::pow(Kokkos::numbers::pi*2,-3) * D(depth, kx, ky, kz);
+                            ippl::Vector<double, dim> centerDiff = tree_m.GetNode(nodekeys[n]).GetCenter() - tree_m.GetNode(nodekeys[idxColleague]).GetCenter();
+                            double dotprod = kx * centerDiff[0] + ky * centerDiff[1] + kz * centerDiff[2];
+                            
+                            Kokkos::complex<double> I;
+                            I.real() = 0; I.imag() = 1;
+                            PsiView(i,j,k) = w * Kokkos::exp(I * h * dotprod) * PhiView(i,j,k);
+                        });
+                    }
+                }
 
                 
                 
             }
 
+        }
+
+        std::pair<fourier_field_type, ippl::FieldLayout<3>> InitFourierField(int nf){
+
+            const int dim = 3;
+            ippl::Vector<int, dim> pt = {nf, nf, nf};
+            ippl::Index I(pt[0]);
+            ippl::Index J(pt[1]);
+            ippl::Index K(pt[2]);
+            ippl::NDIndex<3> owned(I, J, K);
+
+            // Specify parallel dimensions (for MPI?)
+            std::array<bool, dim> isParallel;  
+            isParallel.fill(false);
+
+            // Field Layout
+            ippl::FieldLayout<dim> layout(MPI_COMM_WORLD, owned, isParallel);
+
+            // Mesh holds the information about the geometry of the field
+            // The mesh is [-nf/2, ..., 0, ..., nf/2]^3
+            vector_type hx = {1.0, 1.0, 1.0};
+            vector_type origin = {
+                -static_cast<double>(nf/2), 
+                -static_cast<double>(nf/2), 
+                -static_cast<double>(nf/2)
+            };
+            mesh_type mesh(owned, hx, origin);
+
+
+            // Fourier-space field for outgoing expansion of this node
+            fourier_field_type field(mesh, layout,0);
+            field = 0;
+            return std::make_pair(field, layout);
+        }
+
+        inline double D(unsigned int l, double kx, double ky, double kz){
+            double sigl = sig0_m * Kokkos::pow(0.5,l);
+            double sigl1 = sigl * 0.5;
+            if( Kokkos::abs(kx) < std::numeric_limits<double>::epsilon() && 
+                Kokkos::abs(ky) < std::numeric_limits<double>::epsilon() &&
+                Kokkos::abs(kz) < std::numeric_limits<double>::epsilon())
+            {
+                return Kokkos::numbers::pi * (sigl - sigl1);
+            }
+            
+            else
+            {
+                double k2 = kx * kx + ky * ky + kz * kz;
+                return 4 * Kokkos::numbers::pi / k2  * (Kokkos::exp(-k2 * sigl1 * sigl1 * 0.25) - Kokkos::exp(-k2 * sigl * sigl * 0.25));
+            }
         }
 
         void ResidualKernel(){
