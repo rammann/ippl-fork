@@ -100,9 +100,9 @@ namespace ippl
     public: // Solve
 
         void Solve(){
-            Farfield();
-            FarfieldExplicit();
-            //DifferenceKernel();
+            //Farfield();
+            //FarfieldExplicit();
+            DifferenceKernel();
         }
 
         void Farfield(){
@@ -232,7 +232,7 @@ namespace ippl
 
             // Iterate through levels of the tree
             for(unsigned int depth=1; depth <= tree_m.GetMaxDepth(); ++depth){
-
+                std::cout << "Depth " << depth << "\n";
 
                 // Depth dependent variables
                 double r = r0_m / Kokkos::pow(2, depth);
@@ -245,13 +245,80 @@ namespace ippl
 
                 // keytoidx maps morton ids to their index in nodekeys
                 std::unordered_map<morton_node_id_type, unsigned int> keytoidx;
-                for(unsigned int i=0; i<nodekeys.size(); ++i)
+                for(unsigned int i=0; i<nodekeys.size(); ++i){
                     keytoidx[nodekeys[i]] = i;
-                
+                }
+                    
                 
                 // Outgoing expansion at depth
-                // TODO Consider using Kokkos::unordered_map
-                Kokkos::View<fourier_field_type*> Phi("Outgoing expansion", nodekeys.size());
+                // TODO Consider using Kokkos::UnorderedMap
+                Kokkos::UnorderedMap<morton_node_id_type, fourier_field_type> Phi;
+                for(unsigned int i=0; i<nodekeys.size(); ++i){
+
+                    // Morton key of current internal node
+                    morton_node_id_type key = nodekeys[i];
+                    
+                    // Get node center
+                    ippl::Vector<double,dim> center = tree_m.GetNode(key).GetCenter();
+
+                    // Get souce ids in this node
+                    Kokkos::vector<entity_id_type> idSources = tree_m.CollectSourceIds(key);
+
+
+                    // Create source particles with positions relative to node center
+                    playout_type PLayout;
+                    particle_type relSources(PLayout);
+                    relSources.create(idSources.size());
+                    for(unsigned int i=0; i<idSources.size(); ++i){
+                        relSources.R(i) = h * (sources_m.R(idSources[i]) - center);
+                        relSources.rho(i) = sources_m.rho(idSources[i]);
+                    }
+
+
+                    // Create Fourier-space field for outgoing expansion
+                    ippl::Vector<int, dim> pt = {nf, nf, nf};
+                    ippl::Index I(pt[0]); 
+                    ippl::Index J(pt[1]); 
+                    ippl::Index K(pt[2]);
+                    ippl::NDIndex<3> owned(I, J, K);
+
+                    std::array<bool, dim> isParallel;  
+                    isParallel.fill(false);
+
+                    ippl::FieldLayout<dim> layout(MPI_COMM_WORLD, owned, isParallel);
+
+                    vector_type hx = {1.0, 1.0, 1.0};
+                    vector_type origin = {
+                        -static_cast<double>(nf/2), 
+                        -static_cast<double>(nf/2), 
+                        -static_cast<double>(nf/2)
+                    };
+                    mesh_type mesh(owned, hx, origin);
+
+                    fourier_field_type fieldPhi(mesh, layout,0);
+                    fieldPhi = 0;
+
+
+                    // Initialise NUFFT 1
+                    ippl::ParameterList fftParams;
+                    fftParams.add("use_finufft_defaults", true); 
+                    int type1 = 1; 
+                    std::unique_ptr<nufft_type> nufft1 = std::make_unique<nufft_type>(layout, sources_m.getTotalNum(), type1, fftParams);
+
+
+                    // Perform NUFFT 1
+                    nufft1->transform(relSources.R, relSources.rho, fieldPhi);
+
+
+                    // Insert outgoing expansion into map
+                    Phi.insert(key, fieldPhi);
+
+                    std::cout << "Internal node " << key << "\n";
+
+                }
+                
+                /*
+                //Kokkos::View<fourier_field_type*> Phi("Outgoing expansion", nodekeys.size());
                 Kokkos::parallel_for("Loop over nodes of outoging expansion", nodekeys.size(),
                     KOKKOS_LAMBDA(unsigned int i){
                        
@@ -293,9 +360,11 @@ namespace ippl
                         // Save in view 
                         Phi(i) = field_phi; 
                     });
+                */
+                
 
                 // Incoming expansion at depth
-                
+                /*
                 Kokkos::View<fourier_field_type*> Psi("Incoming Expansion", nodekeys.size());
                 // DONE Init incoming expansion fields
                 for(unsigned int n = 0; n<nodekeys.size(); ++n){
@@ -324,6 +393,8 @@ namespace ippl
                         });
                     }
                 }
+                */
+                
 
                 
                 
