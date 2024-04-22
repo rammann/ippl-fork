@@ -607,7 +607,7 @@ public: // Getters
 
     Kokkos::vector<morton_node_id_type> GetColleagues(morton_node_id_type key) const{
         
-        if(key == 1) return Kokkos::vector<morton_node_id_type>{};
+        if(key == 1) return Kokkos::vector<morton_node_id_type>{1};
 
         ippl::Vector<grid_id_type,3> aidGrid = MortonDecode(key, GetDepth(key));
         Kokkos::vector<morton_node_id_type> colleagues={};
