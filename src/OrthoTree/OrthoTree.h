@@ -762,6 +762,10 @@ public: // Getters
         
         return keys;    
     }
+
+    unsigned int GetMaxElementsPerNode() const noexcept{
+        return maxelements_m;
+    }
     
 
 
