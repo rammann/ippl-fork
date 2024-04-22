@@ -137,7 +137,7 @@ public: // Constructors
         this->rasterizer_m      = GetRasterizer(Box, this->rasterresmax_m);
         
 
-        const size_t n = particles.getLocalNum(); // use getGlobalNum() instead? 
+        const size_t n = particles.getTotalNum(); // use getGlobalNum() instead? 
 
         nodes_m = container_type(EstimateNodeNumber(n, MaxDepth, MaxElements));
 
@@ -220,7 +220,7 @@ private: // Aid Function for Constructor
         //auto const nElement = Kokkos::Experimental::distance(itEndPrev, itEnd);
 
         // reached leaf node -> fill points into vid_m vector
-        if(nElement < this->maxelements_m || nDepthRemain == 0){
+        if(nElement <= this->maxelements_m || nDepthRemain == 0){
             nodeParent.vid_m.resize(nElement);
             std::transform(itEndPrev, itEnd, nodeParent.vid_m.begin(), [](auto const item){return item.first;});
             itEndPrev = itEnd;
@@ -539,6 +539,10 @@ public: // Node Info Functions
             else{
                 for(unsigned int idx=0; idx<node.vid_m.size(); ++idx) std::cout << node.vid_m[idx] << " ";
             }
+            std::cout << "\n";
+
+            // Is Leaf
+            std::cout << "Is Leaf? " << (!node.IsAnyChildExist()) << "\n";
 
             std::cout << "\n\n";
         
