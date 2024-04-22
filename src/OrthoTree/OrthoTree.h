@@ -607,10 +607,15 @@ public: // Getters
 
     Kokkos::vector<morton_node_id_type> GetColleagues(morton_node_id_type key) const{
         
-        if(key == 1) return Kokkos::vector<morton_node_id_type>{1};
+        Kokkos::vector<morton_node_id_type> colleagues={};
+        
+        if(key == 1){
+            colleagues.push_back(1);
+            return colleagues;
+        } 
 
         ippl::Vector<grid_id_type,3> aidGrid = MortonDecode(key, GetDepth(key));
-        Kokkos::vector<morton_node_id_type> colleagues={};
+        
 
         for(int z=-1; z<=1; ++z){
             for(int y=-1; y<=1; ++y){
@@ -638,7 +643,7 @@ public: // Getters
         for(unsigned int idx=0; idx<parentColleagues.size(); ++idx){
             
             OrthoTreeNode& coarseNode = this->GetNode(parentColleagues[idx]);
-
+            
             
             if(!coarseNode.IsAnyChildExist() && boxRelation(coarseNode.boundingbox_m, node.boundingbox_m) == BoxRelation::Adjacent){
                 coarseNbrs.push_back(parentColleagues[idx]);
