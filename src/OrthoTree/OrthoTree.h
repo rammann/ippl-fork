@@ -634,8 +634,9 @@ public: // Getters
         for(unsigned int idx=0; idx<parentColleagues.size(); ++idx){
             
             OrthoTreeNode& coarseNode = this->GetNode(parentColleagues[idx]);
+
             
-            if(boxRelation(coarseNode.boundingbox_m, node.boundingbox_m) == BoxRelation::Adjacent){
+            if(!coarseNode.IsAnyChildExist() && boxRelation(coarseNode.boundingbox_m, node.boundingbox_m) == BoxRelation::Adjacent){
                 coarseNbrs.push_back(parentColleagues[idx]);
             }
 
