@@ -634,10 +634,11 @@ public: // Getters
 
     Kokkos::vector<morton_node_id_type> GetCoarseNbrs(morton_node_id_type key) const{
 
-        assert(key != 1);
+        Kokkos::vector<morton_node_id_type> coarseNbrs{};
+        if(key == 1) return coarseNbrs;
         
         OrthoTreeNode& node = this->GetNode(key);
-        Kokkos::vector<morton_node_id_type> coarseNbrs;
+        
         Kokkos::vector<morton_node_id_type> parentColleagues = this->GetColleagues(key >> dim_m);
 
         for(unsigned int idx=0; idx<parentColleagues.size(); ++idx){
