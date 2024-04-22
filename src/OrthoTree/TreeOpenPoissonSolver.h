@@ -75,7 +75,7 @@ namespace ippl
             auto maxleafele = treeparams.get<int>("maxleafelements");
             auto sourceidx = treeparams.get<unsigned int>("sourceidx");
             tree_m = OrthoTree(allParticles, sourceidx, maxdepth, maxleafele, BoundingBox<3>{{min,min,min},{max,max,max}});
-            //tree_m.PrintStructure();
+            tree_m.PrintStructure();
 
             // Precision
             eps_m = solverparams.get<double>("eps");
@@ -98,6 +98,8 @@ namespace ippl
         }
 
         void Farfield(){
+
+            std::cout << "Starting farfield calculation" << "\n";
             
             // Number of Fourier nodes as defined in (3.36)
             int nf = static_cast<int>(Kokkos::ceil(4 * Kokkos::log(1/eps_m))) * 2;
@@ -188,6 +190,8 @@ namespace ippl
 
             // Type 2 NUFFT
             nufft2->transform(targets_m.R, targets_m.rho, field_u);
+
+            std::cout << "Finished farfield calculation" << "\n\n";
         }
 
         void FarfieldExplicit(){
@@ -212,11 +216,14 @@ namespace ippl
 
         void DifferenceKernel(){
 
+            std::cout << "Starting difference calculation" << "\n";
             const unsigned int dim = 3;    
             int nf = static_cast<int>(Kokkos::ceil(6 / Kokkos::numbers::pi * Kokkos::log(1/eps_m)));
 
             // Iterate through levels of the tree
             for(unsigned int depth=0; depth <= tree_m.GetMaxDepth(); ++depth){
+
+                std::cout << "At depth " << depth << "\n";
 
                 // Depth dependent variables
                 double r = r0_m / Kokkos::pow(2, depth);
@@ -241,15 +248,18 @@ namespace ippl
 
                     // Morton key of current internal node
                     morton_node_id_type key = nodekeys[i];
-                    
+                    std::cout << "Performing outgoing expansion for node " << key << "\n";
+
                     // Get node center
+                    std::cout << "Getting node center" << "\n";
                     ippl::Vector<double,dim> center = tree_m.GetNode(key).GetCenter();
 
                     // Get souce ids in this node
+                    std::cout << "Getting source ids" << "\n";
                     Kokkos::vector<entity_id_type> idSources = tree_m.CollectSourceIds(key);
-
-
+                
                     // Create source particles with positions relative to node center
+                    std::cout << "Creating particles relative to center" << "\n";
                     playout_type PLayout;
                     particle_type relSources(PLayout);
                     relSources.create(idSources.size());
@@ -257,7 +267,8 @@ namespace ippl
                         relSources.R(i) = h * (sources_m.R(idSources[i]) - center);
                         relSources.rho(i) = sources_m.rho(idSources[i]);
                     }
-
+                    
+                    
 
                     // Create Fourier-space field for outgoing expansion
                     ippl::Vector<int, dim> pt = {nf, nf, nf};
@@ -291,14 +302,17 @@ namespace ippl
 
 
                     // Perform NUFFT 1
+                    std::cout << "Performing NUFFT Type 1" << "\n";
                     nufft1->transform(relSources.R, relSources.rho, fieldPhi);
-
+                    
 
                     // Insert outgoing expansion into map
+                    std::cout << "Inserting (key, field) pair into map" << "\n";
                     Phi.insert(key, fieldPhi);
-
+                    
                 } // Loop over nodes for outgoing expansion
                 
+
                 Kokkos::UnorderedMap<morton_node_id_type, fourier_field_type> Psi;
 
                 // Incoming expansion at depth
@@ -307,8 +321,11 @@ namespace ippl
                     // Morton key of current node
                     morton_node_id_type key = nodekeys[i];
 
+                    std::cout << "Performing incoming expansion for key " << key << "\n";
+
                     // Vector of colleague keys
                     Kokkos::vector<morton_node_id_type> colleaguekeys = tree_m.GetColleagues(key);
+                    std::cout << "Number of colleagues is " << colleaguekeys.size() << "\n";
 
                     // Create Fourier-space field for incoming expansion
                     ippl::Vector<int, dim> pt = {nf, nf, nf};
@@ -339,6 +356,7 @@ namespace ippl
                         
                         // Morton key of colleague
                         morton_node_id_type colkey = colleaguekeys[c];
+                        std::cout << "Gathering expansion from colleague " << colkey << "\n";
 
                         // Colleague's outgoing expansion view
                         if(!Phi.exists(colkey)) continue;
@@ -372,8 +390,9 @@ namespace ippl
 
                     } // Loop over colleagues of node
 
+                    std::cout << "Inserting (key,field) pair" << "\n";
                     Psi.insert(key, fieldPsi);
-
+                    
                 } // Loop over nodes for incoming expansion
 
                 // Nufft back onto target on each node
@@ -426,16 +445,18 @@ namespace ippl
                     int type2 = 2; 
                     std::unique_ptr<nufft_type> nufft2 = std::make_unique<nufft_type>(layout, sources_m.getTotalNum(), type2, fftParams);
 
-
+                    // std::cout << "Total number of target points is " <<relTargets.getTotalNum() << "\n";
                     // Perform NUFFT 1
                     nufft2->transform(relTargets.R, relTargets.rho, fieldPsi);
 
+                    
 
                     // Add this contribution to target values
                     Kokkos::parallel_for("Add contribution to target values", idTargets.size(),
                     KOKKOS_LAMBDA(unsigned int t){
                         targets_m.rho(idTargets[t]) += relTargets.rho(t);
                     });
+                    std::cout << "HERE IS THE ERROR" << "\n";
                 }
 
 
