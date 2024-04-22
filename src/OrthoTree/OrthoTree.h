@@ -767,6 +767,24 @@ public: // Getters
         return keys;    
     }
 
+    Kokkos::vector<morton_node_id_type> GetNodeAtDepth(depth_type depth) const noexcept {
+
+        Kokkos::vector<morton_node_id_type> keys;
+        
+        VisitSelectedNodes(1, [&](auto key, auto){
+            
+            if(GetDepth(key) == depth){
+
+                //std::cout << key << " ";
+                keys.push_back(key);
+
+            }
+            
+        }, [&](auto i){return (GetDepth(i)<=depth);});
+        
+        return keys;    
+    }
+
     unsigned int GetMaxElementsPerNode() const noexcept{
         return maxelements_m;
     }
