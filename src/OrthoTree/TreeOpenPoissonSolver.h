@@ -225,22 +225,22 @@ namespace ippl
 
                 // Depth dependent variables
                 double r = r0_m * Kokkos::pow(0.5, depth);
-                double h = 0.5 * 4 * Kokkos::numbers::pi / (3 * r);
+                double hl = 0.5 * 4 * Kokkos::numbers::pi / (3 * r);
                 
 
-                // nodekeys is a vector holding the morton ids of the internal nodes at current depth
-                Kokkos::vector<morton_node_id_type> nodekeys = tree_m.GetInternalNodeAtDepth(depth);
+                // internalnodekeys is a vector holding the morton ids of the internal nodes at current depth
+                Kokkos::vector<morton_node_id_type> internalnodekeys = tree_m.GetInternalNodeAtDepth(depth);
                     
                 // Container for outgoing expansion
                 Kokkos::UnorderedMap<morton_node_id_type, fourier_field_type> Phi;
                 
                 // Outgoing expansion at depth
-                for(unsigned int i=0; i<nodekeys.size(); ++i){
+                for(unsigned int i=0; i<internalnodekeys.size(); ++i){
 
-                    std::cout << nodekeys[i] << "\n";
+                    std::cout << internalnodekeys[i] << "\n";
 
                     // Morton key of current internal node
-                    morton_node_id_type key = nodekeys[i];
+                    morton_node_id_type key = internalnodekeys[i];
 
 
                     // Get node center
@@ -255,7 +255,7 @@ namespace ippl
                     particle_type relSources(PLayout);
                     relSources.create(idSources.size());
                     for(unsigned int i=0; i<idSources.size(); ++i){
-                        relSources.R(i) = h * (sources_m.R(idSources[i]) - center);
+                        relSources.R(i) = hl * (sources_m.R(idSources[i]) - center);
                         relSources.rho(i) = sources_m.rho(idSources[i]);
                     }
 
@@ -301,6 +301,9 @@ namespace ippl
                 
                 // Map for incoming expansion
                 Kokkos::UnorderedMap<morton_node_id_type, fourier_field_type> Psi;
+
+                // nodes of this level
+                Kokkos::vector<morton_node_id_type> nodekeys = tree_m.GetNodeAtDepth(depth);
 
                 // Incoming expansion at depth
                 for(unsigned int i=0; i<nodekeys.size(); ++i){
@@ -371,7 +374,7 @@ namespace ippl
                             Kokkos::complex<double> I;
                             I.real() = 0; I.imag() = 1;
 
-                            PsiView(i,j,k) += w * Kokkos::exp(I * h * t) * PhiView(i,j,k);
+                            PsiView(i,j,k) += w * Kokkos::exp(I * hl * t) * PhiView(i,j,k);
                             
 
                         }); // Incoming expansion loop
@@ -403,7 +406,7 @@ namespace ippl
                     particle_type relTargets(PLayout);
                     relTargets.create(idTargets.size());
                     for(unsigned int i=0; i<idTargets.size(); ++i){
-                        relTargets.R(i) = h * (targets_m.R(idTargets[i]) - center);
+                        relTargets.R(i) = hl * (targets_m.R(idTargets[i]) - center);
                         relTargets.rho(i) = 0;
                     }
 
