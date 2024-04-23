@@ -27,7 +27,7 @@ int main(int argc, char* argv[]) {
         sources.create(nSources);
 
         // Random generators for position and charge
-        std::mt19937_64 eng(13);
+        std::mt19937_64 eng(42);
         std::uniform_real_distribution<double> posDis(0, 1);
         std::uniform_real_distribution<double> chargeDis(-20,20);
 
@@ -46,6 +46,7 @@ int main(int argc, char* argv[]) {
             sources.rho(idx) = chargeDis(eng);
         }
         */
+        
         
         targets.R(0) = ippl::Vector<double,3>{0.25, 0.25, 0.25};
         targets.R(1) = ippl::Vector<double,3>{0.25, 0.75, 0.25};
@@ -72,7 +73,7 @@ int main(int argc, char* argv[]) {
         // Tree Params
         ippl::ParameterList treeparams;
         treeparams.add("maxdepth",          1);
-        treeparams.add("maxleafelements",   2);
+        treeparams.add("maxleafelements",   1);
         treeparams.add("boxmin",            0.0);
         treeparams.add("boxmax",            1.0);
         treeparams.add("sourceidx",         nTargets);
