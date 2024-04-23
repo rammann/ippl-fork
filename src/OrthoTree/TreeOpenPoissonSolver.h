@@ -102,7 +102,7 @@ namespace ippl
             std::cout << "Starting farfield calculation" << "\n";
             
             // Number of Fourier nodes as defined in (3.36)
-            int nf = static_cast<int>(Kokkos::ceil(4 * Kokkos::log(1/eps_m))) * 2;
+            int nf = static_cast<int>(Kokkos::ceil(4 * Kokkos::log(1/eps_m)));
             constexpr unsigned int dim = 3;
 
 
@@ -218,14 +218,14 @@ namespace ippl
 
             std::cout << "Starting difference calculation" << "\n";
             const unsigned int dim = 3;    
-            int nf = static_cast<int>(Kokkos::ceil(6 / Kokkos::numbers::pi * Kokkos::log(1/eps_m)));
+            int nf = static_cast<int>(Kokkos::ceil(6 / Kokkos::numbers::pi * Kokkos::log(1/eps_m))) ;
 
             // Iterate through levels of the tree
             for(unsigned int depth=0; depth < tree_m.GetMaxDepth(); ++depth){
 
                 // Depth dependent variables
                 double r = r0_m * Kokkos::pow(0.5, depth);
-                double h = 4 * Kokkos::numbers::pi / (3 * r) * 0.5;
+                double h = 0.5 * 4 * Kokkos::numbers::pi / (3 * r);
                 
 
                 // nodekeys is a vector holding the morton ids of the internal nodes at current depth
@@ -236,6 +236,8 @@ namespace ippl
                 
                 // Outgoing expansion at depth
                 for(unsigned int i=0; i<nodekeys.size(); ++i){
+
+                    std::cout << nodekeys[i] << "\n";
 
                     // Morton key of current internal node
                     morton_node_id_type key = nodekeys[i];
@@ -297,7 +299,7 @@ namespace ippl
                     
                 } // Loop over nodes for outgoing expansion
                 
-
+                // Map for incoming expansion
                 Kokkos::UnorderedMap<morton_node_id_type, fourier_field_type> Psi;
 
                 // Incoming expansion at depth
@@ -376,7 +378,6 @@ namespace ippl
 
                     } // Loop over colleagues of node
 
-                    std::cout << "Inserting (key,field) pair" << "\n";
                     Psi.insert(key, fieldPsi);
                     
                 } // Loop over nodes for incoming expansion
@@ -464,6 +465,7 @@ namespace ippl
 
                 // Leaf key
                 morton_node_id_type leafkey = leafnodes[i];
+                std::cout << leafkey << "\n";
 
                 // Leaf node
                 OrthoTreeNode leafnode = tree_m.GetNode(leafkey);
@@ -474,6 +476,7 @@ namespace ippl
                 // Find colleagues and coarse neighbours
                 Kokkos::vector<morton_node_id_type> coarseneighbours = tree_m.GetCoarseNbrs(leafkey);
                 Kokkos::vector<morton_node_id_type> colleagues = tree_m.GetColleagues(leafkey);
+
 
                 // Collect source ids
                 Kokkos::vector<entity_id_type> sourceids = tree_m.CollectSourceIds(leafkey);
@@ -530,7 +533,7 @@ namespace ippl
                         targets_m.rho(targetid) += R(depth, r) * sourceRho;
                     }
                 }
-            }
+            } 
             std::cout << "Finished residual contribution" << "\n";
         }
 

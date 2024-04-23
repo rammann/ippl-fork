@@ -32,8 +32,8 @@ int main(int argc, char* argv[]) {
         std::uniform_real_distribution<double> chargeDis(-20,20);
 
         // Generate target points
-        /*
-        for(unsigned int idx=0; idx<nTargets; ++idx){
+        
+        /* for(unsigned int idx=0; idx<nTargets; ++idx){
             ippl::Vector<double,3> r = {posDis(eng), posDis(eng), posDis(eng)};
             targets.R(idx) = r;
             targets.rho(idx) = 0.0;
@@ -44,8 +44,8 @@ int main(int argc, char* argv[]) {
             ippl::Vector<double,3> r = {posDis(eng), posDis(eng), posDis(eng)};
             sources.R(idx) = r;
             sources.rho(idx) = chargeDis(eng);
-        }
-        */
+        } */
+       
         
         
         targets.R(0) = ippl::Vector<double,3>{0.25, 0.25, 0.25};
@@ -65,7 +65,7 @@ int main(int argc, char* argv[]) {
         sources.rho(1) = chargeDis(eng);
         sources.rho(2) = chargeDis(eng);
         sources.rho(3) = chargeDis(eng);
-        
+       
        
 
 
