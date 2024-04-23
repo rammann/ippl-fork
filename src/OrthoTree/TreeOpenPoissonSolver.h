@@ -227,7 +227,7 @@ namespace ippl
 
                 // Depth dependent variables
                 double r = r0_m / Kokkos::pow(2, depth);
-                double h = 0.9 * 4 * Kokkos::numbers::pi / (3 * r);
+                double h = 0.2 * 4 * Kokkos::numbers::pi / (3 * r);
                 
 
                 // nodekeys is a vector holding the morton ids of the internal nodes at current depth
@@ -385,6 +385,7 @@ namespace ippl
                             I.real() = 0; I.imag() = 1;
 
                             PsiView(i,j,k) += w * Kokkos::exp(I * h * t) * PhiView(i,j,k);
+                            
 
                         }); // Incoming expansion loop
 
@@ -456,18 +457,20 @@ namespace ippl
                     KOKKOS_LAMBDA(unsigned int t){
                         targets_m.rho(idTargets[t]) += relTargets.rho(t);
                     });
-                    std::cout << "HERE IS THE ERROR" << "\n";
+                    
                 }
 
 
                 
             } // Loop over depth
 
+            std::cout << "Finished difference contribution" << "\n";
         }
 
         
         void ResidualKernel(){
 
+            std::cout << "Starting residual contribution" << "\n";
             Kokkos::vector<morton_node_id_type> leafnodes = tree_m.GetLeafNodes();
 
             //Kokkos::parallel_for("Loop over leaf nodes for residual contribution", leafnodes.size(),
@@ -543,6 +546,7 @@ namespace ippl
                     }
                 }
             }
+            std::cout << "Finished residual contribution" << "\n";
         }
 
         void ExplicitSolution(){

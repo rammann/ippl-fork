@@ -18,21 +18,21 @@ int main(int argc, char* argv[]) {
 
         // Targets
         ippl::OrthoTreeParticle targets(PLayout);
-        unsigned int nTargets = 100;
+        unsigned int nTargets = 4;
         targets.create(nTargets);
 
         // Sources
         ippl::OrthoTreeParticle sources(PLayout);
-        unsigned int nSources = 100;
+        unsigned int nSources = 4;
         sources.create(nSources);
 
         // Random generators for position and charge
-        std::mt19937_64 eng(12);
+        std::mt19937_64 eng(13);
         std::uniform_real_distribution<double> posDis(0, 1);
         std::uniform_real_distribution<double> chargeDis(-20,20);
 
         // Generate target points
-        
+        /*
         for(unsigned int idx=0; idx<nTargets; ++idx){
             ippl::Vector<double,3> r = {posDis(eng), posDis(eng), posDis(eng)};
             targets.R(idx) = r;
@@ -45,8 +45,8 @@ int main(int argc, char* argv[]) {
             sources.R(idx) = r;
             sources.rho(idx) = chargeDis(eng);
         }
+        */
         
-        /*
         targets.R(0) = ippl::Vector<double,3>{0.25, 0.25, 0.25};
         targets.R(1) = ippl::Vector<double,3>{0.25, 0.75, 0.25};
         targets.R(2) = ippl::Vector<double,3>{0.25, 0.25, 0.75};
@@ -64,14 +64,14 @@ int main(int argc, char* argv[]) {
         sources.rho(1) = chargeDis(eng);
         sources.rho(2) = chargeDis(eng);
         sources.rho(3) = chargeDis(eng);
-        */
+        
        
 
 
 
         // Tree Params
         ippl::ParameterList treeparams;
-        treeparams.add("maxdepth",          5);
+        treeparams.add("maxdepth",          1);
         treeparams.add("maxleafelements",   2);
         treeparams.add("boxmin",            0.0);
         treeparams.add("boxmax",            1.0);
@@ -79,7 +79,7 @@ int main(int argc, char* argv[]) {
 
         // Solver Params
         ippl::ParameterList solverparams;
-        solverparams.add("eps", 0.0001);
+        solverparams.add("eps", 0.000001);
 
         
         ippl::TreeOpenPoissonSolver solver(targets, sources, treeparams, solverparams);
