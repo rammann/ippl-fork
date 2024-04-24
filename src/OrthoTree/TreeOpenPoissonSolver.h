@@ -6,6 +6,7 @@
 #define TREEOPENPOISSONSOLVER
 #include "Utility/ParameterList.h"
 #include <unordered_map>
+#include <numbers>
 
 namespace ippl
 {
@@ -92,6 +93,7 @@ namespace ippl
             Farfield();
             //FarfieldExplicit();
             DifferenceKernel();
+            //ExplictDifference();
             ResidualKernel();
             //PrintSolution();
             ExplicitSolution();
@@ -217,17 +219,24 @@ namespace ippl
         void DifferenceKernel(){
 
             std::cout << "Starting difference calculation" << "\n";
-            const unsigned int dim = 3;    
-            int nf = static_cast<int>(Kokkos::ceil(6 / Kokkos::numbers::pi * Kokkos::log(1/eps_m))) ;
+
+            const unsigned int dim = 3; 
+   
+            //int nf = static_cast<int>(Kokkos::ceil(6 / Kokkos::numbers::pi * Kokkos::log(1/eps_m)))*4;
+            //std::cout << "Using " << nf << " nodes in Fourier space" << " \n";
+            //std::cout << Kokkos::numbers::pi << "\n";
 
             // Iterate through levels of the tree
             for(unsigned int depth=0; depth < tree_m.GetMaxDepth(); ++depth){
 
                 // Depth dependent variables
                 double r = r0_m * Kokkos::pow(0.5, depth);
-                double hl = 0.5 * 4 * Kokkos::numbers::pi / (3 * r);
-                
+                double Kl = 4 / r  * Kokkos::log(1/eps_m) ;
+                double hl = 4 * Kokkos::numbers::pi/(3 * r) ;
+                int nf = static_cast<int>(Kl/hl);
 
+                //std::cout<< "rl = " << r << "\n" << "hl = " << hl << "\n" << "Kl = nf/2 * hl = " << Kl << "\n";
+                
                 // internalnodekeys is a vector holding the morton ids of the internal nodes at current depth
                 Kokkos::vector<morton_node_id_type> internalnodekeys = tree_m.GetInternalNodeAtDepth(depth);
                     
@@ -235,9 +244,8 @@ namespace ippl
                 Kokkos::UnorderedMap<morton_node_id_type, fourier_field_type> Phi;
                 
                 // Outgoing expansion at depth
+                std::cout << "Calculating outgoing expansion for node " << "\n";
                 for(unsigned int i=0; i<internalnodekeys.size(); ++i){
-
-                    std::cout << internalnodekeys[i] << "\n";
 
                     // Morton key of current internal node
                     morton_node_id_type key = internalnodekeys[i];
@@ -255,12 +263,13 @@ namespace ippl
                     particle_type relSources(PLayout);
                     relSources.create(idSources.size());
                     for(unsigned int i=0; i<idSources.size(); ++i){
-                        relSources.R(i) = hl * (sources_m.R(idSources[i]) - center);
+                        relSources.R(i) = /* hl * */ (sources_m.R(idSources[i]) - center);
                         relSources.rho(i) = sources_m.rho(idSources[i]);
                     }
 
+
                     // Create Fourier-space field for outgoing expansion
-                    ippl::Vector<int, dim> pt = {nf, nf, nf};
+                    ippl::Vector<int, dim> pt = {2 * nf + 1, 2 * nf + 1, 2 * nf + 1};
                     ippl::Index I(pt[0]); 
                     ippl::Index J(pt[1]); 
                     ippl::Index K(pt[2]);
@@ -271,15 +280,15 @@ namespace ippl
 
                     ippl::FieldLayout<dim> layout(MPI_COMM_WORLD, owned, isParallel);
 
-                    vector_type hx = {1.0, 1.0, 1.0};
+                    vector_type hx = {hl, hl, hl};
                     vector_type origin = {
-                        -static_cast<double>(nf/2), 
-                        -static_cast<double>(nf/2), 
-                        -static_cast<double>(nf/2)
+                        -Kl, 
+                        -Kl, 
+                        -Kl
                     };
                     mesh_type mesh(owned, hx, origin);
 
-                    fourier_field_type fieldPhi(mesh, layout,0);
+                    fourier_field_type fieldPhi(mesh, layout, 0);
                     fieldPhi = 0;
 
 
@@ -306,10 +315,12 @@ namespace ippl
                 Kokkos::vector<morton_node_id_type> nodekeys = tree_m.GetNodeAtDepth(depth);
 
                 // Incoming expansion at depth
+                std::cout << "Calculating incoming expansion for node ";
                 for(unsigned int i=0; i<nodekeys.size(); ++i){
 
                     // Morton key of current node
                     morton_node_id_type key = nodekeys[i];
+                    
 
                     //if(!tree_m.GetNode(key).IsAnyChildExist()) continue;
 
@@ -319,7 +330,7 @@ namespace ippl
 
 
                     // Create Fourier-space field for incoming expansion
-                    ippl::Vector<int, dim> pt = {nf, nf, nf};
+                    ippl::Vector<int, dim> pt = {2 * nf + 1, 2 * nf + 1, 2 * nf + 1};
                     ippl::Index I(pt[0]); 
                     ippl::Index J(pt[1]); 
                     ippl::Index K(pt[2]);
@@ -330,11 +341,11 @@ namespace ippl
 
                     ippl::FieldLayout<dim> layout(MPI_COMM_WORLD, owned, isParallel);
 
-                    vector_type hx = {1.0, 1.0, 1.0};
+                    vector_type hx = {hl, hl, hl};
                     vector_type origin = {
-                        -static_cast<double>(nf/2), 
-                        -static_cast<double>(nf/2), 
-                        -static_cast<double>(nf/2)
+                        -Kl, 
+                        -Kl, 
+                        -Kl
                     };
                     mesh_type mesh(owned, hx, origin);
 
@@ -347,6 +358,7 @@ namespace ippl
                         
                         // Morton key of colleague
                         morton_node_id_type colkey = colleaguekeys[c];
+                        
 
                         // Colleague's outgoing expansion view
                         if(!Phi.exists(colkey)) continue;
@@ -355,17 +367,19 @@ namespace ippl
                         // Difference of centers of node and its colleague
                         ippl::Vector<double,3> delta = tree_m.GetNode(key).GetCenter() - tree_m.GetNode(colkey).GetCenter();
 
+
                         // Incoming expansion for current colleague
                         Kokkos::parallel_for("Calculate incoming expansion", fieldPsi.getFieldRangePolicy(),
                         KOKKOS_LAMBDA(const int i, const int j, const int k){
                                 
                             // Transform multi-index to k vector
-                            const double kx = -static_cast<double>(nf/2) + i;
-                            const double ky = -static_cast<double>(nf/2) + j;
-                            const double kz = -static_cast<double>(nf/2) + k;
+                            const double kx = -Kl + i * hl;
+                            const double ky = -Kl + j * hl;
+                            const double kz = -Kl + k * hl;
+                            /* std::cout << kx << " " << ky << " " << kz << "\n"; */
 
                             // w value
-                            double w = Kokkos::pow(Kokkos::numbers::pi*2,-3) * D(depth, kx, ky, kz);
+                            double w = D(depth, kx , ky , kz) / Kokkos::pow(2*Kokkos::numbers::pi,3);
 
                             // Dot product of (kx,ky,kz) and (centerdifference)
                             double t = kx * delta[0] + ky * delta[1] + kz * delta[2];
@@ -374,7 +388,7 @@ namespace ippl
                             Kokkos::complex<double> I;
                             I.real() = 0; I.imag() = 1;
 
-                            PsiView(i,j,k) += w * Kokkos::exp(I * hl * t) * PhiView(i,j,k);
+                            PsiView(i,j,k) += w * Kokkos::exp(I *  hl  * t) * PhiView(i,j,k);
                             
 
                         }); // Incoming expansion loop
@@ -406,12 +420,12 @@ namespace ippl
                     particle_type relTargets(PLayout);
                     relTargets.create(idTargets.size());
                     for(unsigned int i=0; i<idTargets.size(); ++i){
-                        relTargets.R(i) = hl * (targets_m.R(idTargets[i]) - center);
-                        relTargets.rho(i) = 0;
+                        relTargets.R(i) = /* hl *  */ (targets_m.R(idTargets[i]) - center);
+                        relTargets.rho(i) = 0.0;
                     }
 
                     // Create Fourier-space field for outgoing expansion
-                    ippl::Vector<int, dim> pt = {nf, nf, nf};
+                    ippl::Vector<int, dim> pt = {2 * nf + 1, 2 * nf + 1, 2 * nf + 1};
                     ippl::Index I(pt[0]); 
                     ippl::Index J(pt[1]); 
                     ippl::Index K(pt[2]);
@@ -422,11 +436,11 @@ namespace ippl
 
                     ippl::FieldLayout<dim> layout(MPI_COMM_WORLD, owned, isParallel);
 
-                    vector_type hx = {1.0, 1.0, 1.0};
+                    vector_type hx = {hl, hl, hl};
                     vector_type origin = {
-                        -static_cast<double>(nf/2), 
-                        -static_cast<double>(nf/2), 
-                        -static_cast<double>(nf/2)
+                        -Kl, 
+                        -Kl, 
+                        -Kl
                     };
                     mesh_type mesh(owned, hx, origin);
 
@@ -456,6 +470,27 @@ namespace ippl
             std::cout << "Finished difference contribution" << "\n";
         }
 
+        void ExplictDifference(){
+            Kokkos::View<double*> targetValues("Explicit farfield solution", targets_m.getTotalNum());
+            double sig0 = sig0_m;
+            double sig1 = sig0_m * 0.5;
+
+            Kokkos::parallel_for("Compute explicit differnce", targets_m.getTotalNum(), 
+                KOKKOS_LAMBDA(const unsigned int t){
+                    double temp = 0;
+                    for(unsigned int s=0; s<sources_m.getTotalNum(); ++s){
+                        double r = Kokkos::sqrt(Kokkos::pow(targets_m.R(t)(0)-sources_m.R(s)(0),2) +
+                                                Kokkos::pow(targets_m.R(t)(1)-sources_m.R(s)(1),2) +
+                                                Kokkos::pow(targets_m.R(t)(2)-sources_m.R(s)(2),2));
+                        temp += sources_m.rho(s) * (std::erf(r/sig1)-std::erf(r/sig0))/r;
+                    }
+                    targetValues(t) = temp;
+                });
+            
+            for(unsigned int t=0; t<targets_m.getTotalNum(); ++t){
+                std::cout << targetValues(t) << " " << targets_m.rho(t) << " diff = " << targetValues(t) - targets_m.rho(t) << "\n";
+            }
+        }
         
         void ResidualKernel(){
 
@@ -558,7 +593,8 @@ namespace ippl
             //});
             
             for(unsigned int t=0; t<targets_m.getTotalNum(); ++t){
-                std::cout <<  targetValues(t) << " " << targets_m.rho(t) <<"\n";
+                std::cout <<  targetValues(t) << " " << targets_m.rho(t) <<  " diff = " << targetValues(t) - targets_m.rho(t) << "\n";
+               
             }
         }
 
