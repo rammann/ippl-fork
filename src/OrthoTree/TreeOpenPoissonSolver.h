@@ -219,21 +219,15 @@ namespace ippl
         void DifferenceKernel(){
 
             std::cout << "Starting difference calculation" << "\n";
-
             const unsigned int dim = 3; 
-   
-            //int nf = static_cast<int>(Kokkos::ceil(6 / Kokkos::numbers::pi * Kokkos::log(1/eps_m)))*4;
-            //std::cout << "Using " << nf << " nodes in Fourier space" << " \n";
-            //std::cout << Kokkos::numbers::pi << "\n";
+            int nf = static_cast<int>(Kokkos::ceil(6 / Kokkos::numbers::pi * Kokkos::log(1/eps_m))) ;
 
             // Iterate through levels of the tree
             for(unsigned int depth=0; depth < tree_m.GetMaxDepth(); ++depth){
 
                 // Depth dependent variables
                 double r = r0_m * Kokkos::pow(0.5, depth);
-                double Kl = 4 / r  * Kokkos::log(1/eps_m) ;
-                double hl = 4 * Kokkos::numbers::pi/(3 * r) ;
-                int nf = static_cast<int>(Kl/hl);
+                double hl = 0.5 * 4 * Kokkos::numbers::pi / (3 * r);
 
                 //std::cout<< "rl = " << r << "\n" << "hl = " << hl << "\n" << "Kl = nf/2 * hl = " << Kl << "\n";
                 
@@ -269,7 +263,7 @@ namespace ippl
 
 
                     // Create Fourier-space field for outgoing expansion
-                    ippl::Vector<int, dim> pt = {2 * nf + 1, 2 * nf + 1, 2 * nf + 1};
+                    ippl::Vector<int, dim> pt = {nf, nf, nf};
                     ippl::Index I(pt[0]); 
                     ippl::Index J(pt[1]); 
                     ippl::Index K(pt[2]);
@@ -280,11 +274,11 @@ namespace ippl
 
                     ippl::FieldLayout<dim> layout(MPI_COMM_WORLD, owned, isParallel);
 
-                    vector_type hx = {hl, hl, hl};
+                    vector_type hx = {1.0, 1.0, 1.0};
                     vector_type origin = {
-                        -Kl, 
-                        -Kl, 
-                        -Kl
+                        -static_cast<double>(nf/2), 
+                        -static_cast<double>(nf/2), 
+                        -static_cast<double>(nf/2)
                     };
                     mesh_type mesh(owned, hx, origin);
 
@@ -330,7 +324,7 @@ namespace ippl
 
 
                     // Create Fourier-space field for incoming expansion
-                    ippl::Vector<int, dim> pt = {2 * nf + 1, 2 * nf + 1, 2 * nf + 1};
+                    ippl::Vector<int, dim> pt = {nf, nf, nf};
                     ippl::Index I(pt[0]); 
                     ippl::Index J(pt[1]); 
                     ippl::Index K(pt[2]);
@@ -341,11 +335,11 @@ namespace ippl
 
                     ippl::FieldLayout<dim> layout(MPI_COMM_WORLD, owned, isParallel);
 
-                    vector_type hx = {hl, hl, hl};
+                    vector_type hx = {1.0, 1.0, 1.0};
                     vector_type origin = {
-                        -Kl, 
-                        -Kl, 
-                        -Kl
+                        -static_cast<double>(nf/2), 
+                        -static_cast<double>(nf/2), 
+                        -static_cast<double>(nf/2)
                     };
                     mesh_type mesh(owned, hx, origin);
 
@@ -373,13 +367,12 @@ namespace ippl
                         KOKKOS_LAMBDA(const int i, const int j, const int k){
                                 
                             // Transform multi-index to k vector
-                            const double kx = -Kl + i * hl;
-                            const double ky = -Kl + j * hl;
-                            const double kz = -Kl + k * hl;
-                            /* std::cout << kx << " " << ky << " " << kz << "\n"; */
+                            const double kx = -static_cast<double>(nf/2) + i;
+                            const double ky = -static_cast<double>(nf/2) + j;
+                            const double kz = -static_cast<double>(nf/2) + k;
 
                             // w value
-                            double w = D(depth, kx , ky , kz) / Kokkos::pow(2*Kokkos::numbers::pi,3);
+                            double w = Kokkos::pow(Kokkos::numbers::pi*2,-3) * D(depth, kx, ky, kz);
 
                             // Dot product of (kx,ky,kz) and (centerdifference)
                             double t = kx * delta[0] + ky * delta[1] + kz * delta[2];
@@ -388,7 +381,7 @@ namespace ippl
                             Kokkos::complex<double> I;
                             I.real() = 0; I.imag() = 1;
 
-                            PsiView(i,j,k) += w * Kokkos::exp(I *  hl  * t) * PhiView(i,j,k);
+                            PsiView(i,j,k) += w * Kokkos::exp(I * hl * t) * PhiView(i,j,k);
                             
 
                         }); // Incoming expansion loop
@@ -425,7 +418,7 @@ namespace ippl
                     }
 
                     // Create Fourier-space field for outgoing expansion
-                    ippl::Vector<int, dim> pt = {2 * nf + 1, 2 * nf + 1, 2 * nf + 1};
+                    ippl::Vector<int, dim> pt = {nf, nf, nf};
                     ippl::Index I(pt[0]); 
                     ippl::Index J(pt[1]); 
                     ippl::Index K(pt[2]);
@@ -436,11 +429,11 @@ namespace ippl
 
                     ippl::FieldLayout<dim> layout(MPI_COMM_WORLD, owned, isParallel);
 
-                    vector_type hx = {hl, hl, hl};
+                    vector_type hx = {1.0, 1.0, 1.0};
                     vector_type origin = {
-                        -Kl, 
-                        -Kl, 
-                        -Kl
+                        -static_cast<double>(nf/2), 
+                        -static_cast<double>(nf/2), 
+                        -static_cast<double>(nf/2)
                     };
                     mesh_type mesh(owned, hx, origin);
 

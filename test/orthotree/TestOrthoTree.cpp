@@ -18,12 +18,12 @@ int main(int argc, char* argv[]) {
 
         // Targets
         ippl::OrthoTreeParticle targets(PLayout);
-        unsigned int nTargets = 2;
+        unsigned int nTargets = 10;
         targets.create(nTargets);
 
         // Sources
         ippl::OrthoTreeParticle sources(PLayout);
-        unsigned int nSources = 2;
+        unsigned int nSources = 10;
         sources.create(nSources);
 
         // Random generators for position and charge
@@ -33,7 +33,7 @@ int main(int argc, char* argv[]) {
 
         // Generate target points
         
-        /* for(unsigned int idx=0; idx<nTargets; ++idx){
+        for(unsigned int idx=0; idx<nTargets; ++idx){
             ippl::Vector<double,3> r = {posDis(eng), posDis(eng), posDis(eng)};
             targets.R(idx) = r;
             targets.rho(idx) = 0.0;
@@ -44,28 +44,28 @@ int main(int argc, char* argv[]) {
             ippl::Vector<double,3> r = {posDis(eng), posDis(eng), posDis(eng)};
             sources.R(idx) = r;
             sources.rho(idx) = chargeDis(eng);
-        } */
+        }
        
         
         
-        targets.R(0) = ippl::Vector<double,3>{0.25, 0.25, 0.25};
+        /* targets.R(0) = ippl::Vector<double,3>{0.25, 0.25, 0.25};
         targets.R(1) = ippl::Vector<double,3>{0.25, 0.75, 0.25};
-        /* targets.R(2) = ippl::Vector<double,3>{0.25, 0.25, 0.75};
-        targets.R(3) = ippl::Vector<double,3>{0.25, 0.75, 0.75}; */
+        targets.R(2) = ippl::Vector<double,3>{0.25, 0.25, 0.75};
+        targets.R(3) = ippl::Vector<double,3>{0.25, 0.75, 0.75};
         targets.rho(0) = 0.0;
         targets.rho(1) = 0.0;
-        /* targets.rho(2) = 0.0;
-        targets.rho(3) = 0.0; */
+        targets.rho(2) = 0.0;
+        targets.rho(3) = 0.0;
 
         sources.R(0) = ippl::Vector<double,3>{0.75, 0.25, 0.25};
         sources.R(1) = ippl::Vector<double,3>{0.75, 0.75, 0.25};
-        /* sources.R(2) = ippl::Vector<double,3>{0.75, 0.25, 0.75};
-        sources.R(3) = ippl::Vector<double,3>{0.75, 0.75, 0.75}; */
+        sources.R(2) = ippl::Vector<double,3>{0.75, 0.25, 0.75};
+        sources.R(3) = ippl::Vector<double,3>{0.75, 0.75, 0.75};
         sources.rho(0) = chargeDis(eng);
         sources.rho(1) = chargeDis(eng);
-        /* sources.rho(2) = chargeDis(eng);
-        sources.rho(3) = chargeDis(eng);
-        */
+        sources.rho(2) = chargeDis(eng);
+        sources.rho(3) = chargeDis(eng); */
+       
        
 
 
