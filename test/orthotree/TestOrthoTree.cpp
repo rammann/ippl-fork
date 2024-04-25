@@ -18,17 +18,17 @@ int main(int argc, char* argv[]) {
 
         // Targets
         ippl::OrthoTreeParticle targets(PLayout);
-        unsigned int nTargets = 10;
+        unsigned int nTargets = 100;
         targets.create(nTargets);
 
         // Sources
         ippl::OrthoTreeParticle sources(PLayout);
-        unsigned int nSources = 10;
+        unsigned int nSources = 100;
         sources.create(nSources);
 
         // Random generators for position and charge
         std::mt19937_64 eng(42);
-        std::uniform_real_distribution<double> posDis(0, 1);
+        std::uniform_real_distribution<double> posDis(0.0, 1.0);
         std::uniform_real_distribution<double> chargeDis(-20,20);
 
         // Generate target points
@@ -72,8 +72,8 @@ int main(int argc, char* argv[]) {
 
         // Tree Params
         ippl::ParameterList treeparams;
-        treeparams.add("maxdepth",          1);
-        treeparams.add("maxleafelements",   1);
+        treeparams.add("maxdepth",          5);
+        treeparams.add("maxleafelements",   6);
         treeparams.add("boxmin",            0.0);
         treeparams.add("boxmax",            1.0);
         treeparams.add("sourceidx",         nTargets);

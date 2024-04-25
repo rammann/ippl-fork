@@ -220,16 +220,17 @@ namespace ippl
 
             std::cout << "Starting difference calculation" << "\n";
             const unsigned int dim = 3; 
-            int nf = static_cast<int>(Kokkos::ceil(6 / Kokkos::numbers::pi * Kokkos::log(1/eps_m))) ;
+            int nf = static_cast<int>(Kokkos::ceil(6 / Kokkos::numbers::pi * Kokkos::log(1/eps_m))) * 4;
+            std::cout << "nf = " << nf << "\n";
 
             // Iterate through levels of the tree
             for(unsigned int depth=0; depth < tree_m.GetMaxDepth(); ++depth){
 
                 // Depth dependent variables
-                double r = r0_m * Kokkos::pow(0.5, depth);
-                double hl = 0.5 * 4 * Kokkos::numbers::pi / (3 * r);
-
-                //std::cout<< "rl = " << r << "\n" << "hl = " << hl << "\n" << "Kl = nf/2 * hl = " << Kl << "\n";
+                //double r = r0_m * Kokkos::pow(0.5, depth);
+                /* double hl = 0.5 * 4 * Kokkos::numbers::pi / (3 * r); */
+                double hl = Kokkos::pow(2,depth);
+                
                 
                 // internalnodekeys is a vector holding the morton ids of the internal nodes at current depth
                 Kokkos::vector<morton_node_id_type> internalnodekeys = tree_m.GetInternalNodeAtDepth(depth);
@@ -238,7 +239,6 @@ namespace ippl
                 Kokkos::UnorderedMap<morton_node_id_type, fourier_field_type> Phi;
                 
                 // Outgoing expansion at depth
-                std::cout << "Calculating outgoing expansion for node " << "\n";
                 for(unsigned int i=0; i<internalnodekeys.size(); ++i){
 
                     // Morton key of current internal node
@@ -257,7 +257,7 @@ namespace ippl
                     particle_type relSources(PLayout);
                     relSources.create(idSources.size());
                     for(unsigned int i=0; i<idSources.size(); ++i){
-                        relSources.R(i) = /* hl * */ (sources_m.R(idSources[i]) - center);
+                        relSources.R(i) = hl * (sources_m.R(idSources[i]) - center);
                         relSources.rho(i) = sources_m.rho(idSources[i]);
                     }
 
@@ -274,7 +274,7 @@ namespace ippl
 
                     ippl::FieldLayout<dim> layout(MPI_COMM_WORLD, owned, isParallel);
 
-                    vector_type hx = {1.0, 1.0, 1.0};
+                    vector_type hx = {1, 1, 1};
                     vector_type origin = {
                         -static_cast<double>(nf/2), 
                         -static_cast<double>(nf/2), 
@@ -309,7 +309,6 @@ namespace ippl
                 Kokkos::vector<morton_node_id_type> nodekeys = tree_m.GetNodeAtDepth(depth);
 
                 // Incoming expansion at depth
-                std::cout << "Calculating incoming expansion for node ";
                 for(unsigned int i=0; i<nodekeys.size(); ++i){
 
                     // Morton key of current node
@@ -335,7 +334,7 @@ namespace ippl
 
                     ippl::FieldLayout<dim> layout(MPI_COMM_WORLD, owned, isParallel);
 
-                    vector_type hx = {1.0, 1.0, 1.0};
+                    vector_type hx = {1, 1, 1};
                     vector_type origin = {
                         -static_cast<double>(nf/2), 
                         -static_cast<double>(nf/2), 
@@ -367,21 +366,21 @@ namespace ippl
                         KOKKOS_LAMBDA(const int i, const int j, const int k){
                                 
                             // Transform multi-index to k vector
-                            const double kx = -static_cast<double>(nf/2) + i;
-                            const double ky = -static_cast<double>(nf/2) + j;
-                            const double kz = -static_cast<double>(nf/2) + k;
+                            const double kx = (-static_cast<double>(nf/2) + i) * hl;
+                            const double ky = (-static_cast<double>(nf/2) + j) * hl;
+                            const double kz = (-static_cast<double>(nf/2) + k) * hl;
 
                             // w value
-                            double w = Kokkos::pow(Kokkos::numbers::pi*2,-3) * D(depth, kx, ky, kz);
+                            double w =  Kokkos::pow(Kokkos::numbers::pi*2,-3) *  D(depth, kx, ky, kz);
 
                             // Dot product of (kx,ky,kz) and (centerdifference)
                             double t = kx * delta[0] + ky * delta[1] + kz * delta[2];
 
                             // i
-                            Kokkos::complex<double> I;
-                            I.real() = 0; I.imag() = 1;
+                            Kokkos::complex<double> imag;
+                            imag.real() = 0; imag.imag() = 1;
 
-                            PsiView(i,j,k) += w * Kokkos::exp(I * hl * t) * PhiView(i,j,k);
+                            PsiView(i,j,k) += w * Kokkos::exp(imag * /* hl * */ t) * PhiView(i,j,k) * Kokkos::pow(hl,3);
                             
 
                         }); // Incoming expansion loop
@@ -413,7 +412,7 @@ namespace ippl
                     particle_type relTargets(PLayout);
                     relTargets.create(idTargets.size());
                     for(unsigned int i=0; i<idTargets.size(); ++i){
-                        relTargets.R(i) = /* hl *  */ (targets_m.R(idTargets[i]) - center);
+                        relTargets.R(i) = hl * (targets_m.R(idTargets[i]) - center);
                         relTargets.rho(i) = 0.0;
                     }
 
@@ -429,7 +428,7 @@ namespace ippl
 
                     ippl::FieldLayout<dim> layout(MPI_COMM_WORLD, owned, isParallel);
 
-                    vector_type hx = {1.0, 1.0, 1.0};
+                    vector_type hx = {1, 1, 1};
                     vector_type origin = {
                         -static_cast<double>(nf/2), 
                         -static_cast<double>(nf/2), 
