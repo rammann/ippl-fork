@@ -114,9 +114,11 @@ public:
             Len[d] = dx[d] * N[d];
         }
         
-        //std::cout << origin[0] << " " << origin[1] << " " << origin[2] << "\n";
-        //std::cout << Len[0] << " " << Len[1] << " " << Len[2] << "\n";
-
+        /* std::cout << origin[0] << " " << origin[1] << " " << origin[2] << "\n";
+        std::cout << Len[0] << " " << Len[1] << " " << Len[2] << "\n";
+        std::cout << dx << "\n";
+        std::cout << fview.extent(0) << " " << fview.extent(1) << " " << fview.extent(2) << "\n";
+        */
         //const double pi = std::acos(-1.0);
 
         auto tempField = tempField_m;
@@ -196,7 +198,7 @@ private:
         
         finufft_opts opts;
 	    finufft_default_opts(&opts);
-        tol_m = 1e-6;
+        tol_m = 0.000001;
 
         if(!params.get<bool>("use_finufft_defaults")) {
            tol_m = params.get<T>("tolerance");

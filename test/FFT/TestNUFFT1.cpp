@@ -96,15 +96,15 @@ int main(int argc, char* argv[]){
         //2 * pi / double(pt[1]),
         //2 * pi / double(pt[2]),
         //};
-        std::array<double,dim> dx = {1, 1, 1};
+        std::array<double,dim> dx = {2, 2, 2};
 
         Vector_t hx = {dx[0], dx[1], dx[2]};
-        Vector_t origin = {-5, -5, -5};
+        Vector_t origin = {-10, -10, -10};
         ippl::UniformCartesian<double, 3> mesh(owned, hx, origin);
         typedef ippl::Field<Kokkos::complex<double>, dim, Mesh_t, Centering_t> field_type;
 
-        field_type field(mesh, layout);
-        field_type field_dft(mesh, layout);
+        field_type field(mesh, layout, 0);
+        field_type field_dft(mesh, layout, 0);
 
 
         //playout_type pl(layout, mesh);
