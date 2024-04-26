@@ -220,7 +220,7 @@ namespace ippl
 
             std::cout << "Starting difference calculation" << "\n";
             const unsigned int dim = 3; 
-            int nf = static_cast<int>(Kokkos::ceil(6 / Kokkos::numbers::pi * Kokkos::log(1/eps_m))) * 4;
+            int nf = static_cast<int>(Kokkos::ceil(6 / Kokkos::numbers::pi * Kokkos::log(1/eps_m))) * 3;
             std::cout << "nf = " << nf << "\n";
 
             // Iterate through levels of the tree
@@ -489,12 +489,12 @@ namespace ippl
             std::cout << "Starting residual contribution" << "\n";
             Kokkos::vector<morton_node_id_type> leafnodes = tree_m.GetLeafNodes();
 
-            //Kokkos::parallel_for("Loop over leaf nodes for residual contribution", leafnodes.size(),
-            //KOKKOS_LAMBDA(unsigned int i){
-            for(unsigned int i=0; i<leafnodes.size(); ++i){
+            Kokkos::parallel_for("Loop over leaf nodes for residual contribution", leafnodes.size(),
+            KOKKOS_LAMBDA(unsigned int i){
+            //for(unsigned int i=0; i<leafnodes.size(); ++i){
 
                 // Leaf key
-                morton_node_id_type leafkey = leafnodes[i];
+                morton_node_id_type leafkey = leafnodes(i);
                 std::cout << leafkey << "\n";
 
                 // Leaf node
@@ -563,7 +563,7 @@ namespace ippl
                         targets_m.rho(targetid) += R(depth, r) * sourceRho;
                     }
                 }
-            } 
+            }); 
             std::cout << "Finished residual contribution" << "\n";
         }
 

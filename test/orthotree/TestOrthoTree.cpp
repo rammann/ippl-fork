@@ -18,12 +18,12 @@ int main(int argc, char* argv[]) {
 
         // Targets
         ippl::OrthoTreeParticle targets(PLayout);
-        unsigned int nTargets = 100;
+        unsigned int nTargets = 200;
         targets.create(nTargets);
 
         // Sources
         ippl::OrthoTreeParticle sources(PLayout);
-        unsigned int nSources = 100;
+        unsigned int nSources = 200;
         sources.create(nSources);
 
         // Random generators for position and charge
@@ -72,8 +72,8 @@ int main(int argc, char* argv[]) {
 
         // Tree Params
         ippl::ParameterList treeparams;
-        treeparams.add("maxdepth",          5);
-        treeparams.add("maxleafelements",   6);
+        treeparams.add("maxdepth",          7);
+        treeparams.add("maxleafelements",   20);
         treeparams.add("boxmin",            0.0);
         treeparams.add("boxmax",            1.0);
         treeparams.add("sourceidx",         nTargets);
