@@ -10,6 +10,12 @@ int main(int argc, char* argv[]) {
     ippl::initialize(argc, argv);
     
     {
+
+        /* Plotting Test */
+
+
+
+
         /* SOLVER INIT TEST*/
         
         // Particle layout type
@@ -46,25 +52,6 @@ int main(int argc, char* argv[]) {
             sources.rho(idx) = chargeDis(eng);
         }
        
-        
-        
-        /* targets.R(0) = ippl::Vector<double,3>{0.25, 0.25, 0.25};
-        targets.R(1) = ippl::Vector<double,3>{0.25, 0.75, 0.25};
-        targets.R(2) = ippl::Vector<double,3>{0.25, 0.25, 0.75};
-        targets.R(3) = ippl::Vector<double,3>{0.25, 0.75, 0.75};
-        targets.rho(0) = 0.0;
-        targets.rho(1) = 0.0;
-        targets.rho(2) = 0.0;
-        targets.rho(3) = 0.0;
-
-        sources.R(0) = ippl::Vector<double,3>{0.75, 0.25, 0.25};
-        sources.R(1) = ippl::Vector<double,3>{0.75, 0.75, 0.25};
-        sources.R(2) = ippl::Vector<double,3>{0.75, 0.25, 0.75};
-        sources.R(3) = ippl::Vector<double,3>{0.75, 0.75, 0.75};
-        sources.rho(0) = chargeDis(eng);
-        sources.rho(1) = chargeDis(eng);
-        sources.rho(2) = chargeDis(eng);
-        sources.rho(3) = chargeDis(eng); */
        
        
 
@@ -85,7 +72,6 @@ int main(int argc, char* argv[]) {
         
         ippl::TreeOpenPoissonSolver solver(targets, sources, treeparams, solverparams);
         solver.Solve();
-
         
 
 
