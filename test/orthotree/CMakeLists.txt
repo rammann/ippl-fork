@@ -14,4 +14,6 @@ set (IPPL_LIBS ippl ${MPI_CXX_LIBRARIES})
 set (COMPILE_FLAGS ${OPAL_CXX_FLAGS})
 
 add_executable (TestOrthoTree TestOrthoTree.cpp)
+add_executable (TestOrthoTreeSolver TestOrthoTreeSolver.cpp)
 target_link_libraries (TestOrthoTree ${IPPL_LIBS})
+target_link_libraries (TestOrthoTreeSolver ${IPPL_LIBS})
