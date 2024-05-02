@@ -105,11 +105,13 @@ namespace ippl {
         KOKKOS_INLINE_FUNCTION const auto& get() const noexcept {
             return val;
         }
-        TupleImpl<i, N, T>()
+        TupleImpl()
             requires(std::is_default_constructible_v<T>)
-         = default;
-        TupleImpl<i, N, T>(const T& t) : val(t){}
-        TupleImpl<i, N, T>(T&& t) : val(std::forward<T>(t)){}
+         = default;        
+        KOKKOS_INLINE_FUNCTION
+        TupleImpl(const T& t) : val(t){}
+        KOKKOS_INLINE_FUNCTION
+        TupleImpl(T&& t) : val(std::forward<T>(t)){}
     };
     /*!
      * @class Tuple
@@ -244,6 +246,7 @@ namespace ippl {
             return Tuple(Tuple(*this) /= other);
         }
         template <std::size_t Idx, std::size_t N, typename... OtherTs>
+        KOKKOS_INLINE_FUNCTION
         bool lexicographicalLess(const Tuple& other) const {
             if constexpr (Idx == N) {
                 return false;
@@ -254,6 +257,7 @@ namespace ippl {
             }
         }
         template <std::size_t Idx, std::size_t N, typename... OtherTs>
+        KOKKOS_INLINE_FUNCTION
         bool lexicographicalEquals(const Tuple& other) const {
             if constexpr (Idx == N) {
                 return true;
