@@ -33,10 +33,8 @@ namespace ippl
         particle_type sources_m;
         particle_type targets_m;
 
-
         // Precision
         double eps_m;
-
 
         // Radius of the box and sigma at the coarsest level
         double r0_m;
@@ -76,7 +74,6 @@ namespace ippl
             auto maxleafele = treeparams.get<int>("maxleafelements");
             auto sourceidx = treeparams.get<unsigned int>("sourceidx");
             tree_m = OrthoTree(allParticles, sourceidx, maxdepth, maxleafele, BoundingBox<3>{{min,min,min},{max,max,max}});
-            tree_m.PrintStructure();
 
             // Precision
             eps_m = solverparams.get<double>("eps");
@@ -91,17 +88,11 @@ namespace ippl
 
         void Solve(){
             Farfield();
-            //FarfieldExplicit();
             DifferenceKernel();
-            //ExplictDifference();
             ResidualKernel();
-            //PrintSolution();
-            ExplicitSolution();
         }
 
         void Farfield(){
-
-            std::cout << "Starting farfield calculation" << "\n";
             
             // Number of Fourier nodes as defined in (3.36)
             int nf = static_cast<int>(Kokkos::ceil(4 * Kokkos::log(1/eps_m)));
@@ -192,46 +183,19 @@ namespace ippl
 
             // Type 2 NUFFT
             nufft2->transform(targets_m.R, targets_m.rho, field_u);
-
-            std::cout << "Finished farfield calculation" << "\n\n";
-        }
-
-        void FarfieldExplicit(){
-            Kokkos::View<double*> targetValues("Explicit farfield solution", targets_m.getTotalNum());
-
-            Kokkos::parallel_for("Compute explicit farfield", targets_m.getTotalNum(), 
-                KOKKOS_LAMBDA(const unsigned int t){
-                    double temp = 0;
-                    for(unsigned int s=0; s<sources_m.getTotalNum(); ++s){
-                        double r = Kokkos::sqrt(Kokkos::pow(targets_m.R(t)(0)-sources_m.R(s)(0),2) +
-                                                Kokkos::pow(targets_m.R(t)(1)-sources_m.R(s)(1),2) +
-                                                Kokkos::pow(targets_m.R(t)(2)-sources_m.R(s)(2),2));
-                        temp += sources_m.rho(s) * std::erf(r/sig0_m)/r;
-                    }
-                    targetValues(t) = temp;
-                });
-            
-            for(unsigned int t=0; t<targets_m.getTotalNum(); ++t){
-                std::cout << targetValues(t) << " " << targets_m.rho(t) <<"\n";
-            }
         }
 
         void DifferenceKernel(){
 
-            std::cout << "Starting difference calculation" << "\n";
             const unsigned int dim = 3; 
             int nf = static_cast<int>(Kokkos::ceil(6 / Kokkos::numbers::pi * Kokkos::log(1/eps_m))) * 3;
-            std::cout << "nf = " << nf << "\n";
 
             // Iterate through levels of the tree
             for(unsigned int depth=0; depth < tree_m.GetMaxDepth(); ++depth){
 
-                // Depth dependent variables
-                //double r = r0_m * Kokkos::pow(0.5, depth);
-                /* double hl = 0.5 * 4 * Kokkos::numbers::pi / (3 * r); */
+                // Fourier-space spacing between modes
                 double hl = Kokkos::pow(2,depth);
-                
-                
+                   
                 // internalnodekeys is a vector holding the morton ids of the internal nodes at current depth
                 Kokkos::vector<morton_node_id_type> internalnodekeys = tree_m.GetInternalNodeAtDepth(depth);
                     
@@ -239,15 +203,14 @@ namespace ippl
                 Kokkos::UnorderedMap<morton_node_id_type, fourier_field_type> Phi;
                 
                 // Outgoing expansion at depth
-                for(unsigned int i=0; i<internalnodekeys.size(); ++i){
+                //Kokkos::parallel_for("Outgoing Expansion", internalnodekeys.size(),KOKKOS_LAMBDA(unsigned int nkey){
+                for(unsigned int nkey=0; nkey<internalnodekeys.size(); ++nkey){
 
                     // Morton key of current internal node
-                    morton_node_id_type key = internalnodekeys[i];
-
+                    morton_node_id_type key = internalnodekeys[nkey];
 
                     // Get node center
                     ippl::Vector<double,dim> center = tree_m.GetNode(key).GetCenter();
-
 
                     // Get souce ids in this node
                     Kokkos::vector<entity_id_type> idSources = tree_m.CollectSourceIds(key);
@@ -260,7 +223,6 @@ namespace ippl
                         relSources.R(i) = hl * (sources_m.R(idSources[i]) - center);
                         relSources.rho(i) = sources_m.rho(idSources[i]);
                     }
-
 
                     // Create Fourier-space field for outgoing expansion
                     ippl::Vector<int, dim> pt = {nf, nf, nf};
@@ -285,22 +247,19 @@ namespace ippl
                     fourier_field_type fieldPhi(mesh, layout, 0);
                     fieldPhi = 0;
 
-
                     // Initialise NUFFT 1
                     ippl::ParameterList fftParams;
                     fftParams.add("use_finufft_defaults", true); 
                     int type1 = 1; 
                     std::unique_ptr<nufft_type> nufft1 = std::make_unique<nufft_type>(layout, relSources.getTotalNum(), type1, fftParams);
-
-
+    
                     // Perform NUFFT 1
                     nufft1->transform(relSources.R, relSources.rho, fieldPhi);
-                    
 
                     // Insert outgoing expansion into map
                     Phi.insert(key, fieldPhi);
-                    
-                } // Loop over nodes for outgoing expansion
+                }
+                //); // Loop over nodes for outgoing expansion
                 
                 // Map for incoming expansion
                 Kokkos::UnorderedMap<morton_node_id_type, fourier_field_type> Psi;
@@ -309,10 +268,11 @@ namespace ippl
                 Kokkos::vector<morton_node_id_type> nodekeys = tree_m.GetNodeAtDepth(depth);
 
                 // Incoming expansion at depth
-                for(unsigned int i=0; i<nodekeys.size(); ++i){
+                Kokkos::parallel_for("Incoming Expansion", nodekeys.size(), KOKKOS_LAMBDA(unsigned int nkey)
+                {
 
                     // Morton key of current node
-                    morton_node_id_type key = nodekeys[i];
+                    morton_node_id_type key = nodekeys[nkey];
                     
 
                     //if(!tree_m.GetNode(key).IsAnyChildExist()) continue;
@@ -389,7 +349,7 @@ namespace ippl
 
                     Psi.insert(key, fieldPsi);
                     
-                } // Loop over nodes for incoming expansion
+                }); // Loop over nodes for incoming expansion
 
                 // Nufft back onto target on each node
                 for(unsigned int i=0; i<nodekeys.size(); ++i){
@@ -399,59 +359,59 @@ namespace ippl
 
                     // Get incoming expansion field
                     if(!Psi.exists(key)) continue;
-                    auto fieldPsi = Psi.value_at(Psi.find(key));
+                        auto fieldPsi = Psi.value_at(Psi.find(key));
                     
-                    // Get node center
-                    ippl::Vector<double,dim> center = tree_m.GetNode(key).GetCenter();
+                        // Get node center
+                        ippl::Vector<double,dim> center = tree_m.GetNode(key).GetCenter();
 
-                    // Get souce ids in this node
-                    Kokkos::vector<entity_id_type> idTargets = tree_m.CollectTargetIds(key);
+                        // Get souce ids in this node
+                        Kokkos::vector<entity_id_type> idTargets = tree_m.CollectTargetIds(key);
 
-                    // Create source particles with positions relative to node center
-                    playout_type PLayout;
-                    particle_type relTargets(PLayout);
-                    relTargets.create(idTargets.size());
-                    for(unsigned int i=0; i<idTargets.size(); ++i){
-                        relTargets.R(i) = hl * (targets_m.R(idTargets[i]) - center);
-                        relTargets.rho(i) = 0.0;
-                    }
+                        // Create source particles with positions relative to node center
+                        playout_type PLayout;
+                        particle_type relTargets(PLayout);
+                        relTargets.create(idTargets.size());
+                        for(unsigned int i=0; i<idTargets.size(); ++i){
+                            relTargets.R(i) = hl * (targets_m.R(idTargets[i]) - center);
+                            relTargets.rho(i) = 0.0;
+                        }
 
-                    // Create Fourier-space field for outgoing expansion
-                    ippl::Vector<int, dim> pt = {nf, nf, nf};
-                    ippl::Index I(pt[0]); 
-                    ippl::Index J(pt[1]); 
-                    ippl::Index K(pt[2]);
-                    ippl::NDIndex<3> owned(I, J, K);
+                        // Create Fourier-space field for outgoing expansion
+                        ippl::Vector<int, dim> pt = {nf, nf, nf};
+                        ippl::Index I(pt[0]); 
+                        ippl::Index J(pt[1]); 
+                        ippl::Index K(pt[2]);
+                        ippl::NDIndex<3> owned(I, J, K);
 
-                    std::array<bool, dim> isParallel;  
-                    isParallel.fill(false);
+                        std::array<bool, dim> isParallel;  
+                        isParallel.fill(false);
 
-                    ippl::FieldLayout<dim> layout(MPI_COMM_WORLD, owned, isParallel);
+                        ippl::FieldLayout<dim> layout(MPI_COMM_WORLD, owned, isParallel);
 
-                    vector_type hx = {1, 1, 1};
-                    vector_type origin = {
-                        -static_cast<double>(nf/2), 
-                        -static_cast<double>(nf/2), 
-                        -static_cast<double>(nf/2)
-                    };
-                    mesh_type mesh(owned, hx, origin);
+                        vector_type hx = {1, 1, 1};
+                        vector_type origin = {
+                            -static_cast<double>(nf/2), 
+                            -static_cast<double>(nf/2), 
+                            -static_cast<double>(nf/2)
+                        };
+                        mesh_type mesh(owned, hx, origin);
 
-                    ippl::ParameterList fftParams;
-                    fftParams.add("use_finufft_defaults", true); 
-                    int type2 = 2; 
-                    std::unique_ptr<nufft_type> nufft2 = std::make_unique<nufft_type>(layout, relTargets.getTotalNum(), type2, fftParams);
+                        ippl::ParameterList fftParams;
+                        fftParams.add("use_finufft_defaults", true); 
+                        int type2 = 2; 
+                        std::unique_ptr<nufft_type> nufft2 = std::make_unique<nufft_type>(layout, relTargets.getTotalNum(), type2, fftParams);
 
-                    // std::cout << "Total number of target points is " <<relTargets.getTotalNum() << "\n";
-                    // Perform NUFFT 1
-                    nufft2->transform(relTargets.R, relTargets.rho, fieldPsi);
+                        // std::cout << "Total number of target points is " <<relTargets.getTotalNum() << "\n";
+                        // Perform NUFFT 1
+                        nufft2->transform(relTargets.R, relTargets.rho, fieldPsi);
 
-                    
+                        
 
-                    // Add this contribution to target values
-                    Kokkos::parallel_for("Add contribution to target values", idTargets.size(),
-                    KOKKOS_LAMBDA(unsigned int t){
-                        targets_m.rho(idTargets[t]) += relTargets.rho(t);
-                    });
+                        // Add this contribution to target values
+                        Kokkos::parallel_for("Add contribution to target values", idTargets.size(),
+                        KOKKOS_LAMBDA(unsigned int t){
+                            targets_m.rho(idTargets[t]) += relTargets.rho(t);
+                        });
                     
                 }
 
@@ -459,34 +419,10 @@ namespace ippl
                 
             } // Loop over depth
 
-            std::cout << "Finished difference contribution" << "\n";
         }
-
-        void ExplictDifference(){
-            Kokkos::View<double*> targetValues("Explicit farfield solution", targets_m.getTotalNum());
-            double sig0 = sig0_m;
-            double sig1 = sig0_m * 0.5;
-
-            Kokkos::parallel_for("Compute explicit differnce", targets_m.getTotalNum(), 
-                KOKKOS_LAMBDA(const unsigned int t){
-                    double temp = 0;
-                    for(unsigned int s=0; s<sources_m.getTotalNum(); ++s){
-                        double r = Kokkos::sqrt(Kokkos::pow(targets_m.R(t)(0)-sources_m.R(s)(0),2) +
-                                                Kokkos::pow(targets_m.R(t)(1)-sources_m.R(s)(1),2) +
-                                                Kokkos::pow(targets_m.R(t)(2)-sources_m.R(s)(2),2));
-                        temp += sources_m.rho(s) * (std::erf(r/sig1)-std::erf(r/sig0))/r;
-                    }
-                    targetValues(t) = temp;
-                });
-            
-            for(unsigned int t=0; t<targets_m.getTotalNum(); ++t){
-                std::cout << targetValues(t) << " " << targets_m.rho(t) << " diff = " << targetValues(t) - targets_m.rho(t) << "\n";
-            }
-        }
-        
+             
         void ResidualKernel(){
 
-            std::cout << "Starting residual contribution" << "\n";
             Kokkos::vector<morton_node_id_type> leafnodes = tree_m.GetLeafNodes();
 
             Kokkos::parallel_for("Loop over leaf nodes for residual contribution", leafnodes.size(),
@@ -495,7 +431,7 @@ namespace ippl
 
                 // Leaf key
                 morton_node_id_type leafkey = leafnodes(i);
-                std::cout << leafkey << "\n";
+                
 
                 // Leaf node
                 OrthoTreeNode leafnode = tree_m.GetNode(leafkey);
@@ -545,8 +481,7 @@ namespace ippl
                 }
 
                 // Calculate Residual Contribution
-                for(unsigned int sidx=0; sidx<sourceids.size(); ++sidx){
-
+                Kokkos::parallel_for("Residual Contribution", sourceids.size(), KOKKOS_LAMBDA(unsigned int sidx){
                     entity_id_type sourceid = sourceids[sidx];
                     vector_type sourceR = sources_m.R(sourceid);
                     double sourceRho = sources_m.rho(sourceid);
@@ -562,31 +497,72 @@ namespace ippl
 
                         targets_m.rho(targetid) += R(depth, r) * sourceRho;
                     }
-                }
+                });
             }); 
-            std::cout << "Finished residual contribution" << "\n";
+
         }
 
-        void ExplicitSolution(){
+        Kokkos::View<double*> ExplicitSolution(){
             Kokkos::View<double*> targetValues("Explicit farfield solution", targets_m.getTotalNum());
 
-            //Kokkos::parallel_for("Compute explicit solution", targets_m.getTotalNum(), 
-            //KOKKOS_LAMBDA(const unsigned int t){
-            
-            for(unsigned int t=0; t<targets_m.getTotalNum(); ++t){      
+            Kokkos::parallel_for("Compute explicit solution", targets_m.getTotalNum(), 
+            KOKKOS_LAMBDA(const unsigned int t){  
                 double temp = 0;
                 for(unsigned int s=0; s<sources_m.getTotalNum(); ++s){
                     vector_type delta = targets_m.R(t) - sources_m.R(s);
                     double r = Kokkos::sqrt(delta[0] * delta[0] + delta[1] * delta[1] + delta[2] * delta[2]);
                     temp += sources_m.rho(s) / r;
                 }
-                targetValues(t) = temp;
-            }
-            //});
+                targetValues(t) = temp;            
+            });
+            
+            //for(unsigned int t=0; t<targets_m.getTotalNum(); ++t){
+            //    std::cout <<  targetValues(t) << " " << targets_m.rho(t) <<  " diff = " << targetValues(t) - targets_m.rho(t) << "\n";
+            //}
+            return targetValues;
+        }
+
+    private: // Explicit Contributions
+
+        void ExplictDifference(){
+            Kokkos::View<double*> targetValues("Explicit Difference", targets_m.getTotalNum());
+            double sig0 = sig0_m;
+            double sig1 = sig0_m * 0.5;
+
+            Kokkos::parallel_for("Compute explicit differnce", targets_m.getTotalNum(), 
+                KOKKOS_LAMBDA(const unsigned int t){
+                    double temp = 0;
+                    for(unsigned int s=0; s<sources_m.getTotalNum(); ++s){
+                        double r = Kokkos::sqrt(Kokkos::pow(targets_m.R(t)(0)-sources_m.R(s)(0),2) +
+                                                Kokkos::pow(targets_m.R(t)(1)-sources_m.R(s)(1),2) +
+                                                Kokkos::pow(targets_m.R(t)(2)-sources_m.R(s)(2),2));
+                        temp += sources_m.rho(s) * (std::erf(r/sig1)-std::erf(r/sig0))/r;
+                    }
+                    targetValues(t) = temp;
+                });
             
             for(unsigned int t=0; t<targets_m.getTotalNum(); ++t){
-                std::cout <<  targetValues(t) << " " << targets_m.rho(t) <<  " diff = " << targetValues(t) - targets_m.rho(t) << "\n";
-               
+                std::cout << targetValues(t) << " " << targets_m.rho(t) << " diff = " << targetValues(t) - targets_m.rho(t) << "\n";
+            }
+        }
+
+        void FarfieldExplicit(){
+            Kokkos::View<double*> targetValues("Explicit farfield solution", targets_m.getTotalNum());
+
+            Kokkos::parallel_for("Compute explicit farfield", targets_m.getTotalNum(), 
+                KOKKOS_LAMBDA(const unsigned int t){
+                    double temp = 0;
+                    for(unsigned int s=0; s<sources_m.getTotalNum(); ++s){
+                        double r = Kokkos::sqrt(Kokkos::pow(targets_m.R(t)(0)-sources_m.R(s)(0),2) +
+                                                Kokkos::pow(targets_m.R(t)(1)-sources_m.R(s)(1),2) +
+                                                Kokkos::pow(targets_m.R(t)(2)-sources_m.R(s)(2),2));
+                        temp += sources_m.rho(s) * std::erf(r/sig0_m)/r;
+                    }
+                    targetValues(t) = temp;
+                });
+            
+            for(unsigned int t=0; t<targets_m.getTotalNum(); ++t){
+                std::cout << targetValues(t) << " " << targets_m.rho(t) <<"\n";
             }
         }
 
