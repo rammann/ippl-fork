@@ -169,40 +169,48 @@ public: // Constructors
         auto itBegin = aidLocations.begin();
         addNodes(nodes_m.value_at(nodes_m.find(kRoot)), kRoot, itBegin, aidLocations.end(), morton_node_id_type{0}, MaxDepth);
 
-
+        PrintStructure();
         BalanceTree(positions);
+        PrintStructure();
 
     }
 
     void BalanceTree(Kokkos::vector<position_type> positions){
         
+        std::cout << "Starting Balancing" << "\n";
         std::queue<morton_node_id_type>         unprocessedNodes    = {};
         Kokkos::vector<morton_node_id_type>     leafNodes           = this->GetLeafNodes();
         
         std::sort(leafNodes.begin(), leafNodes.end(), [](morton_node_id_type l, morton_node_id_type r){return l>r;});
-        for(unsigned int idx=0; idx<leafNodes.size(); ++idx) unprocessedNodes.push(leafNodes[idx]);
+        for(unsigned int idx=0; idx<leafNodes.size(); ++idx) {
+            unprocessedNodes.push(leafNodes[idx]);
+        }
 
         while(!unprocessedNodes.empty()){
 
             bool processed = true;
-
+            
             Kokkos::vector<morton_node_id_type> potentialNeighbours = this->GetPotentialColleagues(unprocessedNodes.front());
-
+            
             for(unsigned int idx=0; idx<potentialNeighbours.size();++idx){
-
+                
                 if ((potentialNeighbours[idx]>>dim_m) == (unprocessedNodes.front()>>dim_m)) continue;
-                        
+                
                 else if (nodes_m.exists(potentialNeighbours[idx] >> dim_m)) continue;
 
                 else {
 
                     processed = false;
-
-                    morton_node_id_type ancestor = this->GetNextAncestor(potentialNeighbours[idx]);
-
+                    
+                    morton_node_id_type ancestor = this->GetNextAncestor(potentialNeighbours[idx]);     
+                    std::cout<<ancestor<<"\n";        
                     Kokkos::vector<morton_node_id_type> NewNodes = this->RefineNode(nodes_m.value_at(nodes_m.find(ancestor)), ancestor, positions);
-
-                    for (unsigned int idx=0; idx<NewNodes.size(); ++idx) unprocessedNodes.push(NewNodes[idx]);
+                    std::cout << "New Nodes: ";
+                    for (unsigned int idx=0; idx<NewNodes.size(); ++idx) {
+                         std::cout << NewNodes[idx] << " ";
+                        unprocessedNodes.push(NewNodes[idx]);
+                    }
+                    std::cout << "\n";
                 }  
             }
 
@@ -251,12 +259,13 @@ private: // Aid Function for Constructor
 
     OrthoTreeNode& createChild(OrthoTreeNode& nodeParent,/* child_id_type iChild,*/ morton_node_id_type kChild){
         
-        //std::cout << "creating child with key = " << kChild << "\n";
+        
+        
         if(!nodeParent.HasChild(kChild)) nodeParent.AddChildInOrder(kChild);
-
+        
         // inserts {kChild, Node} pair into the unorderd map nodes_m
         nodes_m.insert(kChild, OrthoTreeNode());
-
+        
         OrthoTreeNode& nodeChild = nodes_m.value_at(nodes_m.find(kChild)); // reference to newly created node
         
         position_type ptNodeMin = this->box_m.Min;
@@ -264,7 +273,7 @@ private: // Aid Function for Constructor
 
         auto const nDepth   = this->GetDepth(kChild);
         auto mask           = morton_node_id_type{ 1 } << (nDepth * dim_m -1);
-
+        
         double rScale = 1.0;
         for(depth_type iDepth=0; iDepth < nDepth; ++iDepth){
             rScale *= 0.5;
@@ -278,8 +287,9 @@ private: // Aid Function for Constructor
         for(dim_type iDimension = 0; iDimension < dim_m; ++iDimension){
             ptNodeMax[iDimension] = ptNodeMin[iDimension] + (this->box_m.Max[iDimension] - this->box_m.Min[iDimension]) * rScale;
         }
-        
+        std::cout << "creating child with key = " << kChild << " with box" << ptNodeMax <<" "<<ptNodeMin <<"\n";
         for(dim_type iDimension = 0; iDimension < dim_m; ++iDimension){
+            std::cout << iDimension << "\n";
             nodeChild.boundingbox_m.Min[iDimension] = ptNodeMin[iDimension];
             nodeChild.boundingbox_m.Max[iDimension] = ptNodeMax[iDimension];
         }
@@ -291,7 +301,7 @@ private: // Aid Function for Constructor
         
         if (nParticles < 10) return 10;
         
-        const double rMult = 1.5;
+        const double rMult = 3;
 
         // for smaller problem size
         if ((MaxDepth + 1) * dim_m < 64){
@@ -341,15 +351,15 @@ private: // Aid Function for Constructor
             const morton_node_id_type childId = this->MortonEncode(gridId)>>shift;
             return { id, (childId + FlagParent)};
         });
-
+        
         NodeParent.vid_m = {};
 
         for (unsigned int childId=0; childId<Kokkos::pow(2,dim_m); ++childId){
             
             morton_node_id_type const kChild = FlagParent | childId;
+            if(nodes_m.exists(kChild)) continue;
             OrthoTreeNode& nodeChild = this->createChild(NodeParent, kChild);
             nodeChild.parent_m=kParent;
-
             for (unsigned int idx=0; idx<aidLocation.size(); ++idx){
 
                 if (aidLocation[idx].second == kChild) nodeChild.vid_m.push_back(aidLocation[idx].first);
@@ -359,7 +369,7 @@ private: // Aid Function for Constructor
             NewNodes.push_back(kChild);
 
         }
-
+        
         return NewNodes;
 
     }
