@@ -269,6 +269,7 @@ namespace ippl
 
                 // Incoming expansion at depth
                 Kokkos::parallel_for("Incoming Expansion", nodekeys.size(), KOKKOS_LAMBDA(unsigned int nkey)
+                //for(unsigned int nkey=0; nkey<nodekeys.size(); ++nkey)
                 {
 
                     // Morton key of current node
@@ -502,6 +503,42 @@ namespace ippl
 
         }
 
+        void SelfInteraction(){
+
+            Kokkos::vector<morton_node_id_type> leafnodes = tree_m.GetLeafNodes();
+
+            Kokkos::parallel_for("Loop over leaf nodes for residual contribution", leafnodes.size(),
+            KOKKOS_LAMBDA(unsigned int i){
+
+                // Leaf key
+                morton_node_id_type leafkey = leafnodes(i);
+                
+                // Leaf node
+                OrthoTreeNode leafnode = tree_m.GetNode(leafkey);
+
+                // Depth
+                depth_type depth = tree_m.GetDepth(leafkey);
+
+                // Sigma
+                double sigl = sig0_m * Kokkos::pow(0.5, depth);
+
+                Kokkos::vector<entity_id_type> sourceids = tree_m.CollectSourceIds(leafkey);
+                Kokkos::vector<entity_id_type> targetids = tree_m.CollectTargetIds(leafkey);
+
+                for(unsigned int t=0; t<targetids.size(); ++t){
+                    entity_id_type targetid = targetids[t];
+                    for(unsigned int s=0; s<sourceids.size(); ++s){
+                        entity_id_type sourceid = sourceids[s];
+                        vector_type diff = sourceid - targetid;
+                        if(diff[0]*diff[0] + diff[1]*diff[1] + diff[2]*diff[2] < std::numeric_limits<double>::epsilon()){
+                            targets_m.rho(targetid) += -2 * sources_m.rho(sourceid) / (Kokkos::sqrt(Kokkos::numbers::pi) * sigl);
+                        }
+                    }
+                }
+                
+            });
+        }
+
         Kokkos::View<double*> ExplicitSolution(){
             Kokkos::View<double*> targetValues("Explicit farfield solution", targets_m.getTotalNum());
 
@@ -587,7 +624,7 @@ namespace ippl
 
         inline double R(unsigned int l, double r){
             double sigl = sig0_m * Kokkos::pow(0.5,l);
-            return std::erfc(r / sigl)/r;
+            return std::erfc((r+std::numeric_limits<double>::epsilon()) / sigl)/(r+std::numeric_limits<double>::epsilon());
         }
 
         void PrintSolution(){

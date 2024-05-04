@@ -7,66 +7,77 @@
 #include "Utility/IpplTimings.h"
 
 int main(int argc, char* argv[]) {
+    
     ippl::initialize(argc, argv);
     {
+        // Setup
+        static auto timer = IpplTimings::getTimer("Orthotree Poisson Solver");
+        
+        typedef ippl::ParticleSpatialLayout<double, 3> playout_type;
+        playout_type PLayout;
 
-    static auto timer = IpplTimings::getTimer("Orthotree Poisson Solver");
-    
-    typedef ippl::ParticleSpatialLayout<double, 3> playout_type;
-    playout_type PLayout;
+        // Targets
+        ippl::OrthoTreeParticle targets(PLayout);
+        unsigned int nTargets = 10000;
+        targets.create(nTargets);
 
-    // Targets
-    ippl::OrthoTreeParticle targets(PLayout);
-    unsigned int nTargets = 200;
-    targets.create(nTargets);
+        // Sources
+        ippl::OrthoTreeParticle sources(PLayout);
+        unsigned int nSources = 10000;
+        sources.create(nSources);
 
-    // Sources
-    ippl::OrthoTreeParticle sources(PLayout);
-    unsigned int nSources = 200;
-    sources.create(nSources);
+        // Random generators for position and charge
+        std::mt19937_64 eng(43);
+        std::uniform_real_distribution<double> posDis(0.0, 1.0);
+        std::uniform_real_distribution<double> posDist(0.0, 0.5);
+        std::uniform_real_distribution<double> posDiss(0.5, 1.0);
+        std::uniform_real_distribution<double> chargeDis(-20,20);
 
-    // Random generators for position and charge
-    std::mt19937_64 eng(42);
-    std::uniform_real_distribution<double> posDis(0.0, 1.0);
-    std::uniform_real_distribution<double> chargeDis(-20,20);
+        // Generate target points
+        
+        for(unsigned int idx=0; idx<nTargets; ++idx){
+        ippl::Vector<double,3> r = {posDist(eng), posDist(eng), posDist(eng)};
+            targets.R(idx) = r;
+            targets.rho(idx) = 0.0;
+        }
 
-    // Generate target points
-    
-    for(unsigned int idx=0; idx<nTargets; ++idx){
-        ippl::Vector<double,3> r = {posDis(eng), posDis(eng), posDis(eng)};
-        targets.R(idx) = r;
-        targets.rho(idx) = 0.0;
-    }
+        // Generate source points
+        for(unsigned int idx=0; idx<nSources; ++idx){
+        ippl::Vector<double,3> r = {posDiss(eng), posDiss(eng), posDiss(eng)};
+            sources.R(idx) = r;
+            sources.rho(idx) = chargeDis(eng);
+        }
+        
+        // Tree Params
+        ippl::ParameterList treeparams;
+        treeparams.add("maxdepth",          7);
+        treeparams.add("maxleafelements",   100);
+        treeparams.add("boxmin",            0.0);
+        treeparams.add("boxmax",            1.0);
+        treeparams.add("sourceidx",         nTargets);
 
-    // Generate source points
-    for(unsigned int idx=0; idx<nSources; ++idx){
-        ippl::Vector<double,3> r = {posDis(eng), posDis(eng), posDis(eng)};
-        sources.R(idx) = r;
-        sources.rho(idx) = chargeDis(eng);
-    }
-    
-    // Tree Params
-    ippl::ParameterList treeparams;
-    treeparams.add("maxdepth",          7);
-    treeparams.add("maxleafelements",   20);
-    treeparams.add("boxmin",            0.0);
-    treeparams.add("boxmax",            1.0);
-    treeparams.add("sourceidx",         nTargets);
+        // Solver Params
+        ippl::ParameterList solverparams;
+        solverparams.add("eps", 1e-6);
 
-    // Solver Params
-    ippl::ParameterList solverparams;
-    solverparams.add("eps", 0.000001);
+        
+        ippl::TreeOpenPoissonSolver solver(targets, sources, treeparams, solverparams);
 
-    
-    ippl::TreeOpenPoissonSolver solver(targets, sources, treeparams, solverparams);
 
-    IpplTimings::startTimer(timer);
-    solver.Solve();
-    IpplTimings::stopTimer(timer);
+        IpplTimings::startTimer(timer);
+        solver.Solve();
+        IpplTimings::stopTimer(timer);
+        IpplTimings::print();
 
-    IpplTimings::print();
-    IpplTimings::print(std::string("timing.dat"));
+        auto explicitsol = solver.ExplicitSolution();
+        double mse = 0.0;
+        for(unsigned int i = 0; i<nTargets; ++i){
+            mse += (Kokkos::abs(explicitsol(i)-targets.rho(i)));
+        }
+        mse = mse/nTargets;
+        std::cout << "MSE = " << mse << "\n";
 
+         
     
     }
     ippl::finalize();
