@@ -95,7 +95,7 @@ namespace ippl
         void Farfield(){
             
             // Number of Fourier nodes as defined in (3.36)
-            int nf = static_cast<int>(Kokkos::ceil(4 * Kokkos::log(1/eps_m)));
+            int nf = static_cast<int>(Kokkos::ceil(4 * Kokkos::log(1/eps_m))) * 2;
             constexpr unsigned int dim = 3;
 
 
@@ -188,7 +188,7 @@ namespace ippl
         void DifferenceKernel(){
 
             const unsigned int dim = 3; 
-            int nf = static_cast<int>(Kokkos::ceil(6 / Kokkos::numbers::pi * Kokkos::log(1/eps_m))) * 3;
+            int nf = static_cast<int>(Kokkos::ceil(6 / Kokkos::numbers::pi * Kokkos::log(1/eps_m))) * 4;
 
             // Iterate through levels of the tree
             for(unsigned int depth=0; depth < tree_m.GetMaxDepth(); ++depth){
