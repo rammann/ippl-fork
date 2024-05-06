@@ -57,7 +57,7 @@ int main(int argc, char* argv[]) {
         
         // Tree Params
         ippl::ParameterList treeparams;
-        treeparams.add("maxdepth",          1);
+        treeparams.add("maxdepth",          10);
         treeparams.add("maxleafelements",   400);
         treeparams.add("boxmin",            0.0);
         treeparams.add("boxmax",            1.0);
@@ -71,7 +71,7 @@ int main(int argc, char* argv[]) {
         ippl::TreeOpenPoissonSolver solver(targets, sources, treeparams, solverparams);
         auto explicitsol = solver.ExplicitSolution();
         
-        for(unsigned int times=0; times<1; ++times){
+        for(unsigned int times=0; times<3; ++times){
             
             // timings
             IpplTimings::startTimer(timer);
@@ -87,15 +87,13 @@ int main(int argc, char* argv[]) {
             }
 
             std::cout << mse/mean << "\n";
-            ippl::fence();
 
-            // Kokkos::parallel_for("Reset target values", nTargets, 
-            // KOKKOS_LAMBDA(unsigned int i){
-            //     targets.rho(i) = 0.0;
-            // });
-            for(unsigned int i = 0; i<nTargets; ++i){
-                targets.rho(i)= 0.0;
-            }
+
+            Kokkos::parallel_for("Reset target values", nTargets, 
+            KOKKOS_LAMBDA(unsigned int i){
+                targets.rho(i) = 0.0;
+            });
+
             
         }
         
