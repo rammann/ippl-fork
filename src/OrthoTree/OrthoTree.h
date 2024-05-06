@@ -666,7 +666,7 @@ public: // Getters
     Kokkos::vector<entity_id_type> CollectIds(morton_node_id_type kRoot=1)const{
         
         Kokkos::vector<entity_id_type> ids;
-        //ids.reserve(nodes_m.size() * Kokkos::max<size_t>(2, maxelements_m / 2));
+        ids.reserve(nodes_m.size() * Kokkos::max<size_t>(2, maxelements_m / 2));
 
         VisitNodes(kRoot, [&ids](morton_node_id_type, OrthoTreeNode const& node)
         {
@@ -682,7 +682,7 @@ public: // Getters
     Kokkos::vector<entity_id_type> CollectSourceIds(morton_node_id_type kRoot=1)const{
         
         Kokkos::vector<entity_id_type> ids;
-
+        ids.reserve(nodes_m.size() * Kokkos::max<size_t>(2, maxelements_m / 2));
         VisitNodes(kRoot, [&](morton_node_id_type, OrthoTreeNode const& node)
         {
             
@@ -701,6 +701,7 @@ public: // Getters
     Kokkos::vector<entity_id_type> CollectTargetIds(morton_node_id_type kRoot=1)const{
         
         Kokkos::vector<entity_id_type> ids;
+        ids.reserve(nodes_m.size() * Kokkos::max<size_t>(2, maxelements_m / 2));
 
         VisitNodes(kRoot, [&](morton_node_id_type, OrthoTreeNode const& node)
         {
@@ -767,6 +768,7 @@ public: // Getters
     Kokkos::vector<morton_node_id_type> GetInternalNodeAtDepth(depth_type depth) const noexcept {
 
         Kokkos::vector<morton_node_id_type> keys;
+        keys.reserve(Kokkos::pow(8,depth));
         
         VisitSelectedNodes(1, [&](auto key, auto){
             
@@ -785,6 +787,7 @@ public: // Getters
     Kokkos::vector<morton_node_id_type> GetNodeAtDepth(depth_type depth) const noexcept {
 
         Kokkos::vector<morton_node_id_type> keys;
+        keys.reserve(Kokkos::pow(8,depth));
         
         VisitSelectedNodes(1, [&](auto key, auto){
             

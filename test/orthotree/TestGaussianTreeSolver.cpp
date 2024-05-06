@@ -20,7 +20,7 @@ int main(int argc, char* argv[]) {
     ippl::initialize(argc, argv);
     {
         // Setup
-        static auto timer = IpplTimings::getTimer("Orthotree Poisson Solver");
+        
         
         typedef ippl::ParticleSpatialLayout<double, 3> playout_type;
         playout_type PLayout;
@@ -58,7 +58,7 @@ int main(int argc, char* argv[]) {
         // Tree Params
         ippl::ParameterList treeparams;
         treeparams.add("maxdepth",          10);
-        treeparams.add("maxleafelements",   400);
+        treeparams.add("maxleafelements",   40);
         treeparams.add("boxmin",            0.0);
         treeparams.add("boxmax",            1.0);
         treeparams.add("sourceidx",         nTargets);
@@ -69,15 +69,24 @@ int main(int argc, char* argv[]) {
 
         
         ippl::TreeOpenPoissonSolver solver(targets, sources, treeparams, solverparams);
+
+        // Timers 
+        static auto explicit_timer = IpplTimings::getTimer("Explicitsol");
+        static auto solver_timer = IpplTimings::getTimer("solver");
+
+        IpplTimings::startTimer(explicit_timer);
         auto explicitsol = solver.ExplicitSolution();
+        IpplTimings::stopTimer(explicit_timer);
         
-        for(unsigned int times=0; times<3; ++times){
+        
+        for(unsigned int times=0; times<1; ++times){
             
             // timings
-            IpplTimings::startTimer(timer);
+            
+            IpplTimings::startTimer(solver_timer);
             solver.Solve();
-            IpplTimings::stopTimer(timer);
-            IpplTimings::print(std::string("timings.dat"));
+            IpplTimings::stopTimer(solver_timer);
+            
 
             double mse = 0.0;
             double mean = 0.0;
@@ -96,7 +105,7 @@ int main(int argc, char* argv[]) {
 
             
         }
-        
+        IpplTimings::print(std::string("timings.dat"));
 
 
          
