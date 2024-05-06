@@ -692,7 +692,6 @@ public: // Getters
                 }
                 
             }
-            std::cout << "\n";
         });
         
         return ids;

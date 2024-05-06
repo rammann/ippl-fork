@@ -222,7 +222,6 @@ namespace ippl
                     playout_type PLayout;
                     particle_type relSources(PLayout);
                     relSources.create(idSources.size());
-                    std::cout << idSources.size() << "\n";
                     for(unsigned int i=0; i<idSources.size(); ++i){
                         relSources.R(i) = hl * (sources_m.R(idSources[i]) - center);
                         //assert(sources_m.R(idSources[i])[0] < 9);
