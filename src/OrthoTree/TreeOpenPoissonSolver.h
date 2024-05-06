@@ -56,7 +56,7 @@ namespace ippl
             particle_type allParticles(PLayout);
             allParticles.create(targets.getTotalNum() + sources.getTotalNum());
             Kokkos::parallel_for("Fill sources and targets into one view for octree construction",
-                allParticles.getTotalNum(), [=](unsigned int i){
+                allParticles.getTotalNum(), KOKKOS_LAMBDA(unsigned int i){
                     if (i < targets.getTotalNum()) {
                         allParticles.R(i) = targets.R(i); 
                         allParticles.rho(i) = 0.0; // charge is not used for the octree
@@ -190,14 +190,14 @@ namespace ippl
         void DifferenceKernel(){
 
             const unsigned int dim = 3; 
-            int nf = static_cast<int>(Kokkos::ceil(6 / Kokkos::numbers::pi * Kokkos::log(1/eps_m))) * 7;
+            int nf = static_cast<int>(Kokkos::ceil(6 / Kokkos::numbers::pi * Kokkos::log(1/eps_m))) * 2;
 
             // Iterate through levels of the tree
             for(unsigned int depth=0; depth < tree_m.GetMaxDepth(); ++depth){
 
                 // Fourier-space spacing between modes
                 double hl = Kokkos::pow(2,depth);
-                   
+
                 // internalnodekeys is a vector holding the morton ids of the internal nodes at current depth
                 Kokkos::vector<morton_node_id_type> internalnodekeys = tree_m.GetInternalNodeAtDepth(depth);
                     
@@ -213,6 +213,7 @@ namespace ippl
 
                     // Get node center
                     ippl::Vector<double,dim> center = tree_m.GetNode(key).GetCenter();
+                    
 
                     // Get souce ids in this node
                     Kokkos::vector<entity_id_type> idSources = tree_m.CollectSourceIds(key);
@@ -221,8 +222,11 @@ namespace ippl
                     playout_type PLayout;
                     particle_type relSources(PLayout);
                     relSources.create(idSources.size());
+                    std::cout << idSources.size() << "\n";
                     for(unsigned int i=0; i<idSources.size(); ++i){
                         relSources.R(i) = hl * (sources_m.R(idSources[i]) - center);
+                        //assert(sources_m.R(idSources[i])[0] < 9);
+                        //std::cout << sources_m.R(idSources[i])[0] << "    " <<(sources_m.R(idSources[i]) - center)[0] << "\n";
                         relSources.rho(i) = sources_m.rho(idSources[i]);
                     }
 
@@ -238,7 +242,7 @@ namespace ippl
 
                     ippl::FieldLayout<dim> layout(MPI_COMM_WORLD, owned, isParallel);
 
-                    vector_type hx = {1, 1, 1};
+                    vector_type hx = {1.0, 1.0, 1.0};
                     vector_type origin = {
                         -static_cast<double>(nf/2), 
                         -static_cast<double>(nf/2), 
@@ -256,8 +260,8 @@ namespace ippl
                     std::unique_ptr<nufft_type> nufft1 = std::make_unique<nufft_type>(layout, relSources.getTotalNum(), type1, fftParams);
     
                     // Perform NUFFT 1
+                    
                     nufft1->transform(relSources.R, relSources.rho, fieldPhi);
-
                     // Insert outgoing expansion into map
                     Phi.insert(key, fieldPhi);
 
@@ -408,9 +412,9 @@ namespace ippl
                         std::unique_ptr<nufft_type> nufft2 = std::make_unique<nufft_type>(layout, relTargets.getTotalNum(), type2, fftParams);
 
                         // std::cout << "Total number of target points is " <<relTargets.getTotalNum() << "\n";
-                        // Perform NUFFT 1
+                        // Perform NUFFT 2
+                        
                         nufft2->transform(relTargets.R, relTargets.rho, fieldPsi);
-
                         
 
                         // Add this contribution to target values
@@ -635,9 +639,6 @@ namespace ippl
                 std::cout << targets_m.rho(i) << "\n";
             }
         }
-
-
-
 
     };
     

@@ -126,7 +126,7 @@ public: // Constructors
 
     OrthoTree () = default;
 
-    OrthoTree (particle_type const& particles, dim_type sourceidx, depth_type MaxDepth, size_t MaxElements, box_type Box)
+    OrthoTree (particle_type const& particles, entity_id_type sourceidx, depth_type MaxDepth, size_t MaxElements, box_type Box)
     {
 
         this->box_m             = Box;
@@ -138,7 +138,6 @@ public: // Constructors
         
 
         const size_t n = particles.getTotalNum(); // use getGlobalNum() instead? 
-
         nodes_m = container_type(EstimateNodeNumber(n, MaxDepth, MaxElements));
 
         // Root (key, node) pair
@@ -170,6 +169,7 @@ public: // Constructors
         addNodes(nodes_m.value_at(nodes_m.find(kRoot)), kRoot, itBegin, aidLocations.end(), morton_node_id_type{0}, MaxDepth);
   
         BalanceTree(positions);
+        //PrintStructure();
 
     }
 
@@ -538,20 +538,20 @@ public: // Node Info Functions
             }
 
             // Points
-            std::cout << "Points        : ";
-            if(node.IsAnyChildExist()){
-                Kokkos::vector<entity_id_type> points = this->CollectIds(key);
-                for(unsigned int idx=0; idx<points.size(); ++idx) std::cout << points[idx] << " ";
-            }
-            else{
-                for(unsigned int idx=0; idx<node.vid_m.size(); ++idx) std::cout << node.vid_m[idx] << " ";
-            }
-            std::cout << "\n";
+            // std::cout << "Points        : ";
+            // if(node.IsAnyChildExist()){
+            //     Kokkos::vector<entity_id_type> points = this->CollectIds(key);
+            //     for(unsigned int idx=0; idx<points.size(); ++idx) std::cout << points[idx] << " ";
+            // }
+            // else{
+            //     for(unsigned int idx=0; idx<node.vid_m.size(); ++idx) std::cout << node.vid_m[idx] << " ";
+            // }
+            // std::cout << "\n";
 
-            // Is Leaf
-            std::cout << "Is Leaf? " << (!node.IsAnyChildExist()) << "\n";
+            // // Is Leaf
+            // std::cout << "Is Leaf? " << (!node.IsAnyChildExist()) << "\n";
 
-            std::cout << "\n\n";
+            // std::cout << "\n\n";
         
         });
     }
@@ -666,7 +666,7 @@ public: // Getters
     Kokkos::vector<entity_id_type> CollectIds(morton_node_id_type kRoot=1)const{
         
         Kokkos::vector<entity_id_type> ids;
-        ids.reserve(nodes_m.size() * Kokkos::max<size_t>(2, maxelements_m / 2));
+        //ids.reserve(nodes_m.size() * Kokkos::max<size_t>(2, maxelements_m / 2));
 
         VisitNodes(kRoot, [&ids](morton_node_id_type, OrthoTreeNode const& node)
         {
@@ -682,13 +682,17 @@ public: // Getters
     Kokkos::vector<entity_id_type> CollectSourceIds(morton_node_id_type kRoot=1)const{
         
         Kokkos::vector<entity_id_type> ids;
-        ids.reserve(nodes_m.size() * Kokkos::max<size_t>(2, maxelements_m / 2));
 
         VisitNodes(kRoot, [&](morton_node_id_type, OrthoTreeNode const& node)
         {
+            
             for(unsigned int idx=0; idx<node.vid_m.size(); ++idx){
-                if(node.vid_m[idx] >= sourceidx_m) ids.push_back(node.vid_m[idx]-sourceidx_m);
+                if(sourceidx_m <= node.vid_m[idx]){
+                    ids.push_back(node.vid_m[idx]-sourceidx_m);
+                }
+                
             }
+            std::cout << "\n";
         });
         
         return ids;
@@ -698,7 +702,6 @@ public: // Getters
     Kokkos::vector<entity_id_type> CollectTargetIds(morton_node_id_type kRoot=1)const{
         
         Kokkos::vector<entity_id_type> ids;
-        ids.reserve(nodes_m.size() * Kokkos::max<size_t>(2, maxelements_m / 2));
 
         VisitNodes(kRoot, [&](morton_node_id_type, OrthoTreeNode const& node)
         {

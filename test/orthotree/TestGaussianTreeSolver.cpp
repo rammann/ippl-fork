@@ -36,29 +36,29 @@ int main(int argc, char* argv[]) {
         sources.create(nSources);
 
         // Random generators for position and charge
-        std::mt19937_64 eng(10);
+        std::mt19937_64 eng(1);
         std::uniform_real_distribution<double> posDis(0.0, 1.0);
         std::uniform_real_distribution<double> chargeDis(-20,20);
 
         // Generate target points
         
         for(unsigned int idx=0; idx<nTargets; ++idx){
-        ippl::Vector<double,3> r = {posDis(eng), posDis(eng), posDis(eng)};
+            ippl::Vector<double,3> r = {posDis(eng), posDis(eng), posDis(eng)};
             targets.R(idx) = r;
             targets.rho(idx) = 0.0;
         }
 
         // Generate source points
         for(unsigned int idx=0; idx<nSources; ++idx){
-        ippl::Vector<double,3> r = {posDis(eng), posDis(eng), posDis(eng)};
+            ippl::Vector<double,3> r = {posDis(eng), posDis(eng), posDis(eng)};
             sources.R(idx) = r;
             sources.rho(idx) = gaussian(r[0], r[1], r[2]);
         }
         
         // Tree Params
         ippl::ParameterList treeparams;
-        treeparams.add("maxdepth",          10);
-        treeparams.add("maxleafelements",   100);
+        treeparams.add("maxdepth",          1);
+        treeparams.add("maxleafelements",   400);
         treeparams.add("boxmin",            0.0);
         treeparams.add("boxmax",            1.0);
         treeparams.add("sourceidx",         nTargets);
@@ -71,7 +71,7 @@ int main(int argc, char* argv[]) {
         ippl::TreeOpenPoissonSolver solver(targets, sources, treeparams, solverparams);
         auto explicitsol = solver.ExplicitSolution();
         
-        for(unsigned int times=0; times<5; ++times){
+        for(unsigned int times=0; times<1; ++times){
             
             // timings
             IpplTimings::startTimer(timer);
@@ -88,11 +88,14 @@ int main(int argc, char* argv[]) {
 
             std::cout << mse/mean << "\n";
             ippl::fence();
-            
-            Kokkos::parallel_for("Reset target values", nTargets, 
-            KOKKOS_LAMBDA(unsigned int i){
-                targets.rho(i) = 0.0;
-            });
+
+            // Kokkos::parallel_for("Reset target values", nTargets, 
+            // KOKKOS_LAMBDA(unsigned int i){
+            //     targets.rho(i) = 0.0;
+            // });
+            for(unsigned int i = 0; i<nTargets; ++i){
+                targets.rho(i)= 0.0;
+            }
             
         }
         
