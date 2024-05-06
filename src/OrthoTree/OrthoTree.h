@@ -168,16 +168,14 @@ public: // Constructors
 
         auto itBegin = aidLocations.begin();
         addNodes(nodes_m.value_at(nodes_m.find(kRoot)), kRoot, itBegin, aidLocations.end(), morton_node_id_type{0}, MaxDepth);
-
-        PrintStructure();
+  
         BalanceTree(positions);
-        PrintStructure();
 
     }
 
     void BalanceTree(Kokkos::vector<position_type> positions){
         
-        std::cout << "Starting Balancing" << "\n";
+        
         std::queue<morton_node_id_type>         unprocessedNodes    = {};
         Kokkos::vector<morton_node_id_type>     leafNodes           = this->GetLeafNodes();
         
@@ -203,14 +201,13 @@ public: // Constructors
                     processed = false;
                     
                     morton_node_id_type ancestor = this->GetNextAncestor(potentialNeighbours[idx]);     
-                    std::cout<<ancestor<<"\n";        
+        
                     Kokkos::vector<morton_node_id_type> NewNodes = this->RefineNode(nodes_m.value_at(nodes_m.find(ancestor)), ancestor, positions);
-                    std::cout << "New Nodes: ";
+
                     for (unsigned int idx=0; idx<NewNodes.size(); ++idx) {
-                         std::cout << NewNodes[idx] << " ";
                         unprocessedNodes.push(NewNodes[idx]);
                     }
-                    std::cout << "\n";
+
                 }  
             }
 
@@ -287,9 +284,9 @@ private: // Aid Function for Constructor
         for(dim_type iDimension = 0; iDimension < dim_m; ++iDimension){
             ptNodeMax[iDimension] = ptNodeMin[iDimension] + (this->box_m.Max[iDimension] - this->box_m.Min[iDimension]) * rScale;
         }
-        std::cout << "creating child with key = " << kChild << " with box" << ptNodeMax <<" "<<ptNodeMin <<"\n";
+        //std::cout << "creating child with key = " << kChild << " with box" << ptNodeMax <<" "<<ptNodeMin <<"\n";
         for(dim_type iDimension = 0; iDimension < dim_m; ++iDimension){
-            std::cout << iDimension << "\n";
+            
             nodeChild.boundingbox_m.Min[iDimension] = ptNodeMin[iDimension];
             nodeChild.boundingbox_m.Max[iDimension] = ptNodeMax[iDimension];
         }
