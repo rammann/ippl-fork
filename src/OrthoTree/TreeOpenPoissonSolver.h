@@ -430,14 +430,11 @@ namespace ippl
 
             Kokkos::vector<morton_node_id_type> leafnodes = tree_m.GetLeafNodes();
 
-            Kokkos::parallel_for("Loop over leaf nodes for residual contribution", leafnodes.size(),
-            KOKKOS_LAMBDA(unsigned int i){
-            //for(unsigned int i=0; i<leafnodes.size(); ++i){
+            for(unsigned int i=0; i<leafnodes.size(); ++i){
 
                 // Leaf key
                 morton_node_id_type leafkey = leafnodes(i);
                 
-
                 // Leaf node
                 OrthoTreeNode leafnode = tree_m.GetNode(leafkey);
 
@@ -486,24 +483,26 @@ namespace ippl
                 }
 
                 // Calculate Residual Contribution
-                Kokkos::parallel_for("Residual Contribution", sourceids.size(), KOKKOS_LAMBDA(unsigned int sidx){
+                for(unsigned int sidx=0; sidx<sourceids.size(); ++sidx){
                     entity_id_type sourceid = sourceids[sidx];
                     vector_type sourceR = sources_m.R(sourceid);
                     double sourceRho = sources_m.rho(sourceid);
 
                     //std::cout << "Current Source " << sourceid << " with charge " << sourceRho << "\n";
-
-                    for(unsigned int tidx=0; tidx<targetids.size(); ++tidx){
-
+                    Kokkos::parallel_for("Residual contribution", targetids.size(),
+                    KOKKOS_LAMBDA(unsigned int tidx){
                         entity_id_type targetid = targetids[tidx];
                         vector_type targetR = targets_m.R(targetid);
                         ippl::Vector<double, 3> deltaR = targetR - sourceR;
                         double r = Kokkos::sqrt(deltaR[0] * deltaR[0] + deltaR[1] * deltaR[1] + deltaR[2] * deltaR[2]);
-
                         targets_m.rho(targetid) += R(depth, r) * sourceRho;
-                    }
-                });
-            }); 
+                    });
+
+                }
+
+            }
+
+            return;
 
         }
 
@@ -628,7 +627,7 @@ namespace ippl
 
         inline double R(unsigned int l, double r){
             double sigl = sig0_m * Kokkos::pow(0.5,l);
-            return std::erfc((r+std::numeric_limits<double>::epsilon()) / sigl)/(r+std::numeric_limits<double>::epsilon());
+            return std::erfc(r / sigl)/r;
         }
 
         void PrintSolution(){
