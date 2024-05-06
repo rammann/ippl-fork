@@ -27,12 +27,12 @@ int main(int argc, char* argv[]) {
 
         // Targets
         ippl::OrthoTreeParticle targets(PLayout);
-        unsigned int nTargets = 100000;
+        unsigned int nTargets = std::atoi(argv[1]);
         targets.create(nTargets);
 
         // Sources
         ippl::OrthoTreeParticle sources(PLayout);
-        unsigned int nSources = 100000;
+        unsigned int nSources = nTargets;
         sources.create(nSources);
 
         // Random generators for position and charge
@@ -81,18 +81,19 @@ int main(int argc, char* argv[]) {
 
             double mse = 0.0;
             double mean = 0.0;
-            Kokkos::parallel_reduce("Compute error", nTargets,
-            KOKKOS_LAMBDA(unsigned int i, double &mse_t, double &mean_t){
-                mse_t += (Kokkos::abs(explicitsol(i)-targets.rho(i)));
-                mean_t += Kokkos::abs(explicitsol(i));
-            }, mse, mean);
+            for(unsigned int i=0; i<nTargets; ++i){
+                mse += (Kokkos::abs(explicitsol(i)-targets.rho(i))) / nTargets;
+                mean += Kokkos::abs(explicitsol(i)) / nTargets;
+            }
 
             std::cout << mse/mean << "\n";
-
+            ippl::fence();
+            
             Kokkos::parallel_for("Reset target values", nTargets, 
             KOKKOS_LAMBDA(unsigned int i){
                 targets.rho(i) = 0.0;
             });
+            
         }
         
 

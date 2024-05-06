@@ -183,6 +183,8 @@ namespace ippl
 
             // Type 2 NUFFT
             nufft2->transform(targets_m.R, targets_m.rho, field_u);
+
+            return;
         }
 
         void DifferenceKernel(){
@@ -258,6 +260,8 @@ namespace ippl
 
                     // Insert outgoing expansion into map
                     Phi.insert(key, fieldPhi);
+
+                    
                 }
                 //); // Loop over nodes for outgoing expansion
                 
@@ -350,6 +354,7 @@ namespace ippl
 
                     Psi.insert(key, fieldPsi);
                     
+                    
                 }); // Loop over nodes for incoming expansion
 
                 // Nufft back onto target on each node
@@ -415,7 +420,6 @@ namespace ippl
                         });
                     
                 }
-
 
                 
             } // Loop over depth
