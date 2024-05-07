@@ -57,6 +57,7 @@ public: // Member Variables
     Kokkos::vector<morton_node_id_type> vid_m;
     box_type                            boundingbox_m;
     morton_node_id_type                 parent_m;
+    unsigned int                        npoints_m;
 
 public: // Member Functions
 
@@ -222,11 +223,13 @@ private: // Aid Function for Constructor
     void addNodes(OrthoTreeNode& nodeParent, morton_node_id_type kParent, auto& itEndPrev, auto const& itEnd, morton_node_id_type idLocationBegin, depth_type nDepthRemain){
 
         const auto nElement = static_cast<size_t>(itEnd - itEndPrev);;
+        nodeParent.npoints_m = nElement;
         //auto const nElement = Kokkos::Experimental::distance(itEndPrev, itEnd);
 
         // reached leaf node -> fill points into vid_m vector
         if(nElement <= this->maxelements_m || nDepthRemain == 0){
             nodeParent.vid_m.resize(nElement);
+            std::sort(itEndPrev, itEnd);
             std::transform(itEndPrev, itEnd, nodeParent.vid_m.begin(), [](auto const item){return item.first;});
             itEndPrev = itEnd;
             return;
@@ -359,8 +362,9 @@ private: // Aid Function for Constructor
             nodeChild.parent_m=kParent;
             for (unsigned int idx=0; idx<aidLocation.size(); ++idx){
 
-                if (aidLocation[idx].second == kChild) nodeChild.vid_m.push_back(aidLocation[idx].first);
-
+                if (aidLocation[idx].second == kChild) {
+                    nodeChild.vid_m.push_back(aidLocation[idx].first);
+                }
             }
 
             NewNodes.push_back(kChild);
@@ -537,21 +541,21 @@ public: // Node Info Functions
                 std::cout << "\n";
             }
 
-            // Points
-            // std::cout << "Points        : ";
-            // if(node.IsAnyChildExist()){
-            //     Kokkos::vector<entity_id_type> points = this->CollectIds(key);
-            //     for(unsigned int idx=0; idx<points.size(); ++idx) std::cout << points[idx] << " ";
-            // }
-            // else{
-            //     for(unsigned int idx=0; idx<node.vid_m.size(); ++idx) std::cout << node.vid_m[idx] << " ";
-            // }
-            // std::cout << "\n";
+            //Points
+            std::cout << "Points        : ";
+            if(node.IsAnyChildExist()){
+                Kokkos::vector<entity_id_type> points = this->CollectIds(key);
+                for(unsigned int idx=0; idx<points.size(); ++idx) std::cout << points[idx] << " ";
+            }
+            else{
+                for(unsigned int idx=0; idx<node.vid_m.size(); ++idx) std::cout << node.vid_m[idx] << " ";
+            }
+            std::cout << "\n";
 
-            // // Is Leaf
-            // std::cout << "Is Leaf? " << (!node.IsAnyChildExist()) << "\n";
+            // Is Leaf
+            std::cout << "Is Leaf? " << (!node.IsAnyChildExist()) << "\n";
 
-            // std::cout << "\n\n";
+            std::cout << "\n\n";
         
         });
     }
@@ -665,14 +669,28 @@ public: // Getters
 
     Kokkos::vector<entity_id_type> CollectIds(morton_node_id_type kRoot=1)const{
         
+        
         Kokkos::vector<entity_id_type> ids;
-        ids.reserve(nodes_m.size() * Kokkos::max<size_t>(2, maxelements_m / 2));
+        ids.reserve(GetNode(kRoot).npoints_m);
 
         VisitNodes(kRoot, [&ids](morton_node_id_type, OrthoTreeNode const& node)
         {
-            for(unsigned int idx=0; idx<node.vid_m.size(); ++idx){
-                ids.push_back(node.vid_m[idx]);
-            }
+            unsigned int oldsize = ids.size();
+            unsigned int newsize = oldsize + node.vid_m.size();
+            ids.resize(newsize);
+            Kokkos::parallel_for("Collectids", node.vid_m.size(),
+            KOKKOS_LAMBDA(unsigned int idx){
+                ids[oldsize+idx] = node.vid_m[idx];
+            });
+            // for(unsigned int idx=0; idx<node.vid_m.size(); ++idx){
+            //     ids.push_back(node.vid_m[idx]);
+            // }
+            // unsigned int oldsize = idview.size();
+            // Kokkos::resize(idview, )
+            // Kokkos::parallel_for("CollectIds", node.vid_m.size(), 
+            // KOKKOS_LAMBDA(unsigned int idx){
+
+            // });
         });
         
         return ids;
@@ -682,16 +700,24 @@ public: // Getters
     Kokkos::vector<entity_id_type> CollectSourceIds(morton_node_id_type kRoot=1)const{
         
         Kokkos::vector<entity_id_type> ids;
-        ids.reserve(nodes_m.size() * Kokkos::max<size_t>(2, maxelements_m / 2));
+        ids.reserve(GetNode(kRoot).npoints_m);
         VisitNodes(kRoot, [&](morton_node_id_type, OrthoTreeNode const& node)
         {
+            auto pp = std::partition_point(node.vid_m.begin(), node.vid_m.end(), [this](unsigned int i){return i < sourceidx_m;});
+            unsigned int newnpoints = node.vid_m.end() - pp;
+            unsigned int oldsize = ids.size();
+            ids.resize(oldsize + newnpoints);
+            Kokkos::parallel_for("CollectSources", newnpoints,
+            KOKKOS_LAMBDA(unsigned int idx){
+                ids[oldsize+idx] = node.vid_m[(pp-node.vid_m.begin())+idx] - sourceidx_m;
+            });
             
-            for(unsigned int idx=0; idx<node.vid_m.size(); ++idx){
-                if(sourceidx_m <= node.vid_m[idx]){
-                    ids.push_back(node.vid_m[idx]-sourceidx_m);
-                }
+            // for(unsigned int idx=0; idx<node.vid_m.size(); ++idx){
+            //     if(sourceidx_m <= node.vid_m[idx]){
+            //         ids.push_back(node.vid_m[idx]-sourceidx_m);
+            //     }
                 
-            }
+            // }
         });
         
         return ids;
@@ -701,13 +727,22 @@ public: // Getters
     Kokkos::vector<entity_id_type> CollectTargetIds(morton_node_id_type kRoot=1)const{
         
         Kokkos::vector<entity_id_type> ids;
-        ids.reserve(nodes_m.size() * Kokkos::max<size_t>(2, maxelements_m / 2));
+        ids.reserve(GetNode(kRoot).npoints_m);
 
         VisitNodes(kRoot, [&](morton_node_id_type, OrthoTreeNode const& node)
         {
-            for(unsigned int idx=0; idx<node.vid_m.size(); ++idx){
-                if(node.vid_m[idx] < sourceidx_m) ids.push_back(node.vid_m[idx]);
-            }
+            auto pp = std::partition_point(node.vid_m.begin(), node.vid_m.end(), [this](unsigned int i){return i < sourceidx_m;});
+            unsigned int newnpoints = pp-node.vid_m.begin();
+            unsigned int oldsize = ids.size();
+            ids.resize(oldsize + newnpoints);
+            Kokkos::parallel_for("CollectTargets", newnpoints,
+            KOKKOS_LAMBDA(unsigned int idx){
+                ids[oldsize+idx] = node.vid_m[idx];
+            });
+
+            // for(unsigned int idx=0; idx<node.vid_m.size(); ++idx){
+            //     if(node.vid_m[idx] < sourceidx_m) ids.push_back(node.vid_m[idx]);
+            // }
         });
         
         return ids;

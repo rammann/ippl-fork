@@ -54,11 +54,12 @@ int main(int argc, char* argv[]) {
             sources.R(idx) = r;
             sources.rho(idx) = gaussian(r[0], r[1], r[2]);
         }
-        
+    
+
         // Tree Params
         ippl::ParameterList treeparams;
         treeparams.add("maxdepth",          10);
-        treeparams.add("maxleafelements",   40);
+        treeparams.add("maxleafelements",   100);
         treeparams.add("boxmin",            0.0);
         treeparams.add("boxmax",            1.0);
         treeparams.add("sourceidx",         nTargets);

@@ -7,6 +7,7 @@
 #include "Utility/ParameterList.h"
 #include <unordered_map>
 #include <numbers>
+#include "Utility/IpplTimings.h"
 
 namespace ippl
 {
@@ -87,9 +88,22 @@ namespace ippl
     public: // Solve
 
         void Solve(){
+            
+            static auto farfieldtimer = IpplTimings::getTimer("Farfield");
+            static auto residualtimer = IpplTimings::getTimer("Residual");
+            static auto differncetimer = IpplTimings::getTimer("Difference");
+            
+            
+            IpplTimings::startTimer(farfieldtimer);
             Farfield();
+            IpplTimings::stopTimer(farfieldtimer);
+            IpplTimings::startTimer(differncetimer);
             DifferenceKernel();
+            IpplTimings::stopTimer(differncetimer);
+            IpplTimings::startTimer(residualtimer);
             ResidualKernel();
+            IpplTimings::stopTimer(residualtimer);
+
         }
 
         void Farfield(){
@@ -109,7 +123,7 @@ namespace ippl
             
             // Specify parallel dimensions (for MPI?)
             std::array<bool, dim> isParallel;  
-            isParallel.fill(false);
+            isParallel.fill(true);
 
             
             // Field Layout
@@ -188,9 +202,12 @@ namespace ippl
         }
 
         void DifferenceKernel(){
-
+            
+            static auto outgoingexpansiontimer = IpplTimings::getTimer("OutgoingExp");
+            static auto incomingexpansiontimer = IpplTimings::getTimer("IncomingExp");
+            static auto backtransformtimer = IpplTimings::getTimer("BackTransform");
             const unsigned int dim = 3; 
-            int nf = static_cast<int>(Kokkos::ceil(6 / Kokkos::numbers::pi * Kokkos::log(1/eps_m))) * 3;
+            int nf = static_cast<int>(Kokkos::ceil(6 / Kokkos::numbers::pi * Kokkos::log(1/eps_m))) * 2;
 
             // Iterate through levels of the tree
             for(unsigned int depth=0; depth < tree_m.GetMaxDepth(); ++depth){
@@ -206,6 +223,9 @@ namespace ippl
                 
                 // Outgoing expansion at depth
                 //Kokkos::parallel_for("Outgoing Expansion", internalnodekeys.size(),KOKKOS_LAMBDA(unsigned int nkey){
+                
+               
+                IpplTimings::startTimer(outgoingexpansiontimer);
                 for(unsigned int nkey=0; nkey<internalnodekeys.size(); ++nkey){
 
                     // Morton key of current internal node
@@ -222,12 +242,17 @@ namespace ippl
                     playout_type PLayout;
                     particle_type relSources(PLayout);
                     relSources.create(idSources.size());
-                    for(unsigned int i=0; i<idSources.size(); ++i){
+                    // for(unsigned int i=0; i<idSources.size(); ++i){
+                    //     relSources.R(i) = hl * (sources_m.R(idSources[i]) - center);
+                    //     //assert(sources_m.R(idSources[i])[0] < 9);
+                    //     //std::cout << sources_m.R(idSources[i])[0] << "    " <<(sources_m.R(idSources[i]) - center)[0] << "\n";
+                    //     relSources.rho(i) = sources_m.rho(idSources[i]);
+                    // }
+                    Kokkos::parallel_for("Create relative particles", idSources.size(),
+                    KOKKOS_LAMBDA(unsigned int i){
                         relSources.R(i) = hl * (sources_m.R(idSources[i]) - center);
-                        //assert(sources_m.R(idSources[i])[0] < 9);
-                        //std::cout << sources_m.R(idSources[i])[0] << "    " <<(sources_m.R(idSources[i]) - center)[0] << "\n";
                         relSources.rho(i) = sources_m.rho(idSources[i]);
-                    }
+                    });
 
                     // Create Fourier-space field for outgoing expansion
                     ippl::Vector<int, dim> pt = {nf, nf, nf};
@@ -237,7 +262,7 @@ namespace ippl
                     ippl::NDIndex<3> owned(I, J, K);
 
                     std::array<bool, dim> isParallel;  
-                    isParallel.fill(false);
+                    isParallel.fill(true);
 
                     ippl::FieldLayout<dim> layout(MPI_COMM_WORLD, owned, isParallel);
 
@@ -267,13 +292,14 @@ namespace ippl
                     
                 }
                 //); // Loop over nodes for outgoing expansion
-                
+                IpplTimings::stopTimer(outgoingexpansiontimer);
                 // Map for incoming expansion
                 Kokkos::UnorderedMap<morton_node_id_type, fourier_field_type> Psi;
 
                 // nodes of this level
                 Kokkos::vector<morton_node_id_type> nodekeys = tree_m.GetNodeAtDepth(depth);
-
+                
+                IpplTimings::startTimer(incomingexpansiontimer);
                 // Incoming expansion at depth
                 Kokkos::parallel_for("Incoming Expansion", nodekeys.size(), KOKKOS_LAMBDA(unsigned int nkey)
                 //for(unsigned int nkey=0; nkey<nodekeys.size(); ++nkey)
@@ -298,7 +324,7 @@ namespace ippl
                     ippl::NDIndex<3> owned(I, J, K);
 
                     std::array<bool, dim> isParallel;  
-                    isParallel.fill(false);
+                    isParallel.fill(true);
 
                     ippl::FieldLayout<dim> layout(MPI_COMM_WORLD, owned, isParallel);
 
@@ -359,8 +385,9 @@ namespace ippl
                     
                     
                 }); // Loop over nodes for incoming expansion
-
+                IpplTimings::stopTimer(incomingexpansiontimer);
                 // Nufft back onto target on each node
+                IpplTimings::startTimer(backtransformtimer);
                 for(unsigned int i=0; i<nodekeys.size(); ++i){
 
                     // Morton key of current internal node
@@ -368,61 +395,68 @@ namespace ippl
 
                     // Get incoming expansion field
                     if(!Psi.exists(key)) continue;
-                        auto fieldPsi = Psi.value_at(Psi.find(key));
+
+                    auto fieldPsi = Psi.value_at(Psi.find(key));
+                
+                    // Get node center
+                    ippl::Vector<double,dim> center = tree_m.GetNode(key).GetCenter();
+
+                    // Get souce ids in this node
+                    Kokkos::vector<entity_id_type> idTargets = tree_m.CollectTargetIds(key);
+
+                    // Create target particles with positions relative to node center
+                    playout_type PLayout;
+                    particle_type relTargets(PLayout);
+                    relTargets.create(idTargets.size());
+                    Kokkos::parallel_for("Create relative targets", idTargets.size(), 
+                    KOKKOS_LAMBDA(unsigned int i){
+                        relTargets.R(i) = hl * (targets_m.R(idTargets[i]) - center);
+                        relTargets.rho(i) = 0.0;
+                    });
+                    // for(unsigned int i=0; i<idTargets.size(); ++i){
+                    //     relTargets.R(i) = hl * (targets_m.R(idTargets[i]) - center);
+                    //     relTargets.rho(i) = 0.0;
+                    // }
+
+                    // Create Fourier-space field for outgoing expansion
+                    ippl::Vector<int, dim> pt = {nf, nf, nf};
+                    ippl::Index I(pt[0]); 
+                    ippl::Index J(pt[1]); 
+                    ippl::Index K(pt[2]);
+                    ippl::NDIndex<3> owned(I, J, K);
+
+                    std::array<bool, dim> isParallel;  
+                    isParallel.fill(true);
+
+                    ippl::FieldLayout<dim> layout(MPI_COMM_WORLD, owned, isParallel);
+
+                    vector_type hx = {1, 1, 1};
+                    vector_type origin = {
+                        -static_cast<double>(nf/2), 
+                        -static_cast<double>(nf/2), 
+                        -static_cast<double>(nf/2)
+                    };
+                    mesh_type mesh(owned, hx, origin);
+
+                    ippl::ParameterList fftParams;
+                    fftParams.add("use_finufft_defaults", true); 
+                    int type2 = 2; 
+                    std::unique_ptr<nufft_type> nufft2 = std::make_unique<nufft_type>(layout, relTargets.getTotalNum(), type2, fftParams);
+
+                    // std::cout << "Total number of target points is " <<relTargets.getTotalNum() << "\n";
+                    // Perform NUFFT 2
                     
-                        // Get node center
-                        ippl::Vector<double,dim> center = tree_m.GetNode(key).GetCenter();
-
-                        // Get souce ids in this node
-                        Kokkos::vector<entity_id_type> idTargets = tree_m.CollectTargetIds(key);
-
-                        // Create source particles with positions relative to node center
-                        playout_type PLayout;
-                        particle_type relTargets(PLayout);
-                        relTargets.create(idTargets.size());
-                        for(unsigned int i=0; i<idTargets.size(); ++i){
-                            relTargets.R(i) = hl * (targets_m.R(idTargets[i]) - center);
-                            relTargets.rho(i) = 0.0;
-                        }
-
-                        // Create Fourier-space field for outgoing expansion
-                        ippl::Vector<int, dim> pt = {nf, nf, nf};
-                        ippl::Index I(pt[0]); 
-                        ippl::Index J(pt[1]); 
-                        ippl::Index K(pt[2]);
-                        ippl::NDIndex<3> owned(I, J, K);
-
-                        std::array<bool, dim> isParallel;  
-                        isParallel.fill(false);
-
-                        ippl::FieldLayout<dim> layout(MPI_COMM_WORLD, owned, isParallel);
-
-                        vector_type hx = {1, 1, 1};
-                        vector_type origin = {
-                            -static_cast<double>(nf/2), 
-                            -static_cast<double>(nf/2), 
-                            -static_cast<double>(nf/2)
-                        };
-                        mesh_type mesh(owned, hx, origin);
-
-                        ippl::ParameterList fftParams;
-                        fftParams.add("use_finufft_defaults", true); 
-                        int type2 = 2; 
-                        std::unique_ptr<nufft_type> nufft2 = std::make_unique<nufft_type>(layout, relTargets.getTotalNum(), type2, fftParams);
-
-                        // std::cout << "Total number of target points is " <<relTargets.getTotalNum() << "\n";
-                        // Perform NUFFT 2
-                        
-                        nufft2->transform(relTargets.R, relTargets.rho, fieldPsi);
-                        
-
-                        // Add this contribution to target values
-                        Kokkos::parallel_for("Add contribution to target values", idTargets.size(),
-                        KOKKOS_LAMBDA(unsigned int t){
-                            targets_m.rho(idTargets[t]) += relTargets.rho(t);
-                        });
+                    nufft2->transform(relTargets.R, relTargets.rho, fieldPsi);
                     
+
+                    // Add this contribution to target values
+                    Kokkos::parallel_for("Add contribution to target values", idTargets.size(),
+                    KOKKOS_LAMBDA(unsigned int t){
+                        targets_m.rho(idTargets[t]) += relTargets.rho(t);
+                    });
+                
                 }
+                IpplTimings::stopTimer(backtransformtimer);
 
                 
             } // Loop over depth
@@ -565,6 +599,9 @@ namespace ippl
             return targetValues;
         }
 
+        void PrintTree(){
+            tree_m.PrintStructure();
+        }
     private: // Explicit Contributions
 
         void ExplictDifference(){
