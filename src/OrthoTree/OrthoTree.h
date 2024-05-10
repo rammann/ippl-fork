@@ -187,6 +187,10 @@ public: // Constructors
 
         while(!unprocessedNodes.empty()){
 
+            if (GetNode(unprocessedNodes.front()).IsAnyChildExist()) { // means that this node has already been refined by a deeper neighbor
+                unprocessedNodes.pop();
+            }
+            
             bool processed = true;
             
             Kokkos::vector<morton_node_id_type> potentialNeighbours = this->GetPotentialColleagues(unprocessedNodes.front());
