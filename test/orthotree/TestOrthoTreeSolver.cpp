@@ -11,7 +11,7 @@ int main(int argc, char* argv[]) {
     ippl::initialize(argc, argv);
     {
         // Setup
-        static auto timer = IpplTimings::getTimer("Orthotree Poisson Solver");
+        //static auto timer = IpplTimings::getTimer("Orthotree Poisson Solver");
         
         typedef ippl::ParticleSpatialLayout<double, 3> playout_type;
         playout_type PLayout;
