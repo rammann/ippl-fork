@@ -198,13 +198,13 @@ private:
         
         finufft_opts opts;
 	    finufft_default_opts(&opts);
-        tol_m = 0.000001;
+        tol_m = 0.000001; 
 
         if(!params.get<bool>("use_finufft_defaults")) {
            tol_m = params.get<T>("tolerance");
-           //opts.method = params.get<int>("cpu_method");
-           opts.spread_sort = params.get<int>("cpu_sort");
-           opts.spread_kerevalmeth = params.get<int>("cpu_kerevalmeth");
+           opts.spread_sort = params.get<int>("spread_sort");
+           opts.spread_kerevalmeth = params.get<int>("spread_kerevalmeth");
+           opts.nthreads = params.get<int>("nthreads");
         }
 
         //opts.gpu_maxbatchsize = 0;
