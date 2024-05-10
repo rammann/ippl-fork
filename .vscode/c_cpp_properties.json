@@ -6,9 +6,10 @@
                 "${workspaceFolder}/**",
                 "${workspaceFolder}/src/**",
                 "/opt/homebrew/Cellar/open-mpi/5.0.3/include",
-                "/Users/ryan/Documents/Masterthesis/code_dev/ippl-build-scripts/kokkos/Kokkos_serial/include/**",
-                "/Users/ryan/Documents/Masterthesis/code_dev/ippl-build-scripts/heffte/heffte_serial/include/**",
-                "/Users/ryan/Documents/Masterthesis/code_dev/ippl-build-scripts/finufft/include/**"
+                "/opt/homebrew/Cellar/libomp/18.1.3/include",
+                "/Users/ryan/Documents/Masterthesis/code_dev/ippl/build_omp/_deps/**",
+                "/Users/ryan/Documents/Masterthesis/code_dev/ippl-build-scripts/finufft/include/**",
+                "/opt/homebrew/Cellar/fftw/3.3.10_1/include/**"
             ],
             "defines": [],
             "macFrameworkPath": [

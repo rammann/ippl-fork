@@ -16,14 +16,15 @@ int main(int argc, char* argv[]) {
         typedef ippl::ParticleSpatialLayout<double, 3> playout_type;
         playout_type PLayout;
 
+        unsigned int points = 100000;
         // Targets
         ippl::OrthoTreeParticle targets(PLayout);
-        unsigned int nTargets = 10000;
+        unsigned int nTargets = points;
         targets.create(nTargets);
 
         // Sources
         ippl::OrthoTreeParticle sources(PLayout);
-        unsigned int nSources = 10000;
+        unsigned int nSources = points;
         sources.create(nSources);
 
         // Random generators for position and charge
@@ -50,7 +51,7 @@ int main(int argc, char* argv[]) {
         
         // Tree Params
         ippl::ParameterList treeparams;
-        treeparams.add("maxdepth",          7);
+        treeparams.add("maxdepth",          1);
         treeparams.add("maxleafelements",   100);
         treeparams.add("boxmin",            0.0);
         treeparams.add("boxmax",            1.0);
@@ -64,18 +65,9 @@ int main(int argc, char* argv[]) {
         ippl::TreeOpenPoissonSolver solver(targets, sources, treeparams, solverparams);
 
 
-        IpplTimings::startTimer(timer);
         solver.Solve();
-        IpplTimings::stopTimer(timer);
-        IpplTimings::print();
 
-        auto explicitsol = solver.ExplicitSolution();
-        double mse = 0.0;
-        for(unsigned int i = 0; i<nTargets; ++i){
-            mse += (Kokkos::abs(explicitsol(i)-targets.rho(i)));
-        }
-        mse = mse/nTargets;
-        std::cout << "MSE = " << mse << "\n";
+    
 
          
     
