@@ -41,7 +41,7 @@ int main(int argc, char* argv[]) {
         //std::cout << "nTargets = " << typeid(nTargets).name() << "\n";
         //std::cout << "maxElementsPercent = " << typeid(maxElementsPercent).name() << "\n";
 
-        for(unsigned int mult = 1; mult <= 10; ++mult){
+        for(unsigned int mult = 1; mult < 10; ++mult){
             std::cout << "It = " << mult << "\n";
             unsigned int nTargets = mult * nTargetsstart;
             
@@ -52,7 +52,7 @@ int main(int argc, char* argv[]) {
             ippl::OrthoTreeParticle sources(PLayout);
             unsigned int nSources = nTargets;
             sources.create(nSources);
-            std::mt19937_64 eng(3);
+            std::mt19937_64 eng(4);
             std::uniform_real_distribution<double> posDis(0.0, 1.0);
 
             for(unsigned int idx=0; idx<nTargets; ++idx){
