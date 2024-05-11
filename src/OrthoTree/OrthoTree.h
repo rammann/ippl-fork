@@ -170,6 +170,7 @@ public: // Constructors
         addNodes(nodes_m.value_at(nodes_m.find(kRoot)), kRoot, itBegin, aidLocations.end(), morton_node_id_type{0}, MaxDepth);
   
         BalanceTree(positions);
+
         //PrintStructure();
 
     }
@@ -623,6 +624,7 @@ public: // Getters
     Kokkos::vector<morton_node_id_type> GetColleagues(morton_node_id_type key) const{
         
         Kokkos::vector<morton_node_id_type> colleagues={};
+        colleagues.reserve(27);
         
         if(key == 1){
             colleagues.push_back(1);
@@ -637,8 +639,9 @@ public: // Getters
                 for(int x=-1; x<=1; ++x){
 
                     morton_node_id_type nbrKey = MortonEncode( ippl::Vector<grid_id_type,3> {aidGrid[0]+x, aidGrid[1]+y, aidGrid[2]+z} ) + Kokkos::pow(8,GetDepth(key));
-                    if(nodes_m.exists(nbrKey)) colleagues.push_back(nbrKey);
-
+                    if(nodes_m.exists(nbrKey)) {
+                        colleagues.push_back(nbrKey);
+                    }
                 }
             }
         }
@@ -650,6 +653,7 @@ public: // Getters
     Kokkos::vector<morton_node_id_type> GetCoarseNbrs(morton_node_id_type key) const{
 
         Kokkos::vector<morton_node_id_type> coarseNbrs{};
+        coarseNbrs.reserve(3);
         if(key == 1) return coarseNbrs;
         
         OrthoTreeNode& node = this->GetNode(key);
@@ -659,7 +663,6 @@ public: // Getters
         for(unsigned int idx=0; idx<parentColleagues.size(); ++idx){
             
             OrthoTreeNode& coarseNode = this->GetNode(parentColleagues[idx]);
-            
             
             if(!coarseNode.IsAnyChildExist() && boxRelation(coarseNode.boundingbox_m, node.boundingbox_m) == BoxRelation::Adjacent){
                 coarseNbrs.push_back(parentColleagues[idx]);
