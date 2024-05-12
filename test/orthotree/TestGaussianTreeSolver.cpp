@@ -15,51 +15,60 @@ KOKKOS_INLINE_FUNCTION double gaussian(double x, double y, double z, double sigm
     return prefactor * exp(-r2 / (2 * sigma * sigma));
 }
 
+typedef ippl::ParticleSpatialLayout<double, 3> playout_type;
+
 int main(int argc, char* argv[]) {
     
     ippl::initialize(argc, argv);
     {
-        // Setup
-        
-        typedef ippl::ParticleSpatialLayout<double, 3> playout_type;
-        playout_type PLayout;
-
-        // Targets
-        ippl::OrthoTreeParticle targets(PLayout);
         unsigned int nTargets = std::atoi(argv[1]);
+        unsigned int maxElements = std::stoi(argv[2]);
+        
+        playout_type PLayout;
+        ippl::OrthoTreeParticle targets(PLayout);
         targets.create(nTargets);
-
-        // Sources
         ippl::OrthoTreeParticle sources(PLayout);
         unsigned int nSources = nTargets;
         sources.create(nSources);
-
-        // Random generators for position and charge
-        std::mt19937_64 eng(3);
-        std::uniform_real_distribution<double> posDis(0.0, 1.0);
+        std::mt19937_64 eng(23423);
+        std::uniform_real_distribution<double> posDis(0.0, 1);
         std::uniform_real_distribution<double> chargeDis(-20,20);
-
-        // Generate target points
-        
         for(unsigned int idx=0; idx<nTargets; ++idx){
             ippl::Vector<double,3> r = {posDis(eng), posDis(eng), posDis(eng)};
             targets.R(idx) = r;
             targets.rho(idx) = 0.0;
         }
-
-        // Generate source points
+        
         for(unsigned int idx=0; idx<nSources; ++idx){
             ippl::Vector<double,3> r = {posDis(eng), posDis(eng), posDis(eng)};
             sources.R(idx) = r;
             sources.rho(idx) = gaussian(r[0], r[1], r[2]);
         }
         
+        // for(unsigned int z = 0; z<20; ++z){
+        //     for(unsigned int y = 0; y<20; ++y){
+        //         for(unsigned int x = 0; x<20; ++x){
+        //             unsigned int idx = z*400 + y*20 + x;
+        //             targets.R(idx) = ippl::Vector<double,3>{x*0.05, y*0.05, z*0.05};
+        //             targets.rho(idx) = 0.0;
+        //         }
+        //     }
+        // }
+        // for(unsigned int z = 0; z<20; ++z){
+        //     for(unsigned int y = 0; y<20; ++y){
+        //         for(unsigned int x = 0; x<20; ++x){
+        //             unsigned int idx = z*400 + y*20 + x;
+        //             sources.R(idx) = ippl::Vector<double,3>{x*0.05+0.025, y*0.05+0.025, z*0.05+0.025};
+        //             sources.rho(idx) = gaussian(x*0.05+0.025, y*0.05+0.025, z*0.05+0.025);
+        //         }
+        //     }
+        // }
 
 
         // Tree Params
         ippl::ParameterList treeparams;
-        treeparams.add("maxdepth",          10);
-        treeparams.add("maxleafelements",   static_cast<int>(0.005 * nTargets));
+        treeparams.add("maxdepth",          5);
+        treeparams.add("maxleafelements",   static_cast<int>(maxElements));
         treeparams.add("boxmin",            0.0);
         treeparams.add("boxmax",            1.0);
         treeparams.add("sourceidx",         nTargets);
@@ -68,25 +77,20 @@ int main(int argc, char* argv[]) {
         ippl::ParameterList solverparams;
         solverparams.add("eps", 1e-6);
 
-        
         ippl::TreeOpenPoissonSolver solver(targets, sources, treeparams, solverparams);
 
         // Timers 
         static auto explicit_timer = IpplTimings::getTimer("Explicitsol");
         static auto solver_timer = IpplTimings::getTimer("solver");
-
-        IpplTimings::startTimer(explicit_timer);
-        auto explicitsol = solver.ExplicitSolution();
-        IpplTimings::stopTimer(explicit_timer);
         
-        
-            
         // timings
-        
         IpplTimings::startTimer(solver_timer);
         solver.Solve();
         IpplTimings::stopTimer(solver_timer);
         
+        IpplTimings::startTimer(explicit_timer);
+        auto explicitsol = solver.ExplicitSolution();
+        IpplTimings::stopTimer(explicit_timer);
 
         double mse = 0.0;
         double mean = 0.0;
@@ -103,10 +107,7 @@ int main(int argc, char* argv[]) {
             targets.rho(i) = 0.0;
         });
 
-            
-
         IpplTimings::print(std::string("timings.dat"));
-
 
          
     

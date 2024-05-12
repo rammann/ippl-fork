@@ -81,8 +81,9 @@ namespace ippl
             eps_m = solverparams.get<double>("eps");
             
             // Radius of the box and sigma at the coarsest level
-            r0_m = max-min;
-            sig0_m = r0_m/Kokkos::sqrt((Kokkos::log(1/eps_m)));
+            //r0_m = max-min;
+            r0_m = 1.0;
+            sig0_m = r0_m/Kokkos::sqrt((Kokkos::log(1/eps_m)))*0.5;
             
         }
     
@@ -207,6 +208,7 @@ namespace ippl
             static auto outgoingexpansiontimer = IpplTimings::getTimer("OutgoingExp");
             static auto incomingexpansiontimer = IpplTimings::getTimer("IncomingExp");
             static auto backtransformtimer = IpplTimings::getTimer("BackTransform");
+            static auto nuffttimer = IpplTimings::getTimer("NUFFT");
 
             const unsigned int dim = 3; 
             int nf = static_cast<int>(Kokkos::ceil(4 * Kokkos::log(1/eps_m)) * 2);
@@ -216,17 +218,13 @@ namespace ippl
             for(unsigned int depth=0; depth < tree_m.GetMaxDepth(); ++depth){
 
                 // Fourier-space spacing between modes
-                double hl = Kokkos::pow(2,depth) * 2;
+                double hl = Kokkos::pow(2,depth) * 1.8;
                 
-
-                // internalnodekeys is a vector holding the morton ids of the internal nodes at current depth
+                // nodekeys is a vector holding the morton ids of the internal nodes at current depth
                 Kokkos::vector<morton_node_id_type> internalnodekeys = tree_m.GetInternalNodeAtDepth(depth);
                     
                 // Container for outgoing expansion
                 Kokkos::UnorderedMap<morton_node_id_type, fourier_field_type> Phi;
-                
-                // Outgoing expansion at depth
-                //Kokkos::parallel_for("Outgoing Expansion", internalnodekeys.size(),KOKKOS_LAMBDA(unsigned int nkey){
                 
                
                 IpplTimings::startTimer(outgoingexpansiontimer);
@@ -241,6 +239,9 @@ namespace ippl
 
                     // Get souce ids in this node
                     Kokkos::vector<entity_id_type> idSources = tree_m.CollectSourceIds(key);
+                    if(idSources.empty()){
+                        continue;
+                    }
                 
                     // Create source particles with positions relative to node center
                     playout_type PLayout;
@@ -286,36 +287,32 @@ namespace ippl
                     std::unique_ptr<nufft_type> nufft1 = std::make_unique<nufft_type>(layout, relSources.getTotalNum(), type1, fftParams);
     
                     // Perform NUFFT 1
-                    
+                    IpplTimings::startTimer(nuffttimer);
                     nufft1->transform(relSources.R, relSources.rho, fieldPhi);
+                    IpplTimings::stopTimer(nuffttimer);
                     // Insert outgoing expansion into map
                     Phi.insert(key, fieldPhi);
-
-                    
+ 
                 }
-                //); // Loop over nodes for outgoing expansion
                 IpplTimings::stopTimer(outgoingexpansiontimer);
+                
                 // Map for incoming expansion
                 Kokkos::UnorderedMap<morton_node_id_type, fourier_field_type> Psi;
 
                 // nodes of this level
-                Kokkos::vector<morton_node_id_type> nodekeys = tree_m.GetInternalNodeAtDepth(depth);
+                Kokkos::vector<morton_node_id_type> nodekeys = tree_m.GetNodeAtDepth(depth);
                 
                 IpplTimings::startTimer(incomingexpansiontimer);
-                // Incoming expansion at depth
-                Kokkos::parallel_for("Incoming Expansion", nodekeys.size(), KOKKOS_LAMBDA(unsigned int nkey)
-                //for(unsigned int nkey=0; nkey<nodekeys.size(); ++nkey)
-                {
-
+                for(unsigned int nkey=0;nkey<nodekeys.size(); ++nkey){
+                
                     // Morton key of current node
                     morton_node_id_type key = nodekeys[nkey];
-                    
-
-                    //if(!tree_m.GetNode(key).IsAnyChildExist()) continue;
-
-                
+                    if(tree_m.CollectTargetIds(key).empty()){
+                        continue;
+                    }
                     // Vector of colleague keys
                     Kokkos::vector<morton_node_id_type> colleaguekeys = tree_m.GetColleagues(key);
+                    
 
 
                     // Create Fourier-space field for incoming expansion
@@ -341,6 +338,7 @@ namespace ippl
                     fourier_field_type fieldPsi(mesh, layout,0);
                     fieldPsi = 0;
                     auto PsiView = fieldPsi.getView();
+                    bool touched = false;
 
                     // Loop over colleagues to calculate incoming expansion
                     for(unsigned int c=0; c<colleaguekeys.size(); ++c){
@@ -350,7 +348,10 @@ namespace ippl
                         
 
                         // Colleague's outgoing expansion view
-                        if(!Phi.exists(colkey)) continue;
+                        if(!Phi.exists(colkey)){
+                            continue;
+                        } 
+                        touched = true;
                         auto PhiView = Phi.value_at(Phi.find(colkey)).getView();
 
                         // Difference of centers of node and its colleague
@@ -376,17 +377,19 @@ namespace ippl
                             Kokkos::complex<double> imag;
                             imag.real() = 0; imag.imag() = 1;
 
-                            PsiView(i,j,k) += w * Kokkos::exp(imag * /* hl * */ t) * PhiView(i,j,k) * Kokkos::pow(hl,3);
+                            PsiView(i,j,k) += w * Kokkos::exp(imag * t) * PhiView(i,j,k) * Kokkos::pow(hl,3);
                             
 
                         }); // Incoming expansion loop
 
                     } // Loop over colleagues of node
 
-                    Psi.insert(key, fieldPsi);
-                    
-                    
-                }); // Loop over nodes for incoming expansion
+                    if(touched){
+                        Psi.insert(key, fieldPsi);
+                    }
+                     
+                }
+                //); // Loop over nodes for incoming expansion
                 IpplTimings::stopTimer(incomingexpansiontimer);
                 // Nufft back onto target on each node
                 IpplTimings::startTimer(backtransformtimer);
@@ -396,7 +399,9 @@ namespace ippl
                     morton_node_id_type key = nodekeys[i];
 
                     // Get incoming expansion field
-                    if(!Psi.exists(key)) continue;
+                    if(!Psi.exists(key)){
+                        continue;
+                    } 
 
                     auto fieldPsi = Psi.value_at(Psi.find(key));
                 
@@ -405,6 +410,9 @@ namespace ippl
 
                     // Get souce ids in this node
                     Kokkos::vector<entity_id_type> idTargets = tree_m.CollectTargetIds(key);
+                    if(idTargets.empty()){
+                        continue;
+                    }
 
                     // Create target particles with positions relative to node center
                     playout_type PLayout;
@@ -446,8 +454,9 @@ namespace ippl
                     std::unique_ptr<nufft_type> nufft2 = std::make_unique<nufft_type>(layout, relTargets.getTotalNum(), type2, fftParams);
 
                     // Perform NUFFT 2
+                    IpplTimings::startTimer(nuffttimer);
                     nufft2->transform(relTargets.R, relTargets.rho, fieldPsi);
-                    
+                    IpplTimings::stopTimer(nuffttimer);
                     // Add this contribution to target values
                     Kokkos::parallel_for("Add contribution to target values", idTargets.size(),
                     KOKKOS_LAMBDA(unsigned int t){
@@ -466,81 +475,74 @@ namespace ippl
 
             Kokkos::vector<morton_node_id_type> leafnodes = tree_m.GetLeafNodes();
 
-            Kokkos::parallel_for("Loop over leaf nodes", leafnodes.size(),
-            KOKKOS_LAMBDA(unsigned int i){
-            //for(unsigned int i=0; i<leafnodes.size(); ++i){
-
-                // Leaf key
-                morton_node_id_type leafkey = leafnodes(i);
+            for(unsigned int l=0; l<leafnodes.size(); ++l){
                 
-                // Leaf node
+                morton_node_id_type leafkey = leafnodes(l);
                 OrthoTreeNode leafnode = tree_m.GetNode(leafkey);
-
-                // Depth
                 depth_type depth = tree_m.GetDepth(leafkey);
+                Kokkos::vector<entity_id_type> sourceids = tree_m.CollectSourceIds(leafkey);
+                if(sourceids.empty()) {
+                    continue;
+                }
                
-                // Find colleagues and coarse neighbours
                 Kokkos::vector<morton_node_id_type> coarseneighbours = tree_m.GetCoarseNbrs(leafkey);
                 Kokkos::vector<morton_node_id_type> colleagues = tree_m.GetColleagues(leafkey);
 
+                for(unsigned int n=0; n<coarseneighbours.size(); ++n){
 
-                // Collect source ids
-                Kokkos::vector<entity_id_type> sourceids = tree_m.CollectSourceIds(leafkey);
-                Kokkos::vector<entity_id_type> targetids = {};
-                targetids.reserve(static_cast<unsigned int>((coarseneighbours.size() + colleagues.size()) * 2 * tree_m.GetMaxElementsPerNode()));
-                
+                    morton_node_id_type neighbourkey = coarseneighbours[n];
+                    Kokkos::vector<entity_id_type> targetids = tree_m.CollectTargetIds(neighbourkey);
+                    if(targetids.empty()){
+                        continue;
+                    }
 
-                // Incremement targets within coarse neighbours
-                for(unsigned int nidx=0; nidx<coarseneighbours.size(); ++nidx){
-                    
-                    // Coarse leaf neighbour key
-                    morton_node_id_type key = coarseneighbours[nidx];
+                    for(unsigned int s=0; s<sourceids.size(); ++s){
 
-                    // Collect Targets in this coarse leaf neighbour
-                    Kokkos::vector<entity_id_type> tids = tree_m.CollectTargetIds(key);
+                        entity_id_type sid = sourceids[s];
+                        vector_type sourceR = sources_m.R(sid);
 
-                    // Fill target ids into vector
-                    for(unsigned int tidx=0; tidx<tids.size(); ++tidx){
-                        targetids.push_back(tids[tidx]);
+                        Kokkos::parallel_for("Residual Contribution for Coarse Neighbours", targetids.size(),
+                        KOKKOS_LAMBDA(unsigned int t){
+
+                            entity_id_type tid = targetids[t];
+                            vector_type targetR = targets_m.R(tid);
+
+                            ippl::Vector<double, 3> deltaR = targetR - sourceR;
+                            long double r = Kokkos::sqrt(deltaR[0] * deltaR[0] + deltaR[1] * deltaR[1] + deltaR[2] * deltaR[2]);
+                            targets_m.rho(tid) += R(depth,r) * sources_m.rho(sid);
+                            
+                            
+
+                        });
                     }
                 }
 
-                // Increment targets within colleagues
-                for(unsigned int nidx=0; nidx<colleagues.size(); ++nidx){
+                for(unsigned int n=0; n<colleagues.size(); ++n){
                     
-                    // Coarse leaf neighbour key
-                    morton_node_id_type key = colleagues[nidx];
+                    morton_node_id_type neighbourkey = colleagues[n];
+                    Kokkos::vector<entity_id_type> targetids = tree_m.CollectTargetIds(neighbourkey);
 
-                    // Collect Targets in this coarse leaf neighbour
-                    Kokkos::vector<entity_id_type> tids = tree_m.CollectTargetIds(key);
+                    for(unsigned int s=0; s<sourceids.size(); ++s){
 
-                    // Fill target ids into vector
-                    for(unsigned int tidx=0; tidx<tids.size(); ++tidx){
-                        targetids.push_back(tids[tidx]);
+                        entity_id_type sid = sourceids[s];
+                        vector_type sourceR = sources_m.R(sid);
+
+                        Kokkos::parallel_for("Residual Contribution for Colleagues Neighbours", targetids.size(),
+                        KOKKOS_LAMBDA(unsigned int t){
+
+                            entity_id_type tid = targetids[t];
+                            vector_type targetR = targets_m.R(tid);
+
+                            ippl::Vector<double, 3> deltaR = targetR - sourceR;
+                            long double r = Kokkos::sqrt(deltaR[0] * deltaR[0] + deltaR[1] * deltaR[1] + deltaR[2] * deltaR[2]);
+                            targets_m.rho(tid) += R(depth,r) * sources_m.rho(sid);
+
+                        });
                     }
-                }
-
-                // Calculate Residual Contribution
-                for(unsigned int sidx=0; sidx<sourceids.size(); ++sidx){
-                    entity_id_type sourceid = sourceids[sidx];
-                    vector_type sourceR = sources_m.R(sourceid);
-                    double sourceRho = sources_m.rho(sourceid);
-
-                    //std::cout << "Current Source " << sourceid << " with charge " << sourceRho << "\n";
-                    Kokkos::parallel_for("Residual contribution", targetids.size(),
-                    KOKKOS_LAMBDA(unsigned int tidx){
-                        entity_id_type targetid = targetids[tidx];
-                        vector_type targetR = targets_m.R(targetid);
-                        ippl::Vector<double, 3> deltaR = targetR - sourceR;
-                        double r = Kokkos::sqrt(deltaR[0] * deltaR[0] + deltaR[1] * deltaR[1] + deltaR[2] * deltaR[2]);
-                        //targets_m.rho(targetid) += R(depth, r) * sourceRho;
-                        Kokkos::atomic_add(&targets_m.rho(targetid), R(depth, r) * sourceRho);
-                    });
-
                 }
 
             }
-            );
+            //);
 
             return;
 
@@ -596,9 +598,9 @@ namespace ippl
                 targetValues(t) = temp;            
             });
             
-            //for(unsigned int t=0; t<targets_m.getTotalNum(); ++t){
-            //    std::cout <<  targetValues(t) << " " << targets_m.rho(t) <<  " diff = " << targetValues(t) - targets_m.rho(t) << "\n";
-            //}
+            // for(unsigned int t=0; t<targets_m.getTotalNum(); ++t){
+            //     std::cout << "TID = " << t << "  " << targetValues(t) << " " << targets_m.rho(t) <<  " diff = " << targetValues(t) - targets_m.rho(t) << "\n";
+            // }
             return targetValues;
         }
 
@@ -689,7 +691,7 @@ namespace ippl
             }
         }
 
-        inline double R(unsigned int l, double r){
+        inline double R(int l, double r){
             double sigl = sig0_m * Kokkos::pow(0.5,l);
             return std::erfc(r / sigl)/r;
         }

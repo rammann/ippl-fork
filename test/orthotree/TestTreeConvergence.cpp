@@ -1,10 +1,10 @@
 /*
 USAGE
 
-./TestTreeConvergence nTargetsstart maxElementsPercent --info 5
+./TestTreeConvergence nTargetsstart maxElements --info 5
 
 nTargetsstart : number of targetpoints starting value
-maxElementsPercent : max elements per leaf node expressed in percentage of target points
+maxElementsPercent : max elements per leaf node
 
 loops over nTargetsstart ... 10 x nTargetsstart
 
@@ -37,7 +37,7 @@ int main(int argc, char* argv[]) {
     {
         // IO
         unsigned int nTargetsstart = std::atoi(argv[1]);
-        double maxElementsPercent = std::stod(argv[2]);
+        unsigned int maxElements = std::stoi(argv[2]);
         //std::cout << "nTargets = " << typeid(nTargets).name() << "\n";
         //std::cout << "maxElementsPercent = " << typeid(maxElementsPercent).name() << "\n";
 
@@ -69,7 +69,7 @@ int main(int argc, char* argv[]) {
 
             ippl::ParameterList treeparams;
             treeparams.add("maxdepth",          10);
-            treeparams.add("maxleafelements",   static_cast<int>(maxElementsPercent * nTargets));
+            treeparams.add("maxleafelements",   maxElements);
             treeparams.add("boxmin",            0.0);
             treeparams.add("boxmax",            1.0);
             treeparams.add("sourceidx",         nTargets);

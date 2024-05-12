@@ -81,6 +81,7 @@
         "utility": "cpp",
         "numbers": "cpp",
         "valarray": "cpp",
-        "execution": "cpp"
+        "execution": "cpp",
+        "regex": "cpp"
     }
 }

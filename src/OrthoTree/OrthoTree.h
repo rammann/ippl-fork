@@ -372,8 +372,8 @@ private: // Aid Function for Constructor
                 }
             }
 
-            NewNodes.push_back(kChild);
-
+                NewNodes.push_back(kChild);
+            
         }
         
         return NewNodes;
@@ -682,22 +682,16 @@ public: // Getters
 
         VisitNodes(kRoot, [&ids](morton_node_id_type, OrthoTreeNode const& node)
         {
-            unsigned int oldsize = ids.size();
-            unsigned int newsize = oldsize + node.vid_m.size();
-            ids.resize(newsize);
-            Kokkos::parallel_for("Collectids", node.vid_m.size(),
-            KOKKOS_LAMBDA(unsigned int idx){
-                ids[oldsize+idx] = node.vid_m[idx];
+            if(!node.IsAnyChildExist()){
+                unsigned int oldsize = ids.size();
+                unsigned int newsize = oldsize + node.vid_m.size();
+                ids.resize(newsize);
+                Kokkos::parallel_for("Collectids", node.vid_m.size(),
+                KOKKOS_LAMBDA(unsigned int idx){
+                    ids[oldsize+idx] = node.vid_m[idx];
             });
-            // for(unsigned int idx=0; idx<node.vid_m.size(); ++idx){
-            //     ids.push_back(node.vid_m[idx]);
-            // }
-            // unsigned int oldsize = idview.size();
-            // Kokkos::resize(idview, )
-            // Kokkos::parallel_for("CollectIds", node.vid_m.size(), 
-            // KOKKOS_LAMBDA(unsigned int idx){
+            }
 
-            // });
         });
         
         return ids;
@@ -710,21 +704,18 @@ public: // Getters
         ids.reserve(GetNode(kRoot).npoints_m);
         VisitNodes(kRoot, [&](morton_node_id_type, OrthoTreeNode const& node)
         {
-            auto pp = std::partition_point(node.vid_m.begin(), node.vid_m.end(), [this](unsigned int i){return i < sourceidx_m;});
-            unsigned int newnpoints = node.vid_m.end() - pp;
-            unsigned int oldsize = ids.size();
-            ids.resize(oldsize + newnpoints);
-            Kokkos::parallel_for("CollectSources", newnpoints,
-            KOKKOS_LAMBDA(unsigned int idx){
-                ids[oldsize+idx] = node.vid_m[(pp-node.vid_m.begin())+idx] - sourceidx_m;
+            if(!node.IsAnyChildExist()){
+                auto pp = std::partition_point(node.vid_m.begin(), node.vid_m.end(), [this](unsigned int i){return i < sourceidx_m;});
+                unsigned int newnpoints = node.vid_m.end() - pp;
+                unsigned int oldsize = ids.size();
+                ids.resize(oldsize + newnpoints);
+                Kokkos::parallel_for("CollectSources", newnpoints,
+                KOKKOS_LAMBDA(unsigned int idx){
+                    ids[oldsize+idx] = node.vid_m[(pp-node.vid_m.begin())+idx] - sourceidx_m;
             });
+            }
             
-            // for(unsigned int idx=0; idx<node.vid_m.size(); ++idx){
-            //     if(sourceidx_m <= node.vid_m[idx]){
-            //         ids.push_back(node.vid_m[idx]-sourceidx_m);
-            //     }
-                
-            // }
+            
         });
         
         return ids;
@@ -738,18 +729,16 @@ public: // Getters
 
         VisitNodes(kRoot, [&](morton_node_id_type, OrthoTreeNode const& node)
         {
-            auto pp = std::partition_point(node.vid_m.begin(), node.vid_m.end(), [this](unsigned int i){return i < sourceidx_m;});
-            unsigned int newnpoints = pp-node.vid_m.begin();
-            unsigned int oldsize = ids.size();
-            ids.resize(oldsize + newnpoints);
-            Kokkos::parallel_for("CollectTargets", newnpoints,
-            KOKKOS_LAMBDA(unsigned int idx){
-                ids[oldsize+idx] = node.vid_m[idx];
-            });
-
-            // for(unsigned int idx=0; idx<node.vid_m.size(); ++idx){
-            //     if(node.vid_m[idx] < sourceidx_m) ids.push_back(node.vid_m[idx]);
-            // }
+            if(!node.IsAnyChildExist()){
+                auto pp = std::partition_point(node.vid_m.begin(), node.vid_m.end(), [this](unsigned int i){return i < sourceidx_m;});
+                unsigned int newnpoints = pp-node.vid_m.begin();
+                unsigned int oldsize = ids.size();
+                ids.resize(oldsize + newnpoints);
+                Kokkos::parallel_for("CollectTargets", newnpoints,
+                KOKKOS_LAMBDA(unsigned int idx){
+                    ids[oldsize+idx] = node.vid_m[idx];
+                });
+            }
         });
         
         return ids;

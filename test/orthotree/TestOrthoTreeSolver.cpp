@@ -1,3 +1,18 @@
+/*
+USAGE
+
+./TestTreeConvergence nTargetsstart maxElementsPercent --info 5
+
+nTargetsstart : number of targetpoints starting value
+maxElementsPercent : max elements per leaf node expressed in percentage of target points
+
+loops over nTargetsstart ... 10 x nTargetsstart
+
+total points is = source points + target points = 2 x target points
+
+
+*/
+
 #include "Ippl.h"
 #include <Kokkos_Vector.hpp>
 #include <Kokkos_UnorderedMap.hpp>
@@ -5,6 +20,15 @@
 #include <random>
 #include "Utility/ParameterList.h"
 #include "Utility/IpplTimings.h"
+
+KOKKOS_INLINE_FUNCTION double gaussian(double x, double y, double z, double sigma = 0.05,
+                                       double mu = 0.5) {
+    double pi        = Kokkos::numbers::pi_v<double>;
+    double prefactor = (1 / Kokkos::sqrt(2 * 2 * 2 * pi * pi * pi)) * (1 / (sigma * sigma * sigma)) ;
+    double r2        = (x - mu) * (x - mu) + (y - mu) * (y - mu) + (z - mu) * (z - mu);
+
+    return prefactor * exp(-r2 / (2 * sigma * sigma));
+}
 
 int main(int argc, char* argv[]) {
     
