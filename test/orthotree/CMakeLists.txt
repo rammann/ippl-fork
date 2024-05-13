@@ -17,7 +17,12 @@ add_executable (TestOrthoTree TestOrthoTree.cpp)
 add_executable (TestOrthoTreeSolver TestOrthoTreeSolver.cpp)
 add_executable (TestGaussianTreeSolver TestGaussianTreeSolver.cpp)
 add_executable(TestTreeConvergence TestTreeConvergence.cpp)
+add_executable(TestTreeScalings TestTreeScalings.cpp)
+
+
+
 target_link_libraries (TestOrthoTree ${IPPL_LIBS})
 target_link_libraries (TestOrthoTreeSolver ${IPPL_LIBS})
 target_link_libraries (TestGaussianTreeSolver ${IPPL_LIBS})
 target_link_libraries(TestTreeConvergence ${IPPL_LIBS})
+target_link_libraries(TestTreeScalings ${IPPL_LIBS})

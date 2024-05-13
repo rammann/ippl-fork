@@ -45,26 +45,6 @@ int main(int argc, char* argv[]) {
             sources.rho(idx) = gaussian(r[0], r[1], r[2]);
         }
         
-        // for(unsigned int z = 0; z<20; ++z){
-        //     for(unsigned int y = 0; y<20; ++y){
-        //         for(unsigned int x = 0; x<20; ++x){
-        //             unsigned int idx = z*400 + y*20 + x;
-        //             targets.R(idx) = ippl::Vector<double,3>{x*0.05, y*0.05, z*0.05};
-        //             targets.rho(idx) = 0.0;
-        //         }
-        //     }
-        // }
-        // for(unsigned int z = 0; z<20; ++z){
-        //     for(unsigned int y = 0; y<20; ++y){
-        //         for(unsigned int x = 0; x<20; ++x){
-        //             unsigned int idx = z*400 + y*20 + x;
-        //             sources.R(idx) = ippl::Vector<double,3>{x*0.05+0.025, y*0.05+0.025, z*0.05+0.025};
-        //             sources.rho(idx) = gaussian(x*0.05+0.025, y*0.05+0.025, z*0.05+0.025);
-        //         }
-        //     }
-        // }
-
-
         // Tree Params
         ippl::ParameterList treeparams;
         treeparams.add("maxdepth",          5);
@@ -107,7 +87,7 @@ int main(int argc, char* argv[]) {
             targets.rho(i) = 0.0;
         });
 
-        IpplTimings::print(std::string("timings.dat"));
+        IpplTimings::print(std::to_string(nTargets)+"targets_"+std::to_string(maxElements)+"maxelements_"+std::string("timings.dat"));
 
          
     

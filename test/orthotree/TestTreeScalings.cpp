@@ -1,7 +1,7 @@
 /*
 USAGE
 
-./TestTreeConvergence nTargetsstart maxElementsperleaf --info 5
+./TestTreeScalings nTargetsstart maxElementsperleaf --info 5
 
 nTargetsstart : number of targetpoints starting value
 maxElementsPercent : max elements per leaf node
@@ -79,22 +79,32 @@ int main(int argc, char* argv[]) {
             solverparams.add("eps", 1e-6);
 
             ippl::TreeOpenPoissonSolver solver(targets, sources, treeparams, solverparams);
-            auto explicitsol = solver.ExplicitSolution();
-            solver.Solve();
+            
+            static auto explicit_timer = IpplTimings::getTimer("Explicitsol");
+            static auto solver_timer = IpplTimings::getTimer("solver");
+            for(unsigned int time=0;time<3; ++time){
+                IpplTimings::startTimer(explicit_timer);
+                auto explicitsol = solver.ExplicitSolution();
+                IpplTimings::stopTimer(explicit_timer);
+                IpplTimings::startTimer(solver_timer);
+                solver.Solve();
+                IpplTimings::stopTimer(solver_timer);
+                double mape = 0.0;
+                double* const ptr = &mape;
 
-            double mape = 0.0;
-            double* const ptr = &mape;
+                Kokkos::parallel_for("Calculate MAPE", nTargets,
+                KOKKOS_LAMBDA(unsigned int i){
+                    Kokkos::atomic_add(ptr, (Kokkos::abs(explicitsol(i)-targets.rho(i))) / Kokkos::abs(explicitsol(i)));
+                });
+                mape /= nTargets;
+                numbertargets.push_back(nTargets);
+                errors.push_back(mape);
+            }
+            IpplTimings::print(std::to_string(nTargets)+"targets_"+std::to_string(maxElements)+"maxelems_"+std::string("timings.dat"));
 
-            Kokkos::parallel_for("Calculate MAPE", nTargets,
-            KOKKOS_LAMBDA(unsigned int i){
-                Kokkos::atomic_add(ptr, (Kokkos::abs(explicitsol(i)-targets.rho(i))) / Kokkos::abs(explicitsol(i)));
-            });
+            
 
-            mape /= nTargets;
-            // std::cout << "nTargets = " << nTargets << ", "; 
-            // std::cout << "MAPE = " << mape << "\n";
-            numbertargets.push_back(nTargets);
-            errors.push_back(mape);
+
         }
         std::cout << "MAPE:" << "\n";
         for(unsigned int i=0; i<errors.size(); ++i){

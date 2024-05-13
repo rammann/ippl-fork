@@ -83,7 +83,7 @@ namespace ippl
             // Radius of the box and sigma at the coarsest level
             //r0_m = max-min;
             r0_m = 1.0;
-            sig0_m = r0_m/Kokkos::sqrt((Kokkos::log(1/eps_m)))*0.5;
+            sig0_m = r0_m/Kokkos::sqrt((Kokkos::log(1/eps_m)));
             
         }
     
