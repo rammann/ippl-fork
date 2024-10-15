@@ -181,6 +181,9 @@ namespace ippl {
         const NDIndex<Dim>& lDom       = layout.getLocalNDIndex();
         const int nghost               = f.getNghost();
 
+        //create device view to save weights
+        Kokkos::View<Vector:PositionType, Field::dim*> weights("weights", *(this->localNum_mp));    
+
         using policy_type = Kokkos::RangePolicy<execution_space>;
         Kokkos::parallel_for(
             "ParticleAttrib::gather", policy_type(0, *(this->localNum_mp)),
@@ -190,6 +193,9 @@ namespace ippl {
                 Vector<int, Field::dim> index        = l;
                 Vector<PositionType, Field::dim> whi = l - index;
                 Vector<PositionType, Field::dim> wlo = 1.0 - whi;
+                weights[idx] = whi
+
+                std::cout << "whi = " << whi << endl;
 
                 Vector<size_t, Field::dim> args = index - lDom.first() + nghost;
 
@@ -198,6 +204,8 @@ namespace ippl {
                                                        view, wlo, whi, args);
             });
         IpplTimings::stopTimer(gatherTimer);
+
+        auto weights_h = Kokkos::create_mirror_view_and_copy(weights);
     }
 
     /*
@@ -218,7 +226,7 @@ namespace ippl {
 #define DefineParticleReduction(fun, name, op, MPI_Op)                                    \
     template <typename T, class... Properties>                                            \
     T ParticleAttrib<T, Properties...>::name() {                                          \
-        T temp            = 0.0;                                                          \
+        T temp            = Kokkos::reduction_identity<T>::name();                                                     \
         using policy_type = Kokkos::RangePolicy<execution_space>;                         \
         Kokkos::parallel_reduce(                                                          \
             "fun", policy_type(0, *(this->localNum_mp)),                                  \

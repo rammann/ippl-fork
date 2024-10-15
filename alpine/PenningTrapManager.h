@@ -112,6 +112,7 @@ public:
 
     void initializeParticles(){
         Inform m("Initialize Particles");
+        Inform msg2all("Rank ", INFORM_ALL_NODES);
 
         auto *mesh = &this->fcontainer_m->getMesh();
         auto *FL = &this->fcontainer_m->getFL();
@@ -178,6 +179,7 @@ public:
                                                    DistR_t>;
         Vector_t<double, Dim> rmin = this->rmin_m;
         Vector_t<double, Dim> rmax = this->rmax_m;
+
         samplingR_t samplingR(distR, rmax, rmin, rlayout, totalP);
         size_type nlocal = samplingR.getLocalSamplesNum();
 

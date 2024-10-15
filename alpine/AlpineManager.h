@@ -118,6 +118,7 @@ public:
 
     void scatterCIC() {
         Inform m("scatter ");
+        Inform msg2all("Rank ", INFORM_ALL_NODES);
         this->fcontainer_m->getRho() = 0.0;
 
         ippl::ParticleAttrib<double> *q = &this->pcontainer_m->q;
@@ -144,6 +145,8 @@ public:
 
         size_type TotalParticles = 0;
         size_type localParticles = this->pcontainer_m->getLocalNum();
+
+        msg2all << "particles: " << localParticles << endl;
 
         ippl::Comm->reduce(localParticles, TotalParticles, 1, std::plus<size_type>());
 

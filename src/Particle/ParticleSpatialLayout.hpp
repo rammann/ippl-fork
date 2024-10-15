@@ -154,7 +154,7 @@ namespace ippl {
             if (nSends[rank] > 0) {
                 hash_type hash("hash", nSends[rank]);
                 fillHash(rank, ranks, hash);
-                std::cout<<"Rank "<<Comm->rank()<<" sending to Rank "<<rank<<std::endl;
+                //std::cout<<"Rank "<<Comm->rank()<<" sending to Rank "<<rank<<std::endl;
                 pc.sendToRank(rank, tag, sends++, requests, hash);
             }
         }
