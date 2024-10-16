@@ -44,7 +44,7 @@ public:
      *
      * @param max_depth
      * @return Morton&
-     */
+     
     static Morton& getInstance(size_t max_depth);
 
     // deleted to enforce singleton
@@ -197,10 +197,12 @@ public:
     // what do they want here?
     // TODO 
     void get_descendant(morton_code code) const;
+    //probably bool 
+    bool is_descendant(morton_code child, morton_code parent) const;
 
     // TODO 
     vector_t<morton_code> get_list_potential_neighbors(morton_code code, const size_t level) const;
-    // TODO 
+    // TODO shared corner is corner shared with parent node, these eight neighbors don't have the same parent
     vector_t<morton_code> get_list_potential_neighbors_sharing_corner(morton_code code, const size_t level) const;
     // TODO 
     vector_t<morton_code> get_neighbors(morton_code code) const;
@@ -211,6 +213,7 @@ public:
      * @param code
      * @return vector_t<morton_code>
      */
+    //TODO
     vector_t<morton_code> get_insulation_layer(morton_code code) const;
 
 private:
