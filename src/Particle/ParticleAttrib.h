@@ -122,6 +122,11 @@ namespace ippl {
         template <typename Field, typename P2>
         void scatter(Field& f,
                      const ParticleAttrib<Vector<P2, Field::dim>, Properties...>& pp) const;
+        
+        // new scatter for debugging 
+        template <typename Field, typename P2>
+        void scatter_new(Field& f,
+                     const ParticleAttrib<Vector<P2, Field::dim>, Properties...>& pp) const;
 
         template <typename Field, typename P2>
         void gather(Field& f, const ParticleAttrib<Vector<P2, Field::dim>, Properties...>& pp);

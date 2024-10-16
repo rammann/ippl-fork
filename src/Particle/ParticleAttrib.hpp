@@ -154,6 +154,115 @@ namespace ippl {
         IpplTimings::stopTimer(accumulateHaloTimer);
     }
 
+    // New Scatter for Debugging ==================================================================== // 
+    template <typename T, class... Properties>
+    template <typename Field, class PT>
+    void ParticleAttrib<T, Properties...>::scatter_new(
+        Field& f, const ParticleAttrib<Vector<PT, Field::dim>, Properties...>& pp) const {
+        constexpr unsigned Dim = Field::dim;
+        using PositionType     = typename Field::Mesh_t::value_type;
+
+        static IpplTimings::TimerRef scatterTimer = IpplTimings::getTimer("scatter");
+        IpplTimings::startTimer(scatterTimer);
+        using view_type = typename Field::view_type;
+        view_type view  = f.getView();
+
+        using mesh_type       = typename Field::Mesh_t;
+        const mesh_type& mesh = f.get_mesh();
+
+        using vector_type = typename mesh_type::vector_type;
+        using value_type  = typename ParticleAttrib<T, Properties...>::value_type;
+
+        const vector_type& dx     = mesh.getMeshSpacing();
+        const vector_type& origin = mesh.getOrigin();
+        const vector_type invdx   = 1.0 / dx;
+
+        const FieldLayout<Dim>& layout = f.getLayout();
+        const NDIndex<Dim>& lDom       = layout.getLocalNDIndex();
+        const int nghost               = f.getNghost();
+        
+        int myrank;
+        MPI_Comm_rank(*Comm, &myrank);
+        Kokkos::View<double**, execution_space> weights("Interpolation Weights", *(this->localNum_mp), 3);   
+        if (myrank == 0){
+            // Host-Space Serial Loop for Rank 0
+            /* 
+            auto pp_mirror = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), pp);
+            auto view_mirror = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), dview_m);
+           
+            for(size_t idx=0; idx < *(this->localNum_mp); ++idx){
+                vector_type l                        = (pp_mirror(idx) - origin) * invdx + 0.5;
+                Vector<int, Field::dim> index        = l;
+                Vector<PositionType, Field::dim> whi = l - index;
+                Vector<PositionType, Field::dim> wlo = 1.0 - whi;
+           
+                  Vector<size_t, Field::dim> args = index - lDom.first() + nghost;
+
+                // scatter
+                const value_type& val = view_mirror(idx);
+                detail::scatterToField(std::make_index_sequence<1 << Field::dim>{}, view, wlo, whi, args, val);
+            }
+            */ 
+            using policy_type = Kokkos::RangePolicy<execution_space>;
+            Kokkos::parallel_for(
+                "ParticleAttrib::scatter", policy_type(0, *(this->localNum_mp)),
+                KOKKOS_CLASS_LAMBDA(const size_t idx) {
+                    // find nearest grid point
+                    vector_type l                        = (pp(idx) - origin) * invdx + 0.5;
+                    Vector<int, Field::dim> index        = l;
+                    Vector<PositionType, Field::dim> whi = l - index;
+                    Vector<PositionType, Field::dim> wlo = 1.0 - whi;
+
+                    weights(idx,0) = whi(0);
+                    weights(idx,1) = whi(1);
+                    weights(idx,2) = whi(2);
+                   
+                    Vector<size_t, Field::dim> args = index - lDom.first() + nghost;
+
+                    // scatter
+                    const value_type& val = dview_m(idx);
+                    detail::scatterToField(std::make_index_sequence<1 << Field::dim>{}, view, wlo, whi,
+                                           args, val);
+                });
+        }
+        else{
+
+            // Regular Loop for all other Ranks
+            using policy_type = Kokkos::RangePolicy<execution_space>;
+            Kokkos::parallel_for(
+                "ParticleAttrib::scatter", policy_type(0, *(this->localNum_mp)),
+                KOKKOS_CLASS_LAMBDA(const size_t idx) {
+                    // find nearest grid point
+                    vector_type l                        = (pp(idx) - origin) * invdx + 0.5;
+                    Vector<int, Field::dim> index        = l;
+                    Vector<PositionType, Field::dim> whi = l - index;
+                    Vector<PositionType, Field::dim> wlo = 1.0 - whi;
+                   
+                    Vector<size_t, Field::dim> args = index - lDom.first() + nghost;
+
+                    // scatter
+                    const value_type& val = dview_m(idx);
+                    detail::scatterToField(std::make_index_sequence<1 << Field::dim>{}, view, wlo, whi,
+                                           args, val);
+                });
+        }
+        IpplTimings::stopTimer(scatterTimer);
+
+        Kokkos::fence();
+        
+        auto weights_mirror = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), weights);
+        for(unsigned i=0; i < *(this->localNum_mp); ++i){
+            std::cout << weights_mirror(i,0) << " " << weights_mirror(i,1) << " " << weights_mirror(i,2) << std::endl;
+        }
+
+        static IpplTimings::TimerRef accumulateHaloTimer = IpplTimings::getTimer("accumulateHalo");
+        IpplTimings::startTimer(accumulateHaloTimer);
+        f.accumulateHalo();
+        IpplTimings::stopTimer(accumulateHaloTimer);
+    }
+
+    // End of new Scatter ====================================================================================== /
+
     template <typename T, class... Properties>
     template <typename Field, typename P2>
     void ParticleAttrib<T, Properties...>::gather(
@@ -210,7 +319,7 @@ namespace ippl {
 
     template <typename Attrib1, typename Field, typename Attrib2>
     inline void scatter(const Attrib1& attrib, Field& f, const Attrib2& pp) {
-        attrib.scatter(f, pp);
+        attrib.scatter_new(f, pp);
     }
 
     template <typename Attrib1, typename Field, typename Attrib2>
