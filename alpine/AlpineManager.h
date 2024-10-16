@@ -146,8 +146,6 @@ public:
         size_type TotalParticles = 0;
         size_type localParticles = this->pcontainer_m->getLocalNum();
 
-        msg2all << "particles: " << localParticles << endl;
-
         ippl::Comm->reduce(localParticles, TotalParticles, 1, std::plus<size_type>());
 
         if (ippl::Comm->rank() == 0) {

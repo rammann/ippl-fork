@@ -192,6 +192,31 @@ namespace ippl {
         write(inf.getDestination());
     }
 
+
+
+    template <typename T, unsigned Dim, class... ViewArgs>
+    T BareField<T, Dim, ViewArgs...>::sum(int nghost) const{
+        PAssert_LE(nghost, nghost_m);
+        T temp = 0.0;
+        using index_array_type = typename RangePolicy<Dim, execution_space>::index_array_type;
+        ippl::parallel_reduce(
+                "Sum", getRangePolicy(dview_m, nghost_m - nghost),
+                KOKKOS_CLASS_LAMBDA(const index_array_type& args, T& valL){
+                    T myVal = apply(dview_m, args);
+                    valL += myVal;
+                },
+                KokkosCorrection::Sum<T>(temp));
+        Kokkos::fence();
+        T globaltemp = 0.0;
+        int myrank;
+        MPI_Comm_rank(layout_m->comm, &myrank);
+        std::cout << "Rank " << myrank << " Local Field Charge = " << temp << std::endl;
+        layout_m->comm.allreduce(temp, globaltemp, 1, std::plus<T>());
+        return globaltemp;
+    }
+
+
+
 #define DefineReduction(fun, name, op, MPI_Op)                                                  \
     template <typename T, unsigned Dim, class... ViewArgs>                                      \
     T BareField<T, Dim, ViewArgs...>::name(int nghost) const {                                  \
@@ -205,35 +230,14 @@ namespace ippl {
                 op;                                                                             \
             },                                                                                  \
             KokkosCorrection::fun<T>(temp));                                                    \
-        T globaltemp = 0.0;                                                                     \ 
-        int myrank;                                                                             \ 
-        MPI_Comm_rank(layout_m->comm, &myrank);                                                 \  
-        std::cout << "Rank " << myrank << " Local Field Sum = " << temp << std::endl;           \ 
+        Kokkos::fence();                                                                        \
+        T globaltemp = 0.0;                                                                     \
+        int myrank;                                                                             \
+        MPI_Comm_rank(layout_m->comm, &myrank);                                                 \
         layout_m->comm.allreduce(temp, globaltemp, 1, MPI_Op<T>());                             \
         return globaltemp;                                                                      \
     }
    
-    template <typename T, unsigned Dim, class... ViewArgs>
-    T BareField<T, Dim, ViewArgs...>::sum(int nghost) const {
-        PAssert_LE(nghost, nghost_m);
-        T temp = Kokkos::reduction_identity<T>::sum();
-        using index_array_type = typename RangePolicy<Dim, execution_space>::index_array_type;
-        Kokkos::parallel_reduce(                                                                  
-            "Sum", getRangePolicy(dview_m, nghost_m - nghost),                                  
-            KOKKOS_CLASS_LAMBDA(unsigned x, unsigned y, unsigned z, T& valL) {                        
-                //T myVal = apply(dview_m, args);                                                 
-                T myVal = dview_m(x,y,z);                                                 
-                valL += myVal;                                                                             
-            },                                                                                  
-            temp);                                                    
-        T globaltemp = 0.0;
-        int myrank;                                                                              
-        MPI_Comm_rank(layout_m->comm, &myrank);                                                  
-        std::cout << "Rank " << myrank << " Local Field Sum = " << temp << std::endl;            
-        layout_m->comm.allreduce(temp, globaltemp, 1, std::plus<T>());                             
-        return globaltemp;   
-    } 
-         
     //DefineReduction(Sum, sum, valL += myVal, std::plus)
     DefineReduction(Max, max, using Kokkos::max; valL = max(valL, myVal), std::greater)
     DefineReduction(Min, min, using Kokkos::min; valL = min(valL, myVal), std::less)
