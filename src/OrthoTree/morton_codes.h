@@ -43,9 +43,6 @@ public:
     vector_t<morton_code> get_children(morton_code code) const;
     vector_t<morton_code> get_siblings(morton_code code) const;
 
-    // dk whats going on here
-    void get_descendant(morton_code code) const;
-
     morton_code get_first_child(morton_code code) const;
     morton_code get_last_child(morton_code code) const;
 
@@ -69,6 +66,9 @@ public:
     // what is meant by A(n) in the paper? get a list of all ancestors, or boolean value...?
     // TODO morton_code get_ancestor(morton_code code) const; 
     // TODO bool is_ancestor(morton_code child, morton_code parent) const; 
+
+    // what do they want here?
+    // TODO void get_descendant(morton_code code) const;
 
     // TODO vector_t<morton_code> get_list_potential_neighbors(morton_code code, const size_t level) const; 
     // TODO vector_t<morton_code> get_list_potential_neighbors_sharing_corner(morton_code code, const size_t level) const; 
