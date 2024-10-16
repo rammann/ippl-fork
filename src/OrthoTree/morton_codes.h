@@ -55,6 +55,7 @@ public:
     morton_code get_deepest_first_descendant(morton_code code) const;
     morton_code get_deepest_last_descendant(morton_code code) const;
 
+    // testing 
     morton_code get_ancestor_at_relative_level(morton_code code, size_t level) const
     {
         const morton_code depth = get_depth(code);
@@ -65,17 +66,14 @@ public:
 
     morton_code get_nearest_common_ancestor(morton_code code_a, morton_code code_b) const;
 
-    // not done below
-    morton_code get_ancestor(morton_code code) const;
-    bool is_ancestor(morton_code child, morton_code parent) const
-    {
+    // what is meant by A(n) in the paper? get a list of all ancestors, or boolean value...?
+    // TODO morton_code get_ancestor(morton_code code) const; 
+    // TODO bool is_ancestor(morton_code child, morton_code parent) const; 
 
-    }
-
-    vector_t<morton_code> get_list_potential_neighbors(morton_code code, const size_t level) const;
-    vector_t<morton_code> get_list_potential_neighbors_sharing_corner(morton_code code, const size_t level) const;
-    vector_t<morton_code> get_neighbors(morton_code code) const;
-    vector_t<morton_code> get_insulation_layer(morton_code code) const;
+    // TODO vector_t<morton_code> get_list_potential_neighbors(morton_code code, const size_t level) const; 
+    // TODO vector_t<morton_code> get_list_potential_neighbors_sharing_corner(morton_code code, const size_t level) const; 
+    // TODO vector_t<morton_code> get_neighbors(morton_code code) const; 
+    // TODO vector_t<morton_code> get_insulation_layer(morton_code code) const; 
 
 private:
     const size_t max_depth;
