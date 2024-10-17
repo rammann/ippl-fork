@@ -183,7 +183,10 @@ namespace ippl {
         
         int myrank;
         MPI_Comm_rank(*Comm, &myrank);
-        Kokkos::View<double**, execution_space> weights("Interpolation Weights", *(this->localNum_mp), 3);   
+        Kokkos::View<double**, execution_space> weights_high("Interpolation Weights High", *(this->localNum_mp), 3);
+        Kokkos::View<double**, execution_space> weights_low("Interpolation Weights Low", *(this->localNum_mp), 3);
+        Kokkos::View<int**, execution_space> index_values("index values", *(this->localNum_mp), 3);
+        Kokkos::View<double**, execution_space> l_values("l values", *(this->localNum_mp), 3);
         if (myrank == 0){
             // Host-Space Serial Loop for Rank 0
             /* 
@@ -210,12 +213,33 @@ namespace ippl {
                     // find nearest grid point
                     vector_type l                        = (pp(idx) - origin) * invdx + 0.5;
                     Vector<int, Field::dim> index        = l;
-                    Vector<PositionType, Field::dim> whi = l - index;
-                    Vector<PositionType, Field::dim> wlo = 1.0 - whi;
+                    Vector<PositionType, Field::dim> whi; //= (l - index);
+                    Vector<PositionType, Field::dim> wlo; //= (1.0 - whi);
 
-                    weights(idx,0) = whi(0);
-                    weights(idx,1) = whi(1);
-                    weights(idx,2) = whi(2);
+                    whi[0] = (double)(l[0] - index[0]); 
+                    whi[1] = (double)(l[1] - index[1]); 
+                    whi[2] = (double)(l[2] - index[2]); 
+                    
+                    wlo[0] = 1.0 - whi[0]; 
+                    wlo[1] = 1.0 - whi[1];
+                    wlo[2] = 1.0 - whi[2];
+
+                    l_values(idx,0) = l(0);
+                    l_values(idx,1) = l(1);
+                    l_values(idx,2) = l(2);
+                    
+
+                    index_values(idx,0) = index(0);
+                    index_values(idx,1) = index(1);
+                    index_values(idx,2) = index(2);
+                    
+                    weights_high(idx,0) = whi(0);
+                    weights_high(idx,1) = whi(1);
+                    weights_high(idx,2) = whi(2);
+                    
+                    weights_low(idx,0) = wlo(0);
+                    weights_low(idx,1) = wlo(1);
+                    weights_low(idx,2) = wlo(2);
                    
                     Vector<size_t, Field::dim> args = index - lDom.first() + nghost;
 
@@ -250,10 +274,22 @@ namespace ippl {
 
         Kokkos::fence();
         
-        auto weights_mirror = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), weights);
-        for(unsigned i=0; i < *(this->localNum_mp); ++i){
-            std::cout << weights_mirror(i,0) << " " << weights_mirror(i,1) << " " << weights_mirror(i,2) << std::endl;
+        if(myrank == 0){
+           
+            auto weights_high_mirror = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), weights_high);
+            auto weights_low_mirror = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), weights_low);
+            auto l_values_mirror = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), l_values);
+            auto index_values_mirror = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), index_values);
+        
+            for(unsigned i=0; i < *(this->localNum_mp); ++i){
+               std::cout << "l: " << l_values_mirror(i,0) << " " << l_values_mirror(i,1) << " " << l_values_mirror(i,2) << std::endl;
+               std::cout << "index: " << index_values_mirror(i,0) << " " << index_values_mirror(i,1) << " " << index_values_mirror(i,2) << std::endl;
+               std::cout << "Whi: " << weights_high_mirror(i,0) << " " << weights_high_mirror(i,1) << " " << weights_high_mirror(i,2) << std::endl;
+               std::cout << "Wlo: " << weights_low_mirror(i,0) << " " << weights_low_mirror(i,1) << " " << weights_low_mirror(i,2) << std::endl;
+            }
         }
+        
+        Kokkos::fence();
 
         static IpplTimings::TimerRef accumulateHaloTimer = IpplTimings::getTimer("accumulateHalo");
         IpplTimings::startTimer(accumulateHaloTimer);
