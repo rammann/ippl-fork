@@ -292,6 +292,7 @@ namespace ippl {
                 // Scatter
                 scatterToField(std::make_index_sequence<1 << Dim>{}, view, wlo, whi, args);
             });
+        Kokkos::fence();
 
         bf_m.accumulateHalo();
     }

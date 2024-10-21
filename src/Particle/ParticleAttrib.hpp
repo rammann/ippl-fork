@@ -72,7 +72,7 @@ namespace ippl {
         using policy_type = Kokkos::RangePolicy<execution_space>;
         Kokkos::parallel_for(
             "ParticleAttrib::unpack()", policy_type(0, nrecvs),
-            KOKKOS_CLASS_LAMBDA(const size_t i) { dview_m(count + i) = buf_m(i); });
+            KOKKOS_CLASS_LAMBDA(const size_t i) { dview_m(count + i) = buf_m(i); /*printf("dview_m(%lu)=%f \n", count+i, dview_m(count+i));*/});
         Kokkos::fence();
     }
 
@@ -187,26 +187,9 @@ namespace ippl {
         Kokkos::View<double**, execution_space> weights_low("Interpolation Weights Low", *(this->localNum_mp), 3);
         Kokkos::View<int**, execution_space> index_values("index values", *(this->localNum_mp), 3);
         Kokkos::View<double**, execution_space> l_values("l values", *(this->localNum_mp), 3);
+        Kokkos::View<double*, execution_space> charges("charges", *(this->localNum_mp));
         if (myrank == 0){
-            // Host-Space Serial Loop for Rank 0
-            /* 
-            auto pp_mirror = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), pp);
-            auto view_mirror = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), dview_m);
-           
-            for(size_t idx=0; idx < *(this->localNum_mp); ++idx){
-                vector_type l                        = (pp_mirror(idx) - origin) * invdx + 0.5;
-                Vector<int, Field::dim> index        = l;
-                Vector<PositionType, Field::dim> whi = l - index;
-                Vector<PositionType, Field::dim> wlo = 1.0 - whi;
-           
-                  Vector<size_t, Field::dim> args = index - lDom.first() + nghost;
-
-                // scatter
-                const value_type& val = view_mirror(idx);
-                detail::scatterToField(std::make_index_sequence<1 << Field::dim>{}, view, wlo, whi, args, val);
-            }
-            */ 
-            using policy_type = Kokkos::RangePolicy<execution_space>;
+           using policy_type = Kokkos::RangePolicy<execution_space>;
             Kokkos::parallel_for(
                 "ParticleAttrib::scatter", policy_type(0, *(this->localNum_mp)),
                 KOKKOS_CLASS_LAMBDA(const size_t idx) {
@@ -245,6 +228,7 @@ namespace ippl {
 
                     // scatter
                     const value_type& val = dview_m(idx);
+                    charges(idx) = val;
                     detail::scatterToField(std::make_index_sequence<1 << Field::dim>{}, view, wlo, whi,
                                            args, val);
                 });
@@ -280,12 +264,14 @@ namespace ippl {
             auto weights_low_mirror = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), weights_low);
             auto l_values_mirror = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), l_values);
             auto index_values_mirror = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), index_values);
+            auto charges_mirror = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), charges);
         
             for(unsigned i=0; i < *(this->localNum_mp); ++i){
                std::cout << "l: " << l_values_mirror(i,0) << " " << l_values_mirror(i,1) << " " << l_values_mirror(i,2) << std::endl;
                std::cout << "index: " << index_values_mirror(i,0) << " " << index_values_mirror(i,1) << " " << index_values_mirror(i,2) << std::endl;
                std::cout << "Whi: " << weights_high_mirror(i,0) << " " << weights_high_mirror(i,1) << " " << weights_high_mirror(i,2) << std::endl;
                std::cout << "Wlo: " << weights_low_mirror(i,0) << " " << weights_low_mirror(i,1) << " " << weights_low_mirror(i,2) << std::endl;
+               std::cout << "Charge = " << charges_mirror(i) << std::endl;
             }
         }
         
@@ -355,7 +341,8 @@ namespace ippl {
 
     template <typename Attrib1, typename Field, typename Attrib2>
     inline void scatter(const Attrib1& attrib, Field& f, const Attrib2& pp) {
-        attrib.scatter_new(f, pp);
+        //attrib.scatter_new(f, pp);
+        attrib.scatter(f,pp);
     }
 
     template <typename Attrib1, typename Field, typename Attrib2>
@@ -380,7 +367,7 @@ namespace ippl {
         T globaltemp = 0.0;
         int myrank;
         MPI_Comm_rank(*Comm, &myrank);
-        std::cout << "Rank " << myrank << " has " << *(this->localNum_mp) << " particles and charge = " << temp << std::endl;
+        //std::cout << "Rank " << myrank << " has " << *(this->localNum_mp) << " particles and charge = " << temp << std::endl;
         Comm->allreduce(temp, globaltemp, 1, std::plus<T>()); 
         return globaltemp;
     }

@@ -49,7 +49,7 @@ int main(int argc, char* argv[]) {
         Inform msg2all(TestName, INFORM_ALL_NODES);
 
         static IpplTimings::TimerRef mainTimer = IpplTimings::getTimer("total");
-//        IpplTimings::startTimer(mainTimer);
+        IpplTimings::startTimer(mainTimer);
 
         // Read input parameters, assign them to the corresponding memebers of manager
         int arg = 1;

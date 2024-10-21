@@ -210,7 +210,7 @@ namespace ippl {
         T globaltemp = 0.0;
         int myrank;
         MPI_Comm_rank(layout_m->comm, &myrank);
-        std::cout << "Rank " << myrank << " Local Field Charge = " << temp << std::endl;
+        //std::cout << "Rank " << myrank << " Local Field Charge = " << temp << std::endl;
         layout_m->comm.allreduce(temp, globaltemp, 1, std::plus<T>());
         return globaltemp;
     }

@@ -112,6 +112,9 @@ namespace ippl {
         size_type locateParticles(const ParticleContainer& pc, locate_type& ranks,
                                   bool_type& invalid) const;
 
+        template <typename ParticleContainer>
+        size_type locateParticles_old(const ParticleContainer& pc, locate_type& ranks,
+                                  bool_type& invalid) const;
         /*!
          * @param rank we sent to
          * @param ranks a container specifying where a particle at the i-th index should go.

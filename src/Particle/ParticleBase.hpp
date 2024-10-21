@@ -299,6 +299,7 @@ namespace ippl {
             auto buf = Comm->getBuffer<MemorySpace>(mpi::tag::PARTICLE_RECV + recvNum, bufSize);
 
             Comm->recv(rank, tag++, *this, *buf, bufSize, nRecvs);
+            //printf("Rank %d with bufSize %d and %d Recvs and recvNum %lu", rank, bufSize, nRecvs, recvNum); 
             buf->resetReadPos();
         });
         unpack(nRecvs);

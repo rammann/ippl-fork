@@ -75,6 +75,9 @@ namespace ippl {
                         mpi::tag::HALO_SEND + i * cubeCount + index, nsends);
 
                     comm.isend(targetRank, tag, haloData_m, *buf, requests[requestIndex++], nsends);
+                    //int myrank; 
+                    //MPI_Comm_rank(comm, &myrank);
+                    //std::cout << "Rank " << myrank << " sending to Rank " << targetRank << " and nsends = " << nsends << std::endl; 
                     buf->resetWritePos();
                 }
             }
@@ -102,6 +105,10 @@ namespace ippl {
                     buf->resetReadPos();
 
                     unpack<Op>(range, view, haloData_m);
+                
+                    //int myrank; 
+                    //MPI_Comm_rank(comm, &myrank);
+                    //std::cout << "Rank " << myrank << " receiving from Rank " << sourceRank << " and nrecvs = " << nrecvs << std::endl; 
                 }
             }
 
