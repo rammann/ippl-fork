@@ -299,8 +299,20 @@ public:
             IpplTimings::startTimer(domainDecomposition);
             auto* mesh = &fc->getRho().get_mesh();
             auto* FL = &fc->getFL();
+
+            TotalParticles = 0;
+            localParticles = this->pcontainer_m->getLocalNum();
+            ippl::Comm->reduce(localParticles, TotalParticles, 1, std::plus<size_type>());
+            m << "Total Particles Before reparition() = " << TotalParticles << endl;
+
             this->loadbalancer_m->repartition(FL, mesh, isFirstRepartition);
-            IpplTimings::stopTimer(domainDecomposition);
+           
+            TotalParticles = 0;
+            localParticles = this->pcontainer_m->getLocalNum();
+            ippl::Comm->reduce(localParticles, TotalParticles, 1, std::plus<size_type>());
+            m << "Total Particles After reparition() = " << TotalParticles << endl;
+
+           IpplTimings::stopTimer(domainDecomposition);
         }
         
 

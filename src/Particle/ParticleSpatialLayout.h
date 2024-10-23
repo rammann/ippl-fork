@@ -67,7 +67,7 @@ namespace ippl {
         void updateLayout(FieldLayout<Dim>&, Mesh&);
 
         template <class ParticleContainer>
-        void update(ParticleContainer& pc);
+        void update(ParticleContainer& pc, bool useOldLocateParticles);
 
         const RegionLayout_t& getRegionLayout() const { return rlayout_m; }
 

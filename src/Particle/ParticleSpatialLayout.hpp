@@ -78,7 +78,7 @@ namespace ippl {
 
     template <typename T, unsigned Dim, class Mesh, typename... Properties>
     template <class ParticleContainer>
-    void ParticleSpatialLayout<T, Dim, Mesh, Properties...>::update(ParticleContainer& pc) {
+    void ParticleSpatialLayout<T, Dim, Mesh, Properties...>::update(ParticleContainer& pc, bool useOldLocateParticles=false) {
         static IpplTimings::TimerRef ParticleBCTimer = IpplTimings::getTimer("particleBC");
         IpplTimings::startTimer(ParticleBCTimer);
         this->applyBC(pc.R, rlayout_m.getDomain());
@@ -118,8 +118,17 @@ namespace ippl {
          * 1 --> particle invalid
          */
         bool_type invalid("invalid", localnum);
+        
+        size_type invalidCount = 0;
 
-        size_type invalidCount = locateParticles(pc, ranks, invalid);
+        if(useOldLocateParticles){
+            
+            invalidCount = locateParticles_old(pc, ranks, invalid);
+        }
+        else{
+
+            invalidCount = locateParticles(pc, ranks, invalid);
+        }
         IpplTimings::stopTimer(locateTimer);
 
         // 2nd step
@@ -308,7 +317,7 @@ namespace ippl {
          * Step 3: save information on whether the particle was located
          * Step 4: run additional loop on non-located particles
          */
-        /*    
+            
         Kokkos::parallel_scan(
             "ParticleSpatialLayout::locateParticles()",
             Kokkos::RangePolicy<size_t>(0, ranks.extent(0)),
@@ -319,7 +328,7 @@ namespace ippl {
                 // found: True either if inCurr = True or inNeighbor = True.
                 // increment: Helper variable to update red_val.
                 // 
-                ybool inCurr = false;
+                bool inCurr = false;
                 bool inNeighbor = false;
                 bool found = false;
                 bool increment[2];
@@ -357,48 +366,61 @@ namespace ippl {
             red_val);
         
         Kokkos::fence();
-        */
-        // ======= SERIAL FOR LOOP INSTEAD OF KOKKOS PARALLEL SCAN ============= //
-        for(size_t i = 0; i<ranks.extent(0);++i){
-            bool inCurr = false;
-            bool inNeighbor = false;
-            bool found = false;
-            bool increment[2];
-
-            inCurr = positionInRegion(is, positions(i), Regions(myRank)); 
-
-            ranks(i)     = inCurr * myRank;
-            invalid(i)   = !inCurr;
-            found =  inCurr || found;
-
-            /// Step 2
-            for (size_t j = 0; j < neighbors_view.extent(0); ++j) {
-                size_type rank = neighbors_view(j);
-
-                inNeighbor = positionInRegion(is, positions(i), Regions(rank));
-
-                ranks(i) = !(inNeighbor) * ranks(i) + inNeighbor * rank;
-                found =  inNeighbor || found;
-            }
-
-            /// Step 3
-            // isOut: When the last thread has finished the search, checks whether the particle has been found 
-            // either in the current rank or in a neighboring one.
-            // Used to avoid race conditions when updating outsideIds.
-            //
-            if(!found) {
-                outsideIds(red_val.count[1]) = i;
-            }
-            //outsideIds(val.count[1]) = i * isOut;
-            increment[0] = invalid(i);
-            increment[1] = !found;
-            red_val += increment;
-
-        } 
-        
-        
         
         // ======= SERIAL FOR LOOP INSTEAD OF KOKKOS PARALLEL SCAN ============= //
+        /*
+            Kokkos::View<int*> red_value_view_device("deviceview",2);
+            
+            Kokkos::parallel_for("Dummy Loop",
+                    Kokkos::RangePolicy<>(0,1),
+                    KOKKOS_LAMBDA(const size_t z){
+                    
+                        red_value_view_device(0) = 0;
+                        red_value_view_device(1) = 0;
+
+                        for(size_t i = 0; i<ranks.extent(0);++i){
+                         
+                            bool inCurr = false;
+                            bool inNeighbor = false;
+                            bool found = false;
+                            bool increment[2];
+
+                            inCurr = positionInRegion(is, positions(i), Regions(myRank)); 
+
+                            ranks(i)     = inCurr * myRank;
+                            invalid(i)   = !inCurr;
+                            found =  inCurr || found;
+
+                            /// Step 2
+                            for (size_t j = 0; j < neighbors_view.extent(0); ++j) {
+                                size_type rank = neighbors_view(j);
+
+                                inNeighbor = positionInRegion(is, positions(i), Regions(rank));
+
+                                ranks(i) = !(inNeighbor) * ranks(i) + inNeighbor * rank;
+                                found =  inNeighbor || found;
+                            }
+
+                            /// Step 3
+                            // isOut: When the last thread has finished the search, checks whether the particle has been found 
+                            // either in the current rank or in a neighboring one.
+                            // Used to avoid race conditions when updating outsideIds.
+                            //
+                            if(!found) {
+                                outsideIds(red_value_view_device[1]) = i;
+                            }
+                            
+                            red_value_view_device(0) += invalid(i);
+                            red_value_view_device(1) += !found;
+                        }
+            });
+        auto red_value_view_host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), red_value_view_device);
+
+        invalidCount = red_value_view_host(0);
+        outsideCount = red_value_view_host(1);   
+        */ 
+        // ======= SERIAL FOR LOOP INSTEAD OF KOKKOS PARALLEL SCAN ============= //
+          
         invalidCount  = red_val.count[0];
         outsideCount  = red_val.count[1];
 
@@ -406,7 +428,7 @@ namespace ippl {
         static IpplTimings::TimerRef nonNeighboringParticles = IpplTimings::getTimer("nonNeighboringParticles");
         IpplTimings::startTimer(nonNeighboringParticles);
         if (outsideCount > 0) {
-            std::cout<<"looking outisde"<<std::endl;
+            std::cout<<"Looking Outside Neighbors"<<std::endl; 
 
             Kokkos::parallel_for(
                 "ParticleSpatialLayout::leftParticles()",
@@ -417,10 +439,53 @@ namespace ippl {
                     
                     /// inRegion: Checks whether particle pID is inside region j.
                     bool inRegion = positionInRegion(is, positions(pId), Regions(j));
-                    ranks(pId) = inRegion * j + !(inRegion) * ranks(pId);
+                    if(inRegion){
+                        ranks(pId) = j;
+                    }
+                    //ranks(pId) = inRegion * j + !(inRegion) * ranks(pId);
                 });
             Kokkos::fence();
+            
+            // ============ SERIAL LOOP FOR OUTSIDE ============ //
+            /* 
+            std::cout<<"looking outisde"<<std::endl;
+            Kokkos::parallel_for("Dummy Loop", 
+                   Kokkos::RangePolicy<>(0,1),
+                   KOKKOS_LAMBDA(const size_t){
+                
+                for(size_t i=0;i<outsideCount;++i){
+                    for(size_t j=0;j<Regions.extent(0);++j){
+                    
+                        size_type pId = outsideIds(i);
+                        
+                        /// inRegion: Checks whether particle pID is inside region j.
+                        bool inRegion = positionInRegion(is, positions(pId), Regions(j));
+                        ranks(pId) = inRegion * j + !(inRegion) * ranks(pId);
 
+                    }
+                }
+
+            });
+            Kokkos::fence();
+            */ 
+            
+            // ============ SERIAL LOOP FOR OUTSIDE ============ //
+            // ============ PARALLEL_SCAN LOOP FOR OUTSIDE ============ //
+            /*
+            Kokkos::parallel_scan(
+                "ParticleSpatialLayout::leftParticles()",
+                mdrange_type({0, 0}, {outsideCount, Regions.extent(0)}),
+                KOKKOS_LAMBDA(const size_t i, const size_type j) {
+                    /// pID: (local) ID of the particle that is currently being searched.
+                    size_type pId = outsideIds(i);
+                    
+                    /// inRegion: Checks whether particle pID is inside region j.
+                    bool inRegion = positionInRegion(is, positions(pId), Regions(j));
+                    ranks(pId) = inRegion * j + !(inRegion) * ranks(pId);
+                });
+            Kokkos::fence();            
+            */
+            // ============ PARALLEL_SCAN LOOP FOR OUTSIDE ============ //
         }
         IpplTimings::stopTimer(nonNeighboringParticles);
         

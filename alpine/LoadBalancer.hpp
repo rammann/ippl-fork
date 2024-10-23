@@ -44,6 +44,8 @@ class LoadBalancer{
         void updateLayout(ippl::FieldLayout<Dim>* fl, ippl::UniformCartesian<T, Dim>* mesh, bool& isFirstRepartition) {
             // Update local fields
 
+            Inform m("updateLayout");
+
             static IpplTimings::TimerRef tupdateLayout = IpplTimings::getTimer("updateLayout");
             IpplTimings::startTimer(tupdateLayout);
             (*E_m).updateLayout(*fl);
@@ -61,7 +63,19 @@ class LoadBalancer{
             static IpplTimings::TimerRef tupdatePLayout = IpplTimings::getTimer("updatePB");
             IpplTimings::startTimer(tupdatePLayout);
             if (!isFirstRepartition) {
-                pc_m->update();
+                
+                int TotalParticles = 0;
+                int localParticles = pc_m->getLocalNum();
+                ippl::Comm->reduce(localParticles, TotalParticles, 1, std::plus<size_type>());
+                m << "Total Particles before pc_m->update() = " << TotalParticles << endl;
+                
+                //pc_m->update(true);
+                pc_m->update(false);
+                
+                TotalParticles = 0;
+                localParticles = pc_m->getLocalNum();
+                ippl::Comm->reduce(localParticles, TotalParticles, 1, std::plus<size_type>());
+                m << "Total Particles after pc_m->update() = " << TotalParticles << endl;
             }
             IpplTimings::stopTimer(tupdatePLayout);
         }
@@ -72,15 +86,33 @@ class LoadBalancer{
 
         void repartition(ippl::FieldLayout<Dim>* fl, ippl::UniformCartesian<T, Dim>* mesh, bool& isFirstRepartition) {
             // Repartition the domains
+            
+            Inform m("repartition");
 
             using Base = ippl::ParticleBase<ippl::ParticleSpatialLayout<T, Dim>>;
             typename Base::particle_position_type *R;
             R = &pc_m->R;
+            // ================= PRINTOUT ====================// 
+           
+            int TotalParticles = 0;
+            int localParticles = pc_m->getLocalNum();
+            ippl::Comm->reduce(localParticles, TotalParticles, 1, std::plus<size_type>());
+            m << "Total Particles Inside repartion before binaryRepartition() = " << TotalParticles << endl;
+            
+            // // ================= PRINTOUT ====================//
             bool res = orb.binaryRepartition(*R, *fl, isFirstRepartition);
             if (res != true) {
                 std::cout << "Could not repartition!" << std::endl;
                 return;
             }
+            // ================= PRINTOUT ====================// 
+           
+            TotalParticles = 0;
+            localParticles = pc_m->getLocalNum();
+            ippl::Comm->reduce(localParticles, TotalParticles, 1, std::plus<size_type>());
+            m << "Total Particles Inside repartion After binaryRepartition() = " << TotalParticles << endl;
+            
+            // // ================= PRINTOUT ====================//
             // Update
             this->updateLayout(fl, mesh, isFirstRepartition);
             if constexpr (Dim == 2 || Dim == 3) {
