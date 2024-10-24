@@ -67,7 +67,7 @@ namespace ippl {
         void updateLayout(FieldLayout<Dim>&, Mesh&);
 
         template <class ParticleContainer>
-        void update(ParticleContainer& pc, bool useOldLocateParticles);
+        void update(ParticleContainer& pc);
 
         const RegionLayout_t& getRegionLayout() const { return rlayout_m; }
 
@@ -110,7 +110,7 @@ namespace ippl {
          */
         template <typename ParticleContainer>
         size_type locateParticles(const ParticleContainer& pc, locate_type& ranks,
-                                  bool_type& invalid) const;
+                                  bool_type& invalid, Kokkos::View<size_type*>nSends_view) const;
 
         template <typename ParticleContainer>
         size_type locateParticles_old(const ParticleContainer& pc, locate_type& ranks,

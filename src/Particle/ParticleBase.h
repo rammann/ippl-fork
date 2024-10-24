@@ -265,7 +265,7 @@ namespace ippl {
         void destroy(const Kokkos::View<bool*, Properties...>& invalid, const size_type destroyNum);
 
         // This is a collective call.
-        void update(bool useOldLocateParticles=false) { layout_m->update(*this,useOldLocateParticles); }
+        void update() { layout_m->update(*this); }
 
         /*
          * The following functions should not be called in an application.

@@ -107,10 +107,10 @@ public:
 
         this->dump();
 
-        size_type TotalParticles = 0;
-        size_type localParticles = this->pcontainer_m->getLocalNum();
-        ippl::Comm->reduce(localParticles, TotalParticles, 1, std::plus<size_type>());
-        m << "Total Particles End pre_run() = " << TotalParticles << endl;
+        //size_type TotalParticles = 0;
+        //size_type localParticles = this->pcontainer_m->getLocalNum();
+        //ippl::Comm->reduce(localParticles, TotalParticles, 1, std::plus<size_type>());
+        //m << "Total Particles End pre_run() = " << TotalParticles << endl;
 
         m << "Done";
     }
@@ -231,10 +231,10 @@ public:
         static IpplTimings::TimerRef domainDecomposition = IpplTimings::getTimer("loadBalance");
         static IpplTimings::TimerRef SolveTimer       = IpplTimings::getTimer("solve");
 
-        size_type TotalParticles = 0;
-        size_type localParticles = this->pcontainer_m->getLocalNum();
-        ippl::Comm->reduce(localParticles, TotalParticles, 1, std::plus<size_type>());
-        m << "Total Particles Start LeapFrogStep() = " << TotalParticles << endl;
+        //size_type TotalParticles = 0;
+        //size_type localParticles = this->pcontainer_m->getLocalNum();
+        //ippl::Comm->reduce(localParticles, TotalParticles, 1, std::plus<size_type>());
+        //m << "Total Particles Start LeapFrogStep() = " << TotalParticles << endl;
         
         double alpha = this->alpha_m;
         double Bext = this->Bext_m;
@@ -277,19 +277,19 @@ public:
         IpplTimings::stopTimer(RTimer);
 
         // Since the particles have moved spatially update them to correct processors
-        TotalParticles = 0;
-        localParticles = this->pcontainer_m->getLocalNum();
-        ippl::Comm->reduce(localParticles, TotalParticles, 1, std::plus<size_type>());
-        m << "Total Particles Before update() = " << TotalParticles << endl;
+        //TotalParticles = 0;
+        //localParticles = this->pcontainer_m->getLocalNum();
+        //ippl::Comm->reduce(localParticles, TotalParticles, 1, std::plus<size_type>());
+        //m << "Total Particles Before update() = " << TotalParticles << endl;
         
         IpplTimings::startTimer(updateTimer);
         pc->update();
         IpplTimings::stopTimer(updateTimer);
 
-        TotalParticles = 0;
-        localParticles = this->pcontainer_m->getLocalNum();
-        ippl::Comm->reduce(localParticles, TotalParticles, 1, std::plus<size_type>());
-        m << "Total Particles After update() = " << TotalParticles << endl;
+        //TotalParticles = 0;
+        //localParticles = this->pcontainer_m->getLocalNum();
+        //ippl::Comm->reduce(localParticles, TotalParticles, 1, std::plus<size_type>());
+        //m << "Total Particles After update() = " << TotalParticles << endl;
        
          
         size_type totalP = this->totalP_m;
@@ -300,33 +300,33 @@ public:
             auto* mesh = &fc->getRho().get_mesh();
             auto* FL = &fc->getFL();
 
-            TotalParticles = 0;
-            localParticles = this->pcontainer_m->getLocalNum();
-            ippl::Comm->reduce(localParticles, TotalParticles, 1, std::plus<size_type>());
-            m << "Total Particles Before reparition() = " << TotalParticles << endl;
+            //TotalParticles = 0;
+            //localParticles = this->pcontainer_m->getLocalNum();
+            //ippl::Comm->reduce(localParticles, TotalParticles, 1, std::plus<size_type>());
+            //m << "Total Particles Before reparition() = " << TotalParticles << endl;
 
             this->loadbalancer_m->repartition(FL, mesh, isFirstRepartition);
            
-            TotalParticles = 0;
-            localParticles = this->pcontainer_m->getLocalNum();
-            ippl::Comm->reduce(localParticles, TotalParticles, 1, std::plus<size_type>());
-            m << "Total Particles After reparition() = " << TotalParticles << endl;
+            //TotalParticles = 0;
+            //localParticles = this->pcontainer_m->getLocalNum();
+            //ippl::Comm->reduce(localParticles, TotalParticles, 1, std::plus<size_type>());
+            //m << "Total Particles After reparition() = " << TotalParticles << endl;
 
            IpplTimings::stopTimer(domainDecomposition);
         }
         
 
         // scatter the charge onto the underlying grid
-        TotalParticles = 0;
-        localParticles = this->pcontainer_m->getLocalNum();
-        ippl::Comm->reduce(localParticles, TotalParticles, 1, std::plus<size_type>());
-        m << "Total Particles Before par2grid() = " << TotalParticles << endl;
+        //TotalParticles = 0;
+        //localParticles = this->pcontainer_m->getLocalNum();
+        //ippl::Comm->reduce(localParticles, TotalParticles, 1, std::plus<size_type>());
+        //m << "Total Particles Before par2grid() = " << TotalParticles << endl;
         this->par2grid();
         
-        TotalParticles = 0;
-        localParticles = this->pcontainer_m->getLocalNum();
-        ippl::Comm->reduce(localParticles, TotalParticles, 1, std::plus<size_type>());
-        m << "Total Particles Before runSolver() = " << TotalParticles << endl;
+        //TotalParticles = 0;
+        //localParticles = this->pcontainer_m->getLocalNum();
+        //ippl::Comm->reduce(localParticles, TotalParticles, 1, std::plus<size_type>());
+        //m << "Total Particles Before runSolver() = " << TotalParticles << endl;
 
         // Field solve
         IpplTimings::startTimer(SolveTimer);
@@ -334,17 +334,17 @@ public:
         IpplTimings::stopTimer(SolveTimer);
 
         // gather E field
-        TotalParticles = 0;
-        localParticles = this->pcontainer_m->getLocalNum();
-        ippl::Comm->reduce(localParticles, TotalParticles, 1, std::plus<size_type>());
-        m << "Total Particles Before grid2par() = " << TotalParticles << endl;
+        //TotalParticles = 0;
+        //localParticles = this->pcontainer_m->getLocalNum();
+        //ippl::Comm->reduce(localParticles, TotalParticles, 1, std::plus<size_type>());
+        //m << "Total Particles Before grid2par() = " << TotalParticles << endl;
        
         this->grid2par();
 
-        TotalParticles = 0;
-        localParticles = this->pcontainer_m->getLocalNum();
-        ippl::Comm->reduce(localParticles, TotalParticles, 1, std::plus<size_type>());
-        m << "Total Particles After grid2par() = " << TotalParticles << endl;
+        //TotalParticles = 0;
+        //localParticles = this->pcontainer_m->getLocalNum();
+        //ippl::Comm->reduce(localParticles, TotalParticles, 1, std::plus<size_type>());
+        //m << "Total Particles After grid2par() = " << TotalParticles << endl;
         
         IpplTimings::startTimer(PTimer);
         auto R2view = pc->R.getView();

@@ -69,8 +69,7 @@ class LoadBalancer{
                 ippl::Comm->reduce(localParticles, TotalParticles, 1, std::plus<size_type>());
                 m << "Total Particles before pc_m->update() = " << TotalParticles << endl;
                 
-                //pc_m->update(true);
-                pc_m->update(false);
+                pc_m->update();
                 
                 TotalParticles = 0;
                 localParticles = pc_m->getLocalNum();

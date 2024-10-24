@@ -78,7 +78,7 @@ namespace ippl {
 
     template <typename T, unsigned Dim, class Mesh, typename... Properties>
     template <class ParticleContainer>
-    void ParticleSpatialLayout<T, Dim, Mesh, Properties...>::update(ParticleContainer& pc, bool useOldLocateParticles=false) {
+    void ParticleSpatialLayout<T, Dim, Mesh, Properties...>::update(ParticleContainer& pc) {
         static IpplTimings::TimerRef ParticleBCTimer = IpplTimings::getTimer("particleBC");
         IpplTimings::startTimer(ParticleBCTimer);
         this->applyBC(pc.R, rlayout_m.getDomain());
@@ -121,15 +121,10 @@ namespace ippl {
         
         size_type invalidCount = 0;
 
-        if(useOldLocateParticles){
-            
-            invalidCount = locateParticles_old(pc, ranks, invalid);
-        }
-        else{
+        // nSends view 
+        Kokkos::View<size_type*> nSends_view("Sends per rank", nRanks);
 
-            invalidCount = locateParticles(pc, ranks, invalid);
-        }
-        IpplTimings::stopTimer(locateTimer);
+        invalidCount = locateParticles(pc, ranks, invalid, nSends_view);
 
         // 2nd step
 
@@ -261,7 +256,7 @@ namespace ippl {
     template <typename T, unsigned Dim, class Mesh, typename... Properties>
     template <typename ParticleContainer>
     detail::size_type ParticleSpatialLayout<T, Dim, Mesh, Properties...>::locateParticles(
-        const ParticleContainer& pc, locate_type& ranks, bool_type& invalid) const {
+        const ParticleContainer& pc, locate_type& ranks, bool_type& invalid, Kokkos::View<size_type*>nSends_view) const {
         
         auto positions           = pc.R.getView();
         region_view_type Regions = rlayout_m.getdLocalRegions();
@@ -488,7 +483,15 @@ namespace ippl {
             // ============ PARALLEL_SCAN LOOP FOR OUTSIDE ============ //
         }
         IpplTimings::stopTimer(nonNeighboringParticles);
-        
+
+        // Figure out number of sends per rank
+        // Make histogram of sends
+        Kokkos::parallel_for("Calculate Number of Sends per Rank",
+            Kokkos::RangePolicy<size_t>(0, ranks.extent(0)),
+            KOKKOS_LAMBDA(const size_t i){
+                size_type rank = ranks(i); 
+                Kokkos::atomic_fetch_add(&nSends_view(rank),1);
+            });
         return invalidCount;
     }
 
