@@ -27,6 +27,7 @@ TEST(MortonCodesTest, isDescendantTest) {
 
   Morton<3>& morton = Morton<3>::getInstance(8);
 
+  int64_t root = 0;
   int64_t parent = 0b111;
   int64_t child1 = 0b01;
   int64_t child2 = 0b0011000;
@@ -35,6 +36,11 @@ TEST(MortonCodesTest, isDescendantTest) {
   EXPECT_FALSE(morton.is_descendant(child1, parent));
   EXPECT_TRUE(morton.is_descendant(child2,parent));
   EXPECT_FALSE(morton.is_descendant(child3, parent));
+
+  EXPECT_TRUE(morton.is_descendant(child1, root));
+  EXPECT_TRUE(morton.is_descendant(child2, root));
+  EXPECT_TRUE(morton.is_descendant(child3, root));
+  EXPECT_TRUE(morton.is_descendant(parent, root));
 
 
 }
@@ -57,4 +63,13 @@ TEST(MortonCodesTest, GetDeepestLastChildTest) {
   EXPECT_EQ(child, expected);
 }
 
+TEST(MortonCodesTest, GetNearestCommonAncestorTest) {
+  Morton<3>& morton = Morton<3>::getInstance(8);
+
+  int64_t code_a = morton.encode({124, 124, 124}, 6);
+  int64_t code_b = morton.encode({0, 0, 0}, 8);
+  int64_t ancestor = morton.get_nearest_common_ancestor(code_a, code_b);
+  int64_t expected = morton.encode({0, 0, 0}, 1);
+  EXPECT_EQ(ancestor, expected);
+}
 
