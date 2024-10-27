@@ -4,6 +4,8 @@
 #include <array>
 #include <vector>
 #include <cstdint>
+#include <cassert>
+#include <cstdlib>
 
 using morton_code = uint16_t;
 using grid_t = int;
@@ -44,7 +46,10 @@ public:
      *
      * @param max_depth
      * @return Morton&
-     
+     *
+    */
+    // TODO discuss structure of singleton. 
+    // Maybe just write this file procedurally as helper functions? 
     static Morton& getInstance(size_t max_depth);
 
     // deleted to enforce singleton
@@ -52,7 +57,7 @@ public:
     Morton& operator=(const Morton&) = delete;
     Morton(Morton&&) = delete;
     Morton& operator=(Morton&&) = delete;
-
+  
     /**
      * @brief Encodes the given coordinate based on the rasterizer. As of now, the rasterizer is used to transform the (real valued) coordinates to a grid
      * based coordinate system, i dont know if this is a good idea, but it works for spaces in the range [0,1]^Dim
