@@ -5,7 +5,7 @@
 #include <vector>
 #include <cstdint>
 #include <cassert>
-#include <cstdlib>
+#include <cmath>
 
 using morton_code = uint16_t;
 using grid_t = int;
@@ -473,7 +473,7 @@ inline morton_code Morton<Dim>::get_step_size(morton_code code) const
     // the min step size is equal to floor(log2(max_depth)) + 1 == sizeof(depth encoding)
     // each level above min depth increases step size by Dim bits
     // so simplified: 1 << (depth_mask_shift + Dim * (max_depth - get_depth(code)))
-    return 1 << (Dim * (max_depth - get_depth(code) + 1));
+    return 1 << (depth_mask_shift + Dim * (max_depth - get_depth(code)));
 }
 
 template <size_t Dim>
