@@ -7,7 +7,7 @@
 #include <cassert>
 #include <cmath>
 
-using morton_code = uint16_t;
+using morton_code = uint64_t;
 using grid_t = int;
 
 // adjust for ippl/kokkos
@@ -47,9 +47,8 @@ public:
      * @param max_depth
      * @return Morton&
      *
-    */
-    // TODO discuss structure of singleton. 
-    // Maybe just write this file procedurally as helper functions? 
+     */
+    // TODO discuss structure of singleton.
     static Morton& getInstance(size_t max_depth);
 
     // deleted to enforce singleton
@@ -456,9 +455,8 @@ morton_code Morton<Dim>::get_nearest_common_ancestor(morton_code code_a, morton_
         std::swap(depth_a, depth_b);
     }
 
-
     morton_code ancestor_b = code_b;
-    // climp up until common ancestor is found
+    // climb up until common ancestor is found
     while ( !is_descendant(code_a, ancestor_b) ) {
         ancestor_b = get_parent(ancestor_b);
     }
@@ -473,7 +471,7 @@ inline morton_code Morton<Dim>::get_step_size(morton_code code) const
     // the min step size is equal to floor(log2(max_depth)) + 1 == sizeof(depth encoding)
     // each level above min depth increases step size by Dim bits
     // so simplified: 1 << (depth_mask_shift + Dim * (max_depth - get_depth(code)))
-    return 1 << (depth_mask_shift + Dim * (max_depth - get_depth(code)));
+    return (int64_t)1 << (depth_mask_shift + Dim * (max_depth - get_depth(code)));
 }
 
 template <size_t Dim>
@@ -491,3 +489,4 @@ inline morton_code Morton<Dim>::spread_coords(grid_t coord) const
 }
 
 #endif // MORTON_ENCODER_H
+
