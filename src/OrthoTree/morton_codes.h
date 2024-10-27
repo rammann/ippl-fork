@@ -191,13 +191,25 @@ public:
     // what is meant by A(n) in the paper? get a list of all ancestors, or boolean value...?
     // TODO 
     morton_code get_ancestor(morton_code code) const;
-    // TODO 
+    /**
+     * @brief Checks whether the given parent is an ancestor of the given child
+     *
+     * @param child the child code
+     * @param parent the parent code
+     * @return true if parent is ancestor of child
+     */
     bool is_ancestor(morton_code child, morton_code parent) const;
 
     // what do they want here?
     // TODO 
     void get_descendant(morton_code code) const;
-    //probably bool 
+    /**
+     * @brief Checks whether the given child is a descendant of the given parents
+     *
+     * @param child the child code
+     * @param parent the parent code
+     * @return true if child is descendant of parent
+     */
     bool is_descendant(morton_code child, morton_code parent) const;
 
     // TODO 
@@ -349,6 +361,27 @@ vector_t<morton_code> Morton<Dim>::get_siblings(morton_code code) const
 {
     return get_children(get_parent(code));
 }
+
+template <size_t Dim>
+bool Morton<Dim>::is_descendant(morton_code child, morton_code parent) const  {
+
+    // descendants are always larger than their parents
+    if (child < parent) return false;
+
+    const morton_code step = get_step_size(parent);
+    const morton_code next_neighbour = parent + step;
+
+    // if the child is a descendant the parent, is must be smaller than 
+    // the parent's next bigger neighbour at the level of the parent
+    return child < (next_neighbour);
+}
+
+template <size_t Dim>
+bool Morton<Dim>::is_ancestor(morton_code child, morton_code parent) const
+{
+    return is_descendant(child, parent);
+}
+
 
 template <size_t Dim>
 morton_code Morton<Dim>::get_first_child(morton_code code) const
