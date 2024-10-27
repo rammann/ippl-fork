@@ -1,0 +1,60 @@
+//
+// unit test of morton_codes.h
+
+#include "gtest/gtest.h"
+#include "OrthoTree/morton_codes.h"
+#include <cstdint>
+#include <bitset>
+
+
+TEST(MortonCodesTest, Encode3D) {
+  Morton<3>& morton = Morton<3>::getInstance(8);
+  std::array<int, 3> coords = {1, 2, 4};
+  int64_t code = morton.encode(coords, 3);
+  int64_t expected = 0b1000100010011;
+  EXPECT_EQ(code, expected);
+}
+
+TEST(MortonCodesTest, Decode3D) {
+  Morton<3>& morton = Morton<3>::getInstance(8);
+  int64_t code = 0b1000100010011;
+  std::array<int, 3> coords = morton.decode(code);
+  std::array<int, 3> expected = {1, 2, 4};
+  EXPECT_EQ(coords, expected);
+}
+
+TEST(MortonCodesTest, isDescendantTest) {
+
+  Morton<3>& morton = Morton<3>::getInstance(8);
+
+  int64_t parent = 0b111;
+  int64_t child1 = 0b01;
+  int64_t child2 = 0b0011000;
+  int64_t child3 = 0b1111111000;
+
+  EXPECT_FALSE(morton.is_descendant(child1, parent));
+  EXPECT_TRUE(morton.is_descendant(child2,parent));
+  EXPECT_FALSE(morton.is_descendant(child3, parent));
+
+
+}
+TEST(MortonCodesTest, GetDeepestFirstChildTest) {
+  Morton<3>& morton = Morton<3>::getInstance(8);
+
+  int64_t root = 0;
+  int64_t child = morton.get_deepest_first_descendant(root);
+  int64_t expected = 8;
+  EXPECT_EQ(child, expected);
+}
+
+
+TEST(MortonCodesTest, GetDeepestLastChildTest) {
+  Morton<3>& morton = Morton<3>::getInstance(8);
+
+  int64_t root = 0;
+  int64_t child = morton.get_deepest_last_descendant(root);
+  int64_t expected = morton.encode({255, 255, 255}, 8);
+  EXPECT_EQ(child, expected);
+}
+
+
