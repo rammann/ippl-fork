@@ -4,8 +4,8 @@
 
 #include <random>
 #include "Utility/ParameterList.h"
-#include "OrthoTree/OrthoTreeParticle.h"
-#include "OrthoTree/OrthoTree.h"
+#include "OrthoTree_old/OrthoTreeParticle.h"
+#include "OrthoTree_old/OrthoTree.h"
 
 int main(int argc, char* argv[]) {
     

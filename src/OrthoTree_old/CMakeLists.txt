@@ -5,8 +5,6 @@ set (_SRCS
 set (_HDRS
     OrthoTree.h
     OrthoTreeParticle.h
-    MortonHelper.h
-    MortonHelper.hpp
     )
 
 include_directories (
@@ -16,4 +14,4 @@ include_directories (
 ADD_IPPL_SOURCES (${_SRCS})
 ADD_IPPL_HEADERS (${_HDRS})
 
-install (FILES ${_HDRS} DESTINATION include/OrthoTree)
+install (FILES ${_HDRS} DESTINATION include/OrthoTree_old)
