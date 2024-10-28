@@ -8,6 +8,8 @@
 
 #include <Kokkos_Vector.hpp>
 #include <Kokkos_Pair.hpp>
+
+#include <vector>
 namespace ippl {
 
     // this is defined outside of Types.h on purpose, as this is likely to change in the finalised implementation
@@ -30,7 +32,7 @@ namespace ippl {
 
     public:
 
-        explicit OrthoTree(size_t max_depth, size_t max_particles_per_node, const bounds_type& root_bounds)
+        OrthoTree(size_t max_depth, size_t max_particles_per_node, const bounds_type& root_bounds)
             : max_depth_m(max_depth), max_particles_per_node_m(max_particles_per_node),
             root_bounds_m(root_bounds), morton_helper(max_depth)
         { }
@@ -43,7 +45,7 @@ namespace ippl {
             // insert the root into the tree
             tree.push_back(morton_code(0));
 
-            Kokkos::vector<Kokkos::pair<morton_code, size_t>> aid_list(n_particles);
+            std::vector<std::pair<morton_code, size_t>> aid_list(n_particles);
             for ( size_t i = 0; i < n_particles; ++i ) {
                 grid_coordinate grid_coord;
 
@@ -60,11 +62,11 @@ namespace ippl {
 
             std::sort(aid_list.begin(), aid_list.end(), [ ] (const auto& a, const auto& b)
             {
-                return a.second < b.second;
+                return a.first < b.first;
             });
 
             for ( const auto& [morton, id] : aid_list ) {
-                std::cout << "(morton=" << morton << ", id=" << id << ")\n";
+                std::cout << "(morton=0b" << std::bitset<16>(morton) << ", id=" << id << ")\n";
             }
         }
 
