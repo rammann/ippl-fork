@@ -110,7 +110,7 @@ namespace ippl {
          * @return The total number of invalidated particles
          */
         template <typename ParticleContainer>
-        size_type locateParticles(const ParticleContainer& pc, locate_type& ranks,
+        std::pair<size_type,size_type> locateParticles(const ParticleContainer& pc, locate_type& ranks,
                                   bool_type& invalid, locate_type& nSends_dview, locate_type& sends_dview) const;
 
         /*!

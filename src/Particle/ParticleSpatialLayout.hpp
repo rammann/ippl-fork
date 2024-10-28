@@ -73,137 +73,144 @@ namespace ippl {
     template <typename T, unsigned Dim, class Mesh, typename... Properties>
     template <class ParticleContainer>
     void ParticleSpatialLayout<T, Dim, Mesh, Properties...>::update(ParticleContainer& pc) {
+        
+        /* Apply Boundary Conditions */
         static IpplTimings::TimerRef ParticleBCTimer = IpplTimings::getTimer("particleBC");
         IpplTimings::startTimer(ParticleBCTimer);
         this->applyBC(pc.R, rlayout_m.getDomain());
         IpplTimings::stopTimer(ParticleBCTimer);
 
+        /* Update Timer for the rest of the function */
         static IpplTimings::TimerRef ParticleUpdateTimer = IpplTimings::getTimer("updateParticle");
         IpplTimings::startTimer(ParticleUpdateTimer);
+        
         int nRanks = Comm->size();
-
         if (nRanks < 2) {
             return;
         }
 
         /* particle MPI exchange:
-         *   1. figure out which particles need to go where
+         *   1. figure out which particles need to go where -> locateParticles(...)
          *   2. fill send buffer and send particles
          *   3. delete invalidated particles
          *   4. receive particles
          */
 
+        // 1.  figure out which particles need to go where -> locateParticles(...) ============= //
+        
         static IpplTimings::TimerRef locateTimer = IpplTimings::getTimer("locateParticles");
         IpplTimings::startTimer(locateTimer);
+
+        /* Rank-local number of particles */
         size_type localnum = pc.getLocalNum();
 
-        // 1st step
+        /* The indices correspond to the indices of the local particles,
+         * the values correspond to the ranks to which the particles need to be sent
+         */        
+        locate_type particleRanks("particles' MPI ranks", localnum);
 
-        /* the values specify the rank where
-         * the particle with that index should go
+        /* The indices are the indices of the particles,
+         * the boolean values describe wheather the particle has left the current rank 
+         * 0 --> particle valid (inside current rank)
+         * 1 --> particle invalid (left rank)
          */
-        locate_type ranks("MPI ranks", localnum);
+        bool_type invalidParticles("validity of particles", localnum);
 
-        /* 0 --> particle valid
-         * 1 --> particle invalid
+        /* The indices are the MPI ranks,
+         * the values are the number of particles are sent to that rank from myrank 
          */
-        bool_type invalid("invalid", localnum);
+        locate_type rankSendCount_dview("rankSendCount Device", nRanks);
 
-        /* the values specify the number of sends
-         * for the rank with the index
+        /* The indices have no particluar meaning, 
+         * the values are the MPI ranks to which we need to send
          */
-        locate_type nSends_dview("nSends Device", nRanks);
+        locate_type destinationRanks_dview("destinationRanks Device", nRanks);
 
-        /* ranks to which we need to send */
-        locate_type sends_dview("sends Device", nRanks);
+        /* nInvalid is the number of invalid particles
+         * nDestinationRanks is the number of MPI ranks we need to send to
+         */ 
+        auto [nInvalid, nDestinationRanks] = 
+            locateParticles(pc, 
+                particleRanks, invalidParticles, 
+                rankSendCount_dview, destinationRanks_dview);
 
-        auto [invalidCount, rankSends] = locateParticles(pc, ranks, invalid, nSends_dview, sends_dview);
-
-        /* Host space copy of nSends_dview */
-        auto nSends_hview = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), nSends_dview);
+        /* Host space copy of rankSendCount_dview */
+        auto rankSendCount_hview = 
+            Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), rankSendCount_dview);
         
-        /* Host Space copy of sends_dview */
-        auto sends_hview = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), sends_dview);
+        /* Host Space copy of destinationRanks_dview */
+        auto destinationRanks_hview = 
+            Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), destinationRanks_dview);
 
         IpplTimings::stopTimer(locateTimer);
 
-        // 2nd step
+        // 2. fill send buffer and send particles =============================================== //
 
-        // figure out how many receives
+        // 2.1 Remote Memory Access window for one-sided communication
+        
         static IpplTimings::TimerRef preprocTimer = IpplTimings::getTimer("sendPreprocess");
         IpplTimings::startTimer(preprocTimer);
+        
         mpi::rma::Window<mpi::rma::Active> window;
+        
         std::vector<size_type> nRecvs(nRanks, 0);
         window.create(*Comm, nRecvs.begin(), nRecvs.end());
-
         std::vector<size_type> nSends(nRanks, 0);
 
         window.fence(0);
-
-        /* Old Way of Calculating Sends
-        for (int rank = 0; rank < nRanks; ++rank) {
-            if (rank == Comm->rank()) {
-                // we do not need to send to ourselves
-                continue;
-            }
-            nSends[rank] = numberOfSends(rank, ranks);
-            window.put<size_type>(nSends.data() + rank, rank, Comm->rank());
-        }
-        */
-        /* Second Oldest Way of Calculating Sends
-        for (int rank=0; rank<nRanks; ++rank){
+        
+        /* Prepare RMA window for the ranks we need to send to */ 
+        for(size_t ridx=0; ridx < nDestinationRanks; ridx++){
+            size_t rank = destinationRanks_hview[ridx];
             if (rank == Comm->rank()){
                 // we do not need to send to ourselves
                 continue;
             }
-            nSends[rank] = nSends_hview(rank);
-            window.put<size_type>(nSends.data() + rank, rank, Comm->rank());
-        }*/
-
-        for(int idx=0; idx < rankSends; idx++){
-            if (rank == Comm->rank()){
-                // we do not need to send to ourselves
-                continue;
-            }
-            int rank=sends_hview[idx];
-            nSends[rank] = nSends_hview(rank);
+            nSends[rank] = rankSendCount_hview(rank);
             window.put<size_type>(nSends.data() + rank, rank, Comm->rank());
         }
-
-
         window.fence(0);
+
         IpplTimings::stopTimer(preprocTimer);
+
+        // 2.2 Particle Sends 
 
         static IpplTimings::TimerRef sendTimer = IpplTimings::getTimer("particleSend");
         IpplTimings::startTimer(sendTimer);
-        // send
+        
         std::vector<MPI_Request> requests(0);
 
         int tag = Comm->next_tag(mpi::tag::P_SPATIAL_LAYOUT, mpi::tag::P_LAYOUT_CYCLE);
 
         int sends = 0;
-        for (int rank = 0; rank < nRanks; ++rank) {
-            if (nSends[rank] > 0) {
-                hash_type hash("hash", nSends[rank]);
-                fillHash(rank, ranks, hash);
-
-                pc.sendToRank(rank, tag, sends++, requests, hash);
-            }
+        for(size_t ridx=0; ridx < nDestinationRanks; ridx++){
+            size_t rank = destinationRanks_hview[ridx];
+            if(rank == Comm->rank()){
+               continue;
+            } 
+            hash_type hash("hash", nSends[rank]);
+            fillHash(rank, particleRanks, hash);
+            pc.sendToRank(rank, tag, sends++, requests, hash);
         }
+       
         IpplTimings::stopTimer(sendTimer);
 
-        // 3rd step
+
+        // 3. Internal destruction of invalid particlesi ======================================= //
+        
         static IpplTimings::TimerRef destroyTimer = IpplTimings::getTimer("particleDestroy");
         IpplTimings::startTimer(destroyTimer);
 
-        pc.internalDestroy(invalid, invalidCount);
+        pc.internalDestroy(invalidParticles, nInvalid);
         Kokkos::fence();
 
-
         IpplTimings::stopTimer(destroyTimer);
+        
+        // 4. Receive Particles ================================================================ // 
+        
         static IpplTimings::TimerRef recvTimer = IpplTimings::getTimer("particleRecv");
         IpplTimings::startTimer(recvTimer);
-        // 4th step
+
         int recvs = 0;
         for (int rank = 0; rank < nRanks; ++rank) {
             if (nRecvs[rank] > 0) {
@@ -211,6 +218,7 @@ namespace ippl {
             }
         }
         IpplTimings::stopTimer(recvTimer);
+
 
         IpplTimings::startTimer(sendTimer);
 
@@ -387,18 +395,21 @@ namespace ippl {
         ); 
     
         // Number of Ranks we need to send to 
-        size_type rankSends=0; 
+        Kokkos::View<size_type> rankSends("Number of Ranks we need to send to");
+        
         Kokkos::parallel_for("Calculate sends",
                Kokkos::RangePolicy<size_t>(0, nSends_dview.extent(0)),
                KOKKOS_LAMBDA(const size_t rank){
                    if(nSends_dview(rank) != 0){
-                       size_t index = Kokkos::atomic_fetch_add(&rankSends(), 1);
+                       size_type index = Kokkos::atomic_fetch_add(&rankSends(), 1);
                        sends_dview(index) = rank;
                    }
                }
         );
+        size_type temp;
+        Kokkos::deep_copy(temp, rankSends);
 
-        return {invalidCount, rankSends};
+        return {invalidCount, temp};
     }
 
     template <typename T, unsigned Dim, class Mesh, typename... Properties>
