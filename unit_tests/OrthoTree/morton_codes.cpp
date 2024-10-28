@@ -2,36 +2,54 @@
 // unit test of morton_codes.h
 
 #include "gtest/gtest.h"
+
 #include "OrthoTree/MortonHelper.h"
+#include "OrthoTree/Types.h"
+
 #include <algorithm>
 #include <cstdint>
 #include <bitset>
 
+using namespace ippl;
 
-TEST(MortonCodesTest, Encode3D) {
+TEST(MortonCodesTest, Encode3D)
+{
+  static constexpr size_t Dim = 3;
   const size_t max_depth = 8;
-  Morton<3> morton(max_depth);
+  Morton<Dim> morton(max_depth);
 
-  std::array<int, 3> coords = { 1, 2, 4 };
-  int64_t code = morton.encode(coords, 3);
-  int64_t expected = 0b1000100010011;
+  grid_coordinate_template<Dim> coords = { 1, 2, 4 };
+  morton_code code = morton.encode(coords, 3);
+  morton_code expected = 0b1000100010011;
   EXPECT_EQ(code, expected);
 }
 
 TEST(MortonCodesTest, Decode3D) {
+  static constexpr size_t Dim = 3;
   const size_t max_depth = 8;
-  Morton<3> morton(max_depth);
+  Morton<Dim> morton(max_depth);
 
-  int64_t code = 0b1000100010011;
-  std::array<int, 3> coords = morton.decode(code);
-  std::array<int, 3> expected = {1, 2, 4};
-  EXPECT_EQ(coords, expected);
+  morton_code code = 0b1000100010011;
+  Morton<Dim>::grid_coordinate coords = morton.decode(code);
+  Morton<Dim>::grid_coordinate expected = { 1, 2, 4 };
+
+  bool is_same = true;
+  for ( size_t i = 0; i < Dim; ++i ) {
+    if ( coords[i] != expected[i] ) {
+      is_same = false;
+      std::cout << coords[i] << ", " << expected[i] << std::endl;
+      break;
+    }
+  }
+
+  EXPECT_EQ(is_same, true);
 }
 
 TEST(MortonCodesTest, isDescendantTest) {
 
+  static constexpr size_t Dim = 3;
   const size_t max_depth = 8;
-  Morton<3> morton(max_depth);
+  Morton<Dim> morton(max_depth);
 
   int64_t root = 0;
   int64_t parent = 0b111;
@@ -47,51 +65,55 @@ TEST(MortonCodesTest, isDescendantTest) {
   EXPECT_TRUE(morton.is_descendant(child2, root));
   EXPECT_TRUE(morton.is_descendant(child3, root));
   EXPECT_TRUE(morton.is_descendant(parent, root));
-
-
 }
-TEST(MortonCodesTest, GetDeepestFirstChildTest) {
-  const size_t max_depth = 8;
-  Morton<3> morton(max_depth);
 
-  int64_t root = 0;
-  int64_t child = morton.get_deepest_first_descendant(root);
-  int64_t expected = 8;
+TEST(MortonCodesTest, GetDeepestFirstChildTest)
+{
+  static constexpr size_t Dim = 3;
+  const size_t max_depth = 8;
+  Morton<Dim> morton(max_depth);
+
+  morton_code root = 0;
+  morton_code child = morton.get_deepest_first_descendant(root);
+  morton_code expected = 8;
   EXPECT_EQ(child, expected);
 }
 
 
 TEST(MortonCodesTest, GetDeepestLastChildTest) {
+  static constexpr size_t Dim = 3;
   const size_t max_depth = 8;
-  Morton<3> morton(max_depth);
+  Morton<Dim> morton(max_depth);
 
-  int64_t root = 0;
-  int64_t child = morton.get_deepest_last_descendant(root);
-  int64_t expected = morton.encode({255, 255, 255}, 8);
+  morton_code root = 0;
+  morton_code child = morton.get_deepest_last_descendant(root);
+  morton_code expected = morton.encode({ 255, 255, 255 }, 8);
   EXPECT_EQ(child, expected);
 }
 
 TEST(MortonCodesTest, GetNearestCommonAncestorTest) {
+  static constexpr size_t Dim = 3;
   const size_t max_depth = 8;
-  Morton<3> morton(max_depth);
+  Morton<Dim> morton(max_depth);
 
-  int64_t code_a = morton.encode({124, 124, 124}, 6);
-  int64_t code_b = morton.encode({0, 0, 0}, 8);
-  int64_t ancestor = morton.get_nearest_common_ancestor(code_a, code_b);
-  int64_t expected = morton.encode({0, 0, 0}, 1);
+  morton_code code_a = morton.encode({ 124, 124, 124 }, 6);
+  morton_code code_b = morton.encode({ 0, 0, 0 }, 8);
+  morton_code ancestor = morton.get_nearest_common_ancestor(code_a, code_b);
+  morton_code expected = morton.encode({ 0, 0, 0 }, 1);
   EXPECT_EQ(ancestor, expected);
 }
 
 TEST(MortonCodesTest, GetChildrenTest) {
+  static constexpr size_t Dim = 3;
   const size_t max_depth = 8;
-  Morton<3> morton(max_depth);
+  Morton<Dim> morton(max_depth);
 
-  int64_t parent = morton.encode({126, 126, 126}, 7);
+  morton_code parent = morton.encode({ 126, 126, 126 }, 7);
   vector_t<morton_code> children = morton.get_children(parent);
   vector_t<morton_code> expected;
-  for (int i = 0; i < 2; i++) {
-    for (int j = 0; j < 2; j++) {
-      for (int k = 0; k < 2; k++) {
+  for ( grid_t i = 0; i < 2; i++ ) {
+    for ( grid_t j = 0; j < 2; j++ ) {
+      for ( grid_t k = 0; k < 2; k++ ) {
         expected.push_back(morton.encode({126 + i, 126 + j, 126 + k}, 8));
       }
     }
@@ -103,12 +125,13 @@ TEST(MortonCodesTest, GetChildrenTest) {
 }
 
 TEST(MortonCodesTest, GetParentTest) {
+  static constexpr size_t Dim = 3;
   const size_t max_depth = 8;
-  Morton<3> morton(max_depth);
+  Morton<Dim> morton(max_depth);
 
-  int64_t child = morton.encode({126, 126, 126}, 7);
-  int64_t parent = morton.get_parent(child);
-  int64_t expected = morton.encode({124, 124, 124}, 6);
+  morton_code child = morton.encode({ 126, 126, 126 }, 7);
+  morton_code parent = morton.get_parent(child);
+  morton_code expected = morton.encode({ 124, 124, 124 }, 6);
   EXPECT_EQ(parent, expected);
 }
 
