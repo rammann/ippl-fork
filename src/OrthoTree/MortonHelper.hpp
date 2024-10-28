@@ -1,11 +1,10 @@
 #include "MortonHelper.h"
-
-namespace ippl {
+#include "Types.h"
 
 template <size_t Dim>
 morton_code Morton<Dim>::encode(const real_coordinate& coordinate, const real_coordinate& rasterizer, const size_t depth)
 {
-    grid_coordinate grid = { {} };
+    grid_coordinate grid;
 
     // also: we use two for loops because encode is called instead of encoding directly.
     for ( size_t i = 0; i < Dim; ++i ) {
@@ -34,8 +33,7 @@ template <size_t Dim>
 inline Morton<Dim>::grid_coordinate Morton<Dim>::decode(morton_code code) const
 {
     code = code >> depth_mask_shift; // remove depth information
-
-    grid_coordinate grid_pos { {} };
+    grid_coordinate grid_pos;
     for ( size_t i = 0; i < Dim; ++i ) {
         // limit amount of traversed bits
         for ( size_t bit = 0; bit < (sizeof(morton_code) * 8) / Dim; ++bit ) {
@@ -215,5 +213,3 @@ inline morton_code Morton<Dim>::spread_coords(grid_t coord) const
 
     return res;
 }
-
-} // namespace ippl

@@ -28,12 +28,10 @@ using vector_t = std::vector<T>;
  */
 template <size_t Dim>
 struct Morton {
-    // change this to work with ippl later
+public:
     using grid_coordinate = grid_coordinate_template<Dim>;
-    // change this to work with ippl later
     using real_coordinate = real_coordinate_template<Dim>;
 
-public:
     Morton(size_t max_depth)
         : max_depth(max_depth),
         depth_mask_shift(std::floor(std::log2(max_depth)) + 1),
@@ -219,8 +217,8 @@ private:
     inline morton_code spread_coords(grid_t coord) const;
 };
 
-} // namespace ippl
-
 #include "MortonHelper.hpp"
+
+} // namespace ippl
 
 #endif // MORTON_ENCODER_H
