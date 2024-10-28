@@ -7,20 +7,13 @@
 #include <cassert>
 #include <cmath>
 
-using morton_code = uint64_t;
-using grid_t = int;
+#include "Types.h"
 
-// adjust for ippl/kokkos
+namespace ippl {
+
+    // TODO: remove this and make it a kokkos vector or smth
 template <typename T>
 using vector_t = std::vector<T>;
-
-// adjust for ippl/kokkos
-template <size_t Dim>
-using grid_coordinates_template = std::array<grid_t, Dim>;
-
-// adjust for ippl/kokkos
-template <size_t Dim>
-using real_coordinates_template = std::array<double, Dim>;
 
 /**
  * @brief This class manages morton codes for the octree.
@@ -36,9 +29,9 @@ using real_coordinates_template = std::array<double, Dim>;
 template <size_t Dim>
 struct Morton {
     // change this to work with ippl later
-    using grid_coordinates = grid_coordinates_template<Dim>;
+    using grid_coordinate = grid_coordinate_template<Dim>;
     // change this to work with ippl later
-    using real_coordinates = real_coordinates_template<Dim>;
+    using real_coordinate = real_coordinate_template<Dim>;
 
 public:
     Morton(size_t max_depth)
@@ -66,7 +59,7 @@ public:
      *
      * @return morton_code
      */
-    inline morton_code encode(const real_coordinates& coordinate, const real_coordinates& rasterizer, const size_t depth);
+    inline morton_code encode(const real_coordinate& coordinate, const real_coordinate& rasterizer, const size_t depth);
 
     /**
      * @brief Encodes the given grid based coordinate to a morton code.
@@ -78,15 +71,15 @@ public:
      *
      * @return morton_code
      */
-    inline morton_code encode(const grid_coordinates& coordinate, const size_t depth);
+    inline morton_code encode(const grid_coordinate& coordinate, const size_t depth);
 
     /**
      * @brief Decodes the given morton code into an integer based coordiante vector
      *
      * @param code a valid morton code (also works with invalid codes lol)
-     * @return grid_coordinates
+     * @return grid_coordinate
      */
-    inline grid_coordinates decode(morton_code code) const;
+    inline grid_coordinate decode(morton_code code) const;
 
     /**
      * @brief Returns the encoded depth of a code
@@ -226,7 +219,8 @@ private:
     inline morton_code spread_coords(grid_t coord) const;
 };
 
+} // namespace ippl
+
 #include "MortonHelper.hpp"
 
 #endif // MORTON_ENCODER_H
-
