@@ -11,6 +11,7 @@ namespace ippl {
 
         real_coordinate min_m;
         real_coordinate max_m;
+
     public:
         BoundingBox() = default;
         BoundingBox(real_coordinate min, real_coordinate max)
@@ -25,7 +26,7 @@ namespace ippl {
             BoundingBox raster;
             raster.min_m = min_m;
             for ( size_t i = 0; i < Dim; ++i ) {
-                raster.max_m[i] = raster.min_m + (max_m - min_m) / raster_size;
+                raster.max_m[i] = raster.min_m[i] + (max_m[i] - min_m[i]) / raster_size;
             }
 
             return raster;
@@ -35,7 +36,7 @@ namespace ippl {
         {
             real_coordinate center;
             for ( size_t i = 0; i < Dim; ++i ) {
-                center[i] = min_m + (max_m - min_m) / 2;
+                center[i] = min_m[i] + (max_m[i] - min_m[i]) / 2;
             }
             return center;
         }
