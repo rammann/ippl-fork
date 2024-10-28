@@ -4,8 +4,10 @@
 #include <array>
 #include <vector>
 #include <cstdint>
+#include <cassert>
+#include <cmath>
 
-using morton_code = uint16_t;
+using morton_code = uint64_t;
 using grid_t = int;
 
 // adjust for ippl/kokkos
@@ -44,7 +46,9 @@ public:
      *
      * @param max_depth
      * @return Morton&
-     
+     *
+     */
+    // TODO discuss structure of singleton.
     static Morton& getInstance(size_t max_depth);
 
     // deleted to enforce singleton
@@ -52,7 +56,7 @@ public:
     Morton& operator=(const Morton&) = delete;
     Morton(Morton&&) = delete;
     Morton& operator=(Morton&&) = delete;
-
+  
     /**
      * @brief Encodes the given coordinate based on the rasterizer. As of now, the rasterizer is used to transform the (real valued) coordinates to a grid
      * based coordinate system, i dont know if this is a good idea, but it works for spaces in the range [0,1]^Dim
@@ -168,7 +172,7 @@ public:
      * @param code
      * @return morton_code
      */
-    morton_code get_last_descendant(morton_code code) const;
+    morton_code get_deepest_last_descendant(morton_code code) const;
 
     // testing 
     morton_code get_ancestor_at_relative_level(morton_code code, size_t level) const
@@ -191,13 +195,25 @@ public:
     // what is meant by A(n) in the paper? get a list of all ancestors, or boolean value...?
     // TODO 
     morton_code get_ancestor(morton_code code) const;
-    // TODO 
+    /**
+     * @brief Checks whether the given parent is an ancestor of the given child
+     *
+     * @param child the child code
+     * @param parent the parent code
+     * @return true if parent is ancestor of child
+     */
     bool is_ancestor(morton_code child, morton_code parent) const;
 
     // what do they want here?
     // TODO 
     void get_descendant(morton_code code) const;
-    //probably bool 
+    /**
+     * @brief Checks whether the given child is a descendant of the given parents
+     *
+     * @param child the child code
+     * @param parent the parent code
+     * @return true if child is descendant of parent
+     */
     bool is_descendant(morton_code child, morton_code parent) const;
 
     // TODO 
@@ -351,6 +367,27 @@ vector_t<morton_code> Morton<Dim>::get_siblings(morton_code code) const
 }
 
 template <size_t Dim>
+bool Morton<Dim>::is_descendant(morton_code child, morton_code parent) const  {
+
+    // descendants are always larger than their parents
+    if (child < parent) return false;
+
+    const morton_code step = get_step_size(parent);
+    const morton_code next_neighbour = parent + step;
+
+    // if the child is a descendant the parent, is must be smaller than 
+    // the parent's next bigger neighbour at the level of the parent
+    return child < (next_neighbour);
+}
+
+template <size_t Dim>
+bool Morton<Dim>::is_ancestor(morton_code child, morton_code parent) const
+{
+    return is_descendant(child, parent);
+}
+
+
+template <size_t Dim>
 morton_code Morton<Dim>::get_first_child(morton_code code) const
 {
     return code + 1;
@@ -364,24 +401,30 @@ morton_code Morton<Dim>::get_last_child(morton_code code) const
     return first_child + (n_children - 1) * step;
 }
 
+// implementation corrected for absolute level
 template <size_t Dim>
 morton_code Morton<Dim>::get_first_descendant(morton_code code, const size_t level) const
 {
-    return code + level;
+    return (code & (~depth_mask)) + level;
 }
 
+// implementation corrected for absolute level
 template <size_t Dim>
 morton_code Morton<Dim>::get_last_descendant(morton_code code, const size_t level) const
 {
-    size_t current_depth = get_depth(code);
-    size_t total_levels = level - current_depth;
+    const morton_code current_depth = get_depth(code);
+    assert(level >= current_depth && 
+        "can't get descendants at a coarser level than the current node!");
+    const morton_code first_descendant = get_first_descendant(code, level); 
+    const morton_code step = get_step_size(first_descendant);
 
-    size_t num_descendants = 0;
-    for ( size_t i = 1; i <= total_levels; ++i ) {
-        num_descendants += static_cast<size_t>(pow(n_children, i));
-    }
+    // the number of descendants at a given relative level are given by 
+    // 2^(Dim * (level difference)) as each level multiplies a factor 2^Dim
+    const morton_code num_descendants = (1 << (Dim * (level - current_depth)));
 
-    return code + num_descendants;
+    // the last descendant is num_descendants - 1 morton code steps
+    // away from the first descendant
+    return first_descendant + step*(num_descendants - 1);
 }
 
 template <size_t Dim>
@@ -396,34 +439,29 @@ morton_code Morton<Dim>::get_deepest_last_descendant(morton_code code) const
     return get_last_descendant(code, max_depth);
 }
 
+
+// suggestion for alternative algorithm:
+// only go up the levels on the larger node and check whether the other is descendant.
 template <size_t Dim>
 morton_code Morton<Dim>::get_nearest_common_ancestor(morton_code code_a, morton_code code_b) const
 {
-    morton_code ancestor_a = code_a;
+
+    size_t depth_a = get_depth(code_a);
+    size_t depth_b = get_depth(code_b);
+
+    // swap nodes such that b is the coarser nodes
+    if ( depth_a < depth_b ) {
+        std::swap(code_a, code_b);
+        std::swap(depth_a, depth_b);
+    }
+
     morton_code ancestor_b = code_b;
-
-    size_t depth_a = get_depth(ancestor_a);
-    size_t depth_b = get_depth(ancestor_b);
-
-    // bring both nodes to the same depth
-    while ( depth_a > depth_b ) {
-        ancestor_a = get_parent(ancestor_a);
-        depth_a--;
-    }
-
-    while ( depth_b > depth_a ) {
-        ancestor_b = get_parent(ancestor_b);
-        depth_b--;
-    }
-
-    // climp up until common ancestor is found
-    while ( ancestor_a != ancestor_b ) {
-        assert(ancestor_a != 0 && ancestor_b != 0 && "cant ascend more than root node");
-        ancestor_a = get_parent(ancestor_a);
+    // climb up until common ancestor is found
+    while ( !is_descendant(code_a, ancestor_b) ) {
         ancestor_b = get_parent(ancestor_b);
     }
 
-    return ancestor_a;
+    return ancestor_b;
 }
 
 template <size_t Dim>
@@ -433,7 +471,7 @@ inline morton_code Morton<Dim>::get_step_size(morton_code code) const
     // the min step size is equal to floor(log2(max_depth)) + 1 == sizeof(depth encoding)
     // each level above min depth increases step size by Dim bits
     // so simplified: 1 << (depth_mask_shift + Dim * (max_depth - get_depth(code)))
-    return 1 << (Dim * (max_depth - get_depth(code) + 1));
+    return morton_code(1) << (depth_mask_shift + Dim * (max_depth - get_depth(code)));
 }
 
 template <size_t Dim>
@@ -451,3 +489,4 @@ inline morton_code Morton<Dim>::spread_coords(grid_t coord) const
 }
 
 #endif // MORTON_ENCODER_H
+
