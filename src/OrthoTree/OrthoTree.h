@@ -22,10 +22,9 @@ namespace ippl {
         using bounds_type = BoundingBox<Dim>;
 
         const size_t max_depth_m;
-        const size_t max_particles_per_node;
+        const size_t max_particles_per_node_m;
         const bounds_type root_bounds_m;
-        const bounds_type rasterizer_m;
-        const Morton morton_helper;
+        const Morton<Dim> morton_helper;
 
         Kokkos::vector<morton_code> tree;
 
@@ -34,21 +33,29 @@ namespace ippl {
         explicit OrthoTree(size_t max_depth, size_t max_particles_per_node, const bounds_type& root_bounds)
             : max_depth_m(max_depth), max_particles_per_node_m(max_particles_per_node),
             root_bounds_m(root_bounds), morton_helper(max_depth)
-        {
-            const size_t leaf_nodes_per_edge = (size_t(1) << max_depth);
-            rasterizer_m = root_bounds_m.get_raster(leaf_nodes_per_edge);
-        }
+        { }
 
         void build_tree_naive_sequential(particle_type const& particles)
         {
-            const size_t n_particles = particles.size();
+            const size_t n_particles = particles.getLocalNum();
+            const size_t nodes_per_edge = (size_t(1) << max_depth_m);
 
             // insert the root into the tree
             tree.push_back(morton_code(0));
 
             Kokkos::vector<Kokkos::pair<morton_code, size_t>> aid_list(n_particles);
             for ( size_t i = 0; i < n_particles; ++i ) {
-                aid_list[i] = { morton_helper.encode(particles.R(i), rasterizer_m, max_depth_m), i };
+                grid_coordinate grid_coord;
+
+                for ( size_t j = 0; j < Dim; ++j ) {
+                    const double dist = particles.R(i)[j] - root_bounds_m.get_min()[j];
+                    const double grid_len = root_bounds_m.get_max()[j] - root_bounds_m.get_min()[j];
+
+                    const double ratio = dist / grid_len;
+                    grid_coord[j] = static_cast<grid_t>(nodes_per_edge * ratio);
+                }
+
+                aid_list[i] = { morton_helper.encode(grid_coord, max_depth_m), i };
             }
 
             std::sort(aid_list.begin(), aid_list.end(), [ ] (const auto& a, const auto& b)
