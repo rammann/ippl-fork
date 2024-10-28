@@ -3,6 +3,7 @@
 
 #include "gtest/gtest.h"
 #include "OrthoTree/morton_codes.h"
+#include <algorithm>
 #include <cstdint>
 #include <bitset>
 
@@ -71,5 +72,33 @@ TEST(MortonCodesTest, GetNearestCommonAncestorTest) {
   int64_t ancestor = morton.get_nearest_common_ancestor(code_a, code_b);
   int64_t expected = morton.encode({0, 0, 0}, 1);
   EXPECT_EQ(ancestor, expected);
+}
+
+TEST(MortonCodesTest, GetChildrenTest) {
+  Morton<3>& morton = Morton<3>::getInstance(8);
+
+  int64_t parent = morton.encode({126, 126, 126}, 7);
+  vector_t<morton_code> children = morton.get_children(parent);
+  vector_t<morton_code> expected;
+  for (int i = 0; i < 2; i++) {
+    for (int j = 0; j < 2; j++) {
+      for (int k = 0; k < 2; k++) {
+        expected.push_back(morton.encode({126 + i, 126 + j, 126 + k}, 8));
+      }
+    }
+  }
+
+  std::sort(expected.begin(), expected.end());
+
+  EXPECT_EQ(children, expected);
+}
+
+TEST(MortonCodesTest, GetParentTest) {
+  Morton<3>& morton = Morton<3>::getInstance(8);
+
+  int64_t child = morton.encode({126, 126, 126}, 7);
+  int64_t parent = morton.get_parent(child);
+  int64_t expected = morton.encode({124, 124, 124}, 6);
+  EXPECT_EQ(parent, expected);
 }
 
