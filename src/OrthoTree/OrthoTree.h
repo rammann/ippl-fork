@@ -30,7 +30,6 @@ namespace ippl {
         const bounds_t root_bounds_m;
         const Morton<Dim> morton_helper;
 
-        Kokkos::vector<morton_code> tree; // this is just a placeholder rn
 
         // probably best kept as member, need to compare with new particle codes for update
         aid_list_t aid_list;
@@ -41,18 +40,22 @@ namespace ippl {
             : max_depth_m(max_depth), max_particles_per_node_m(max_particles_per_node),
             root_bounds_m(root_bounds), morton_helper(max_depth)
         { }
+        /**
+         * @brief algorithm 1' topdown sequential construction of octree
+         *
+         * @param morton code of root_node, particles
+         *
+         * @return list of morton codes of leaves of tree spanning root node
+         */
 
-        void build_tree_naive_sequential(particle_t const& particles)
+        Kokkos::vector<morton_code> build_tree_topdown_sequential(morton_code root_node, particle_t const& particles)
         {
             // insert the root into the tree
+            Kokkos::vector<morton_code> tree; // subtree that will be returned
             tree.push_back(morton_code(0)); // maybe store morton_code(0) s.t. we can call morton::root_val or smth
 
-            initialize_aid_list(particles);
 
-            std::cout << "aid_list size: " << aid_list.size() << std::endl;
-            for ( const auto& [morton, id] : aid_list ) {
-                std::cout << "(morton=0b" << std::bitset<16>(morton) << ", id=" << id << ")\n";
-            }
+            return tree;
         }
 
         /**
@@ -95,6 +98,19 @@ namespace ippl {
                 return a.first < b.first;
             });
         }
+        /**
+         * @brief counts the number of particles covered by the cell decribed by the morton code
+         *
+         * @params morton_code, particle list
+         *
+         * @return number of particles in the cell
+         *
+         **/
+
+        size_t NumberOfPoints(morton_code, particle_t const& particles){
+            return 0
+        }
+          
     };
 
 } // namespace ippl
