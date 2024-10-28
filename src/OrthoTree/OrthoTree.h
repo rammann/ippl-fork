@@ -52,12 +52,28 @@ namespace ippl {
         {
             // insert the root into the tree
             Kokkos::vector<morton_code> tree; // subtree that will be returned
-            tree.push_back(root_node); // maybe store morton_code(0) s.t. we can call morton::root_val or smth
+            Kokkos::vector<morton_code> stack; // subtree that will be returned
+
+
+            stack.push_back(root_node); // maybe store morton_code(0) s.t. we can call morton::root_val or smth
 
             initialize_aid_list(particles) // initialize aid list - required for particle counting could be moved to constructor
 
+            while(stack.size() > 0){
+                morton_code current_node = stack.back();
+                stack.pop_back();
 
+              if(NumberOfParticles(current_node) > max_particles_per_node_m && morton_helper.get_depth(current_node) < max_depth_m){
+                
+                Kokkos::vector<morton_code> children = morton_helper.get_children(current_node); // subtree that will be returned
+                
+                for(morton_code child : children){stack.push_back(child);}
 
+              }
+              else{
+                tree.push_back(current_node);
+              }
+            }
 
             return tree;
         }
@@ -114,8 +130,8 @@ namespace ippl {
 
         size_t NumberOfParticles(morton_code mc){
             size_t count = 0;
-            for(morton_code particle_code : aid_list){
-              count += morton_helper.is_ancestor(partice_code,mc); // iff cell is ancestor of particle code of the corresponding particle, the particle is in the box 
+            for(auto aid_list_el : aid_list){
+              count += morton_helper.is_ancestor(aid_list_el.first,mc); // iff cell is ancestor of particle code of the corresponding particle, the particle is in the box 
             }
 
             return count;
