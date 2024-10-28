@@ -11,11 +11,9 @@ mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR" || exit 1
 
 # Configure the build with CMake
-# cmake "$ROOT_DIR" -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_STANDARD=20 -DENABLE_TESTS=True -DKokkos_VERSION=4.2.00 -DENABLE_UNIT_TESTS=True
 cmake "$ROOT_DIR" -DCMAKE_CXX_STANDARD=20 -DENABLE_TESTS=True -DKokkos_VERSION=4.2.00 -DENABLE_UNIT_TESTS=True
 
 # Navigate to the unit test directory
-mkdir -p "$UNIT_TEST_DIR"
 cd "$UNIT_TEST_DIR" || exit 1
 
 # Build the tests
