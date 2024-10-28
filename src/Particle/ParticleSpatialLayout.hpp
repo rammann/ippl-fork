@@ -113,11 +113,18 @@ namespace ippl {
          * for the rank with the index
          */
         locate_type nSends_dview("nSends Device", nRanks);
-        //locate_type nSends_hview("nSends host", nRanks);
 
-        size_type invalidCount = locateParticles(pc, ranks, invalid, nSends_dview);
+        /* ranks to which we need to send */
+        locate_type sends_dview("sends Device", nRanks);
 
+        auto [invalidCount, rankSends] = locateParticles(pc, ranks, invalid, nSends_dview, sends_dview);
+
+        /* Host space copy of nSends_dview */
         auto nSends_hview = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), nSends_dview);
+        
+        /* Host Space copy of sends_dview */
+        auto sends_hview = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), sends_dview);
+
         IpplTimings::stopTimer(locateTimer);
 
         // 2nd step
@@ -143,7 +150,7 @@ namespace ippl {
             window.put<size_type>(nSends.data() + rank, rank, Comm->rank());
         }
         */
-
+        /* Second Oldest Way of Calculating Sends
         for (int rank=0; rank<nRanks; ++rank){
             if (rank == Comm->rank()){
                 // we do not need to send to ourselves
@@ -151,7 +158,18 @@ namespace ippl {
             }
             nSends[rank] = nSends_hview(rank);
             window.put<size_type>(nSends.data() + rank, rank, Comm->rank());
+        }*/
+
+        for(int idx=0; idx < rankSends; idx++){
+            if (rank == Comm->rank()){
+                // we do not need to send to ourselves
+                continue;
+            }
+            int rank=sends_hview[idx];
+            nSends[rank] = nSends_hview(rank);
+            window.put<size_type>(nSends.data() + rank, rank, Comm->rank());
         }
+
 
         window.fence(0);
         IpplTimings::stopTimer(preprocTimer);
@@ -229,8 +247,10 @@ namespace ippl {
 
     template <typename T, unsigned Dim, class Mesh, typename... Properties>
     template <typename ParticleContainer>
-    detail::size_type ParticleSpatialLayout<T, Dim, Mesh, Properties...>::locateParticles(
-        const ParticleContainer& pc, locate_type& ranks, bool_type& invalid, locate_type& nSends_dview) const {
+    std::pair<detail::size_type, detail::size_type> ParticleSpatialLayout<T, Dim, Mesh, Properties...>::locateParticles(
+        const ParticleContainer& pc, locate_type& ranks, bool_type& invalid, 
+        locate_type& nSends_dview, locate_type& sends_dview) const {
+
         auto positions           = pc.R.getView();
         region_view_type Regions = rlayout_m.getdLocalRegions();
 
@@ -316,7 +336,6 @@ namespace ippl {
                     ranks(i) = !(inNeighbor) * ranks(i) + inNeighbor * rank;
                     found =  inNeighbor || found;
                 }
-
                 /// Step 3
                 /* isOut: When the last thread has finished the search, checks whether the particle has been found 
                  * either in the current rank or in a neighboring one.
@@ -366,8 +385,20 @@ namespace ippl {
                 Kokkos::atomic_fetch_add(&nSends_dview(rank),1);
             }
         ); 
-       
-        return invalidCount;
+    
+        // Number of Ranks we need to send to 
+        size_type rankSends=0; 
+        Kokkos::parallel_for("Calculate sends",
+               Kokkos::RangePolicy<size_t>(0, nSends_dview.extent(0)),
+               KOKKOS_LAMBDA(const size_t rank){
+                   if(nSends_dview(rank) != 0){
+                       size_t index = Kokkos::atomic_fetch_add(&rankSends(), 1);
+                       sends_dview(index) = rank;
+                   }
+               }
+        );
+
+        return {invalidCount, rankSends};
     }
 
     template <typename T, unsigned Dim, class Mesh, typename... Properties>

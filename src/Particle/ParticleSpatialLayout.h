@@ -111,7 +111,7 @@ namespace ippl {
          */
         template <typename ParticleContainer>
         size_type locateParticles(const ParticleContainer& pc, locate_type& ranks,
-                                  bool_type& invalid, locate_type& nSends_dview) const;
+                                  bool_type& invalid, locate_type& nSends_dview, locate_type& sends_dview) const;
 
         /*!
          * @param rank we sent to
