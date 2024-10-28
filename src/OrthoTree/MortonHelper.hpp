@@ -2,7 +2,7 @@
 #include "Types.h"
 
 template <size_t Dim>
-morton_code Morton<Dim>::encode(const real_coordinate& coordinate, const real_coordinate& rasterizer, const size_t depth)
+morton_code Morton<Dim>::encode(const real_coordinate& coordinate, const real_coordinate& rasterizer, const size_t depth) const
 {
     grid_coordinate grid;
 
@@ -17,7 +17,7 @@ morton_code Morton<Dim>::encode(const real_coordinate& coordinate, const real_co
 }
 
 template <size_t Dim>
-inline morton_code Morton<Dim>::encode(const grid_coordinate& coordinate, const size_t depth)
+inline morton_code Morton<Dim>::encode(const grid_coordinate& coordinate, const size_t depth) const
 {
     morton_code code = 0;
     for ( size_t i = 0; i < Dim; ++i ) {

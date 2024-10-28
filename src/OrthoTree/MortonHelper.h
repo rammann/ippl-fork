@@ -28,10 +28,10 @@ using vector_t = std::vector<T>;
  */
 template <size_t Dim>
 struct Morton {
-public:
     using grid_coordinate = grid_coordinate_template<Dim>;
     using real_coordinate = real_coordinate_template<Dim>;
 
+public:
     Morton(size_t max_depth)
         : max_depth(max_depth),
         depth_mask_shift(std::floor(std::log2(max_depth)) + 1),
@@ -57,7 +57,7 @@ public:
      *
      * @return morton_code
      */
-    inline morton_code encode(const real_coordinate& coordinate, const real_coordinate& rasterizer, const size_t depth);
+    inline morton_code encode(const real_coordinate& coordinate, const real_coordinate& rasterizer, const size_t depth) const;
 
     /**
      * @brief Encodes the given grid based coordinate to a morton code.
@@ -69,7 +69,7 @@ public:
      *
      * @return morton_code
      */
-    inline morton_code encode(const grid_coordinate& coordinate, const size_t depth);
+    inline morton_code encode(const grid_coordinate& coordinate, const size_t depth) const;
 
     /**
      * @brief Decodes the given morton code into an integer based coordiante vector
