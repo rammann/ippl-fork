@@ -471,7 +471,7 @@ inline morton_code Morton<Dim>::get_step_size(morton_code code) const
     // the min step size is equal to floor(log2(max_depth)) + 1 == sizeof(depth encoding)
     // each level above min depth increases step size by Dim bits
     // so simplified: 1 << (depth_mask_shift + Dim * (max_depth - get_depth(code)))
-    return (int64_t)1 << (depth_mask_shift + Dim * (max_depth - get_depth(code)));
+    return morton_code(1) << (depth_mask_shift + Dim * (max_depth - get_depth(code)));
 }
 
 template <size_t Dim>
