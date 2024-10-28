@@ -3,10 +3,12 @@ set (_SRCS
     )
 
 set (_HDRS
-    OrthoTree.h
     OrthoTreeParticle.h
-    MortonHelper.h
+    Types.h
     MortonHelper.hpp
+    OrthoTree.h
+    MortonHelper.h
+    BoundingBox.h
     )
 
 include_directories (
