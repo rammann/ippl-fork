@@ -9,15 +9,19 @@
 
 
 TEST(MortonCodesTest, Encode3D) {
-  Morton<3>& morton = Morton<3>::getInstance(8);
-  std::array<int, 3> coords = {1, 2, 4};
+  const size_t max_depth = 8;
+  Morton<3> morton(max_depth);
+
+  std::array<int, 3> coords = { 1, 2, 4 };
   int64_t code = morton.encode(coords, 3);
   int64_t expected = 0b1000100010011;
   EXPECT_EQ(code, expected);
 }
 
 TEST(MortonCodesTest, Decode3D) {
-  Morton<3>& morton = Morton<3>::getInstance(8);
+  const size_t max_depth = 8;
+  Morton<3> morton(max_depth);
+
   int64_t code = 0b1000100010011;
   std::array<int, 3> coords = morton.decode(code);
   std::array<int, 3> expected = {1, 2, 4};
@@ -26,7 +30,8 @@ TEST(MortonCodesTest, Decode3D) {
 
 TEST(MortonCodesTest, isDescendantTest) {
 
-  Morton<3>& morton = Morton<3>::getInstance(8);
+  const size_t max_depth = 8;
+  Morton<3> morton(max_depth);
 
   int64_t root = 0;
   int64_t parent = 0b111;
@@ -46,7 +51,8 @@ TEST(MortonCodesTest, isDescendantTest) {
 
 }
 TEST(MortonCodesTest, GetDeepestFirstChildTest) {
-  Morton<3>& morton = Morton<3>::getInstance(8);
+  const size_t max_depth = 8;
+  Morton<3> morton(max_depth);
 
   int64_t root = 0;
   int64_t child = morton.get_deepest_first_descendant(root);
@@ -56,7 +62,8 @@ TEST(MortonCodesTest, GetDeepestFirstChildTest) {
 
 
 TEST(MortonCodesTest, GetDeepestLastChildTest) {
-  Morton<3>& morton = Morton<3>::getInstance(8);
+  const size_t max_depth = 8;
+  Morton<3> morton(max_depth);
 
   int64_t root = 0;
   int64_t child = morton.get_deepest_last_descendant(root);
@@ -65,7 +72,8 @@ TEST(MortonCodesTest, GetDeepestLastChildTest) {
 }
 
 TEST(MortonCodesTest, GetNearestCommonAncestorTest) {
-  Morton<3>& morton = Morton<3>::getInstance(8);
+  const size_t max_depth = 8;
+  Morton<3> morton(max_depth);
 
   int64_t code_a = morton.encode({124, 124, 124}, 6);
   int64_t code_b = morton.encode({0, 0, 0}, 8);
@@ -75,7 +83,8 @@ TEST(MortonCodesTest, GetNearestCommonAncestorTest) {
 }
 
 TEST(MortonCodesTest, GetChildrenTest) {
-  Morton<3>& morton = Morton<3>::getInstance(8);
+  const size_t max_depth = 8;
+  Morton<3> morton(max_depth);
 
   int64_t parent = morton.encode({126, 126, 126}, 7);
   vector_t<morton_code> children = morton.get_children(parent);
@@ -94,7 +103,8 @@ TEST(MortonCodesTest, GetChildrenTest) {
 }
 
 TEST(MortonCodesTest, GetParentTest) {
-  Morton<3>& morton = Morton<3>::getInstance(8);
+  const size_t max_depth = 8;
+  Morton<3> morton(max_depth);
 
   int64_t child = morton.encode({126, 126, 126}, 7);
   int64_t parent = morton.get_parent(child);
