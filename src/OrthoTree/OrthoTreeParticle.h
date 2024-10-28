@@ -3,10 +3,10 @@
  * should be used with the serial layout only!
 */
 
-#ifndef OCTREEPARTICLEGUARD
-#define OCTREEPARTICLEGUARD
+#ifndef OCTREE_PARTICLE_GUARD
+#define OCTREE_PARTICLE_GUARD
 
-namespace ippl{
+namespace ippl {
     
     /**
      * @class OrthoTreeParticle: Class that implements 3D particles with rho attribute 
@@ -15,7 +15,7 @@ namespace ippl{
      * The points can be accessed through this->R(index), which return the i-th point as a ippl::Vector<double, 3>.
      * rho(i) returns the charge of the i-th particle
     */
-    template <class PLayout = ippl::ParticleSpatialLayout<double, 3> >
+    template <class PLayout = ippl::ParticleSpatialLayout<double, 3>>
     class OrthoTreeParticle : public ippl::ParticleBase<PLayout> {
     
     public:
@@ -30,4 +30,4 @@ namespace ippl{
     };
 }
 
-#endif
+#endif // OCTREE_PARTICLE_GUARD

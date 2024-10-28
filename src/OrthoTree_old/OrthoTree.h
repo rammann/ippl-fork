@@ -8,8 +8,8 @@
 */
 
 
-#ifndef ORTHOTREE_GUARD
-#define ORTHOTREE_GUARD
+#ifndef OLD_ORTHOTREE_GUARD
+#define OLD_ORTHOTREE_GUARD
 
 #include <Kokkos_Vector.hpp>
 #include <Kokkos_UnorderedMap.hpp>
@@ -850,4 +850,4 @@ public: // Getters
 
 
 } // Namespace ippl
-#endif
+#endif // OLD_ORTHOTREE_GUARD

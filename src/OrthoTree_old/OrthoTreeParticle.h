@@ -3,8 +3,8 @@
  * should be used with the serial layout only!
 */
 
-#ifndef OCTREEPARTICLEGUARD
-#define OCTREEPARTICLEGUARD
+#ifndef OLD_OCTREEPARTICLEGUARD
+#define OLD_OCTREEPARTICLEGUARD
 
 namespace ippl{
     
@@ -30,4 +30,4 @@ namespace ippl{
     };
 }
 
-#endif
+#endif // OLD_OCTREEPARTICLEGUARD

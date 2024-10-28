@@ -5,6 +5,8 @@ set (_SRCS
 set (_HDRS
     OrthoTree.h
     OrthoTreeParticle.h
+    MortonHelper.h
+    MortonHelper.hpp
     )
 
 include_directories (

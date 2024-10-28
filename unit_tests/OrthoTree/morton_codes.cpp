@@ -2,7 +2,7 @@
 // unit test of morton_codes.h
 
 #include "gtest/gtest.h"
-#include "OrthoTree/morton_codes.h"
+#include "OrthoTree/MortonHelper.h"
 #include <algorithm>
 #include <cstdint>
 #include <bitset>
