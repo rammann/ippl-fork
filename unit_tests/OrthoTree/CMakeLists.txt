@@ -13,9 +13,18 @@ link_directories (
 
 add_executable (morton_test morton_codes.cpp)
 gtest_discover_tests (morton_test PROPERTIES TEST_DISCOVERY_TIMEOUT 600)
-
 target_link_libraries (
     morton_test
+    ippl
+    pthread
+    GTest::gtest_main
+    ${MPI_CXX_LIBRARIES}
+)
+
+add_executable (ortho_tree_test ortho_tree.cpp)
+gtest_discover_tests (ortho_tree_test PROPERTIES TEST_DISCOVERY_TIMEOUT 600)
+target_link_libraries (
+    ortho_tree_test
     ippl
     pthread
     GTest::gtest_main
