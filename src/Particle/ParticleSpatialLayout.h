@@ -1,3 +1,4 @@
+
 //
 // Class ParticleSpatialLayout
 //   Particle layout based on spatial decomposition.
@@ -76,7 +77,7 @@ namespace ippl {
         RegionLayout_t rlayout_m;
 
         //! The FieldLayout containing information on nearest neighbors
-        FieldLayout_t flayout_m;
+        FieldLayout_t& flayout_m;
 
         //! Type of the Kokkos view containing the local regions.
         using region_view_type = typename RegionLayout_t::view_type;
@@ -88,6 +89,14 @@ namespace ippl {
         template <size_t... Idx>
         KOKKOS_INLINE_FUNCTION constexpr static bool positionInRegion(
             const std::index_sequence<Idx...>&, const vector_type& pos, const region_type& region);
+
+        /*!
+         * Evaluates the total number of MPI ranks sharing the spatial nearest neighbors.
+         * @param neighbors structure containing, for every spatial direction, a list of
+         * MPI ranks IDs corresponding to the nearest neighbors of the current local domain section.
+         * @return The total number of the ranks.
+         */
+        size_type getNeighborSize(const neighbor_list& neighbors) const;
 
     public:
         /*!
@@ -102,7 +111,7 @@ namespace ippl {
          */
         template <typename ParticleContainer>
         size_type locateParticles(const ParticleContainer& pc, locate_type& ranks,
-                                  bool_type& invalid) const;
+                                  bool_type& invalid, locate_type& nSends_dview) const;
 
         /*!
          * @param rank we sent to
@@ -122,3 +131,4 @@ namespace ippl {
 #include "Particle/ParticleSpatialLayout.hpp"
 
 #endif
+
