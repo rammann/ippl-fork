@@ -12,6 +12,7 @@
 
 using namespace ippl;
 
+// i will maybe move this to OrthoTree/utils.h or smth
 template <size_t Dim>
 bool compare_coordinates(const real_coordinate_template<Dim>& a, const real_coordinate_template<Dim>& b)
 {
@@ -24,6 +25,7 @@ bool compare_coordinates(const real_coordinate_template<Dim>& a, const real_coor
     return true;
 }
 
+// i will maybe move this to OrthoTree/utils.h or OrthoTree/BoundingBox.h as a comparator
 template <size_t Dim>
 bool compare_boxes(const BoundingBox<Dim>& a, const BoundingBox<Dim>& b)
 {
@@ -43,7 +45,7 @@ TEST(BoundingBoxTest, InitializeTest)
 
 TEST(BoundingBoxTest, GetCenterTest)
 {
-    // testing if a box is initialized to zero
+    // testing if the center is calculated correctly
     static constexpr size_t Dim = 3;
     BoundingBox<Dim> box({ 0.0, 0.0, 0.0 }, { 1.0, 1.0, 1.0 });
     const auto result = box.get_center();
@@ -54,7 +56,7 @@ TEST(BoundingBoxTest, GetCenterTest)
 
 TEST(BoundingBoxTest, ConvertIntegerGridToReal)
 {
-    // testing if a box is initialized to zero
+    // this will test the conversion from a grid coordinate to a real valued coordinate inside the root bounds, not implemented yet
     static constexpr size_t Dim = 3;
 
     BoundingBox<Dim> root_bounds({ 0.0, 0.0, 0.0 }, { 1.0, 1.0, 1.0 });
