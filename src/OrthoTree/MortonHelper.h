@@ -217,8 +217,9 @@ private:
     inline morton_code spread_coords(grid_t coord) const;
 };
 
-#include "MortonHelper.hpp"
 
 } // namespace ippl
+
+#include "MortonHelper.hpp"
 
 #endif // MORTON_ENCODER_H
