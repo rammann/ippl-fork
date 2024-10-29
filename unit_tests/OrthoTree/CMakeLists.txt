@@ -31,6 +31,16 @@ target_link_libraries (
     ${MPI_CXX_LIBRARIES}
 )
 
+add_executable (bounds_test bounding_box.cpp)
+# gtest_discover_tests (tree_test PROPERTIES TEST_DISCOVERY_TIMEOUT 600)
+target_link_libraries (
+    bounds_test
+    ippl
+    pthread
+    GTest::gtest_main
+    ${MPI_CXX_LIBRARIES}
+)
+
 
 # vi: set et ts=4 sw=4 sts=4:
 
