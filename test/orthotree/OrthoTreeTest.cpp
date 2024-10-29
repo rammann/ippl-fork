@@ -5,7 +5,6 @@
 #include <random>
 #include "Utility/ParameterList.h"
 #include "OrthoTree/OrthoTree.h"
-#include "OrthoTree/OrthoTreeTypes.h"
 #include "OrthoTree/BoundingBox.h"
 
 #include <random>
@@ -37,9 +36,7 @@ int main(int argc, char* argv[])
             particles.rho(i) = 0;
         }
 
-        //tree.build_tree_naive_sequential(particles);
         tree.build_tree_naive(particles);
-        std::cout << "working hehe\n";
     }
 
     ippl::finalize();
