@@ -6,12 +6,7 @@ namespace ippl {
     OrthoTree<Dim>::OrthoTree(size_t max_depth, size_t max_particles_per_node, const bounds_t& root_bounds)
         : max_depth_m(max_depth), max_particles_per_node_m(max_particles_per_node),
         root_bounds_m(root_bounds), morton_helper(max_depth)
-    {
-        std::cout << "Initialized OrthoTree<" << Dim << ">:" << std::endl
-            << "    max_particles: " << max_particles_per_node << std::endl
-            << "    max_depth: " << max_depth
-            << std::endl;
-    }
+    { }
 
     template <size_t Dim>
     void OrthoTree<Dim>::build_tree_naive(particle_t const& particles)
