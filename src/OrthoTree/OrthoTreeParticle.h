@@ -6,6 +6,8 @@
 #ifndef OCTREE_PARTICLE_GUARD
 #define OCTREE_PARTICLE_GUARD
 
+#include <Particle/ParticleSpatialLayout.h>
+
 namespace ippl {
     
     /**
