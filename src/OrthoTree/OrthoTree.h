@@ -70,6 +70,13 @@ namespace ippl {
         void build_tree_naive(particle_t const& particles);
 
         /**
+         * @brief Returns a vector with morton_codes and lists of particle ids inside this region
+         * This is also not meant to be permanent, but it should suffice for the beginning
+         * @return Kokkos::vector<Kokkos::pair<morton_code, Kokkos::vector<size_t>>>
+         */
+        Kokkos::vector<Kokkos::pair<morton_code, Kokkos::vector<size_t>>> get_tree() const;
+
+        /**
          * @brief Compares the following aspects of the trees:
          * - n_particles
          * - tree_m.size()
@@ -83,13 +90,6 @@ namespace ippl {
          */
         bool operator==(const OrthoTree& other);
 
-        /**
-         * @brief Returns a vector with morton_codes and lists of particle ids inside this region
-         * This is also not meant to be permanent, but it should suffice for the beginning
-         * @return Kokkos::vector<Kokkos::pair<morton_code, Kokkos::vector<size_t>>>
-         */
-        Kokkos::vector<Kokkos::pair<morton_code, Kokkos::vector<size_t>>> get_tree() const;
-
     private:
 
         /**
@@ -100,6 +100,14 @@ namespace ippl {
          */
         void initialize_aid_list(particle_t const& particles);
 
+        /**
+         * @brief counts the number of particles covered by the cell decribed by the morton code
+         *        initialize_aid_list needs to be called first
+         *
+         * @param morton_code
+         * @return number of particles in the cell specified by the morton code
+         **/
+        size_t get_num_particles_in_octant(morton_code octant);
     public:
 
         // SIMONS FUNCTIONS DONT EDIT, TOUCH OR USE THIS IN YOUR CODE:
@@ -125,7 +133,7 @@ namespace ippl {
                 morton_code current_node = stack.back();
                 stack.pop_back();
 
-                if ( NumberOfParticles(current_node) > max_particles_per_node_m && morton_helper.get_depth(current_node) < max_depth_m ) {
+                if ( get_num_particles_in_octant(current_node) > max_particles_per_node_m && morton_helper.get_depth(current_node) < max_depth_m ) {
 
                     ippl::vector_t<morton_code> children = morton_helper.get_children(current_node);
 
@@ -137,26 +145,8 @@ namespace ippl {
                 }
             }
 
+            std::sort(tree.begin(), tree.end());
             return tree;
-        }
-
-        /**
-         * @brief counts the number of particles covered by the cell decribed by the morton code
-         *        initialize_aid_list needs to be called first
-         *
-         * @params morton_code
-         *
-         * @return number of particles in the cell specified by the morton code
-         *
-         **/
-        size_t NumberOfParticles(morton_code mc)
-        {
-            size_t count = 0;
-            for ( auto aid_list_el : aid_list ) {
-                count += morton_helper.is_ancestor(aid_list_el.first, mc); // iff cell is ancestor of particle code of the corresponding particle, the particle is in the box
-            }
-
-            return count;
         }
     };
 

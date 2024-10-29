@@ -11,6 +11,7 @@ namespace ippl {
     template <size_t Dim>
     void OrthoTree<Dim>::build_tree_naive(particle_t const& particles)
     {
+        // this needs to be initialized before constructing the tree
         initialize_aid_list(particles);
 
         std::stack<std::pair<morton_code, size_t>> s;
@@ -24,16 +25,12 @@ namespace ippl {
                 continue;
             }
 
-            for ( const auto& child_code : morton_helper.get_children(octant) ) {
-                size_t count = 0;
-                for ( const auto& [particle_code, id] : aid_list ) {
-                    if ( morton_helper.is_descendant(particle_code, child_code) ) {
-                        ++count;
-                    }
-                }
+            for ( const auto& child_octant : morton_helper.get_children(octant) ) {
+                const size_t count = get_num_particles_in_octant(child_octant);
 
+                // no need to push in this case
                 if ( count > 0 ) {
-                    s.push({ child_code, count });
+                    s.push({ child_octant, count });
                 }
             }
         }
@@ -81,7 +78,6 @@ namespace ippl {
         return result;
     }
 
-
     template <size_t Dim>
     void OrthoTree<Dim>::initialize_aid_list(particle_t const& particles)
     {
@@ -109,6 +105,28 @@ namespace ippl {
         {
             return a.first < b.first;
         });
+    }
+
+    template <size_t Dim>
+    size_t OrthoTree<Dim>::get_num_particles_in_octant(morton_code octant)
+    {
+        const morton_code lower_bound_target = octant;
+        // this is the same logic as in Morton::is_ancestor/Morton::is_descendant
+        const morton_code upper_bound_target = octant + morton_helper.get_step_size(octant);
+
+        auto lower_bound_idx = std::lower_bound(aid_list.begin(), aid_list.end(), lower_bound_target,
+        [ ] (const Kokkos::pair<unsigned long long, unsigned long>& pair, const morton_code& val)
+        {
+            return pair.first < val;
+        });
+
+        auto upper_bound_idx = std::upper_bound(aid_list.begin(), aid_list.end(), upper_bound_target,
+            [ ] (const morton_code& val, const Kokkos::pair<unsigned long long, unsigned long>& pair)
+        {
+            return val < pair.first;
+        });
+
+        return static_cast<size_t>(upper_bound_idx - lower_bound_idx);
     }
 
 } // namespace ippl
