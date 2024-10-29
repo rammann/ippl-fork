@@ -108,8 +108,8 @@ namespace ippl {
          * @return number of particles in the cell specified by the morton code
          **/
         size_t get_num_particles_in_octant(morton_code octant);
-    public:
 
+    public:
         // SIMONS FUNCTIONS DONT EDIT, TOUCH OR USE THIS IN YOUR CODE:
 
         /**
