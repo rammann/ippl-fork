@@ -16,6 +16,25 @@ namespace ippl {
     template <size_t Dim>
     using particle_type_template = OrthoTreeParticle<ippl::ParticleSpatialLayout<double, Dim>>;
 
+    /**
+     * @brief This is the OrthoTree class, nice oder.
+     *
+     * The idea is:
+     *
+     * - no complexity
+     *      auto tree = OrthoTree<Dimension>(max_depth, max_particles, root_bounds);
+     *
+     * - all the computational complexity
+     *      tree.function_that_builds_the_tree(particles);
+     *
+     * - maybe some complexity, idc
+     *      tree.traverse() or whatever operations your heart desieres.
+     *
+     * - this way we can later implement update as:
+     *      tree.update(updated_particles);
+     *
+     * @tparam Dim
+     */
     template <size_t Dim>
     class OrthoTree {
         using real_coordinate = real_coordinate_template<Dim>;
@@ -30,62 +49,46 @@ namespace ippl {
         const bounds_t root_bounds_m;
         const Morton<Dim> morton_helper;
 
+        // as of now the tree is stored only as morton codes, this needs to be discussed as a group
+        Kokkos::vector<morton_code> tree_m;
 
-        // probably best kept as member, need to compare with new particle codes for update
+        size_t n_particles;
+
+        // this list should not be edited, we will probably need it if we implement the tree update as well
         aid_list_t aid_list;
 
     public:
 
-        OrthoTree(size_t max_depth, size_t max_particles_per_node, const bounds_t& root_bounds)
-            : max_depth_m(max_depth), max_particles_per_node_m(max_particles_per_node),
-            root_bounds_m(root_bounds), morton_helper(max_depth)
-        { }
-        /**
-         * @brief algorithm 1' topdown sequential construction of octree
-         *
-         * @param morton code of root_node, particles
-         *
-         * @return list of morton codes of leaves of tree spanning root node
-         */
-
-        ippl::vector_t<morton_code> build_tree_topdown_sequential(morton_code root_node, particle_t const& particles)
-        {
-            // insert the root into the tree
-          ippl::vector_t<morton_code> tree; // subtree that will be returned
-          ippl::vector_t<morton_code> stack; // stack used to build the tree
-
-
-            stack.push_back(root_node); // maybe store morton_code(0) s.t. we can call morton::root_val or smth
-
-            initialize_aid_list(particles); // initialize aid list - required for particle counting could be moved to constructor
-
-            while(stack.size() > 0){
-                morton_code current_node = stack.back();
-                stack.pop_back();
-
-              if(NumberOfParticles(current_node) > max_particles_per_node_m && morton_helper.get_depth(current_node) < max_depth_m){
-                
-                ippl::vector_t<morton_code> children = morton_helper.get_children(current_node);
-                
-                for(morton_code child : children){stack.push_back(child);}
-
-              }
-              else{
-                tree.push_back(current_node);
-              }
-            }
-
-            return tree;
-        }
+        OrthoTree(size_t max_depth, size_t max_particles_per_node, const bounds_t& root_bounds);
 
         /**
-         * @brief returns a list of morton_codes (nodes) / particle ids
-         * this is intended for testing
+         * @brief This is the most basic way to build a tree. Its inefficien, but it (should) be correct.
+         * Can be used to compare against parallel implementations later on.
+         *
+         * @param particles An 'object of arrays' of particles (google it)
          */
-        //Kokkos::vector<Kokkos::pair<morton_code, Kokkos::vector<size_t>> get_orthotree() const;
+        void build_tree_naive(particle_t const& particles);
 
-        // todo @aaron, generic tree walker that takes 2 funcs (select & apply)
-        void traverse_tree();
+        /**
+         * @brief Compares the following aspects of the trees:
+         * - n_particles
+         * - tree_m.size()
+         * - contents of tree_m
+         *
+         * @warning THIS FUNCTION ASSUMES THAT THE TREES ARE SORTED
+         *
+         * @param other
+         * @return true
+         * @return false
+         */
+        bool operator==(const OrthoTree& other);
+
+        /**
+         * @brief Returns a vector with morton_codes and lists of particle ids inside this region
+         * This is also not meant to be permanent, but it should suffice for the beginning
+         * @return Kokkos::vector<Kokkos::pair<morton_code, Kokkos::vector<size_t>>>
+         */
+        Kokkos::vector<Kokkos::pair<morton_code, Kokkos::vector<size_t>>> get_tree() const;
 
     private:
 
@@ -95,29 +98,48 @@ namespace ippl {
          *
          * @param particles
          */
-        void initialize_aid_list(particle_t const& particles)
+        void initialize_aid_list(particle_t const& particles);
+
+    public:
+
+        // SIMONS FUNCTIONS DONT EDIT, TOUCH OR USE THIS IN YOUR CODE:
+
+        /**
+         * @brief algorithm 1' topdown sequential construction of octree
+         *
+         * @param morton code of root_node, particles
+         *
+         * @return list of morton codes of leaves of tree spanning root node
+         **/
+        ippl::vector_t<morton_code> build_tree_topdown_sequential(morton_code root_node, particle_t const& particles)
         {
-            // maybe get getGlobalNum()?
-            const size_t n_particles = particles.getLocalNum();
-            const size_t nodes_per_edge = (size_t(1) << max_depth_m);
+            // insert the root into the tree
+            ippl::vector_t<morton_code> tree;
+            ippl::vector_t<morton_code> stack; // stack used to build the tree
 
-            // store dimensions of root bounding box
-            const real_coordinate root_bounds_size = root_bounds_m.get_max() - root_bounds_m.get_min();
+            stack.push_back(root_node); // maybe store morton_code(0) s.t. we can call morton::root_val or smth
 
-            aid_list.resize(n_particles);
+            initialize_aid_list(particles); // initialize aid list - required for particle counting could be moved to constructor
 
-            for ( size_t i = 0; i < n_particles; ++i ) {
-                // real/grid_coordinate has lazy eval
-                const real_coordinate normalized = (particles.R(i) - root_bounds_m.get_min()) / root_bounds_size;
-                const grid_coordinate grid_coord = static_cast<grid_coordinate>(normalized * nodes_per_edge);
-                aid_list[i] = { morton_helper.encode(grid_coord, max_depth_m), i };
+            while ( stack.size() > 0 ) {
+                morton_code current_node = stack.back();
+                stack.pop_back();
+
+                if ( NumberOfParticles(current_node) > max_particles_per_node_m && morton_helper.get_depth(current_node) < max_depth_m ) {
+
+                    ippl::vector_t<morton_code> children = morton_helper.get_children(current_node);
+
+                    for ( morton_code child : children ) { stack.push_back(child); }
+
+                }
+                else {
+                    tree.push_back(current_node);
+                }
             }
 
-            std::sort(aid_list.begin(), aid_list.end(), [ ] (const auto& a, const auto& b)
-            {
-                return a.first < b.first;
-            });
+            return tree;
         }
+
         /**
          * @brief counts the number of particles covered by the cell decribed by the morton code
          *        initialize_aid_list needs to be called first
@@ -127,18 +149,19 @@ namespace ippl {
          * @return number of particles in the cell specified by the morton code
          *
          **/
-
-        size_t NumberOfParticles(morton_code mc){
+        size_t NumberOfParticles(morton_code mc)
+        {
             size_t count = 0;
-            for(auto aid_list_el : aid_list){
-              count += morton_helper.is_ancestor(aid_list_el.first,mc); // iff cell is ancestor of particle code of the corresponding particle, the particle is in the box 
+            for ( auto aid_list_el : aid_list ) {
+                count += morton_helper.is_ancestor(aid_list_el.first, mc); // iff cell is ancestor of particle code of the corresponding particle, the particle is in the box
             }
 
             return count;
         }
-          
     };
 
 } // namespace ippl
+
+#include "OrthoTree.hpp"
 
 #endif // ORTHOTREE_GUARD
