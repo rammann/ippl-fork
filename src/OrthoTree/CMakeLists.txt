@@ -7,8 +7,10 @@ set (_HDRS
     Types.h
     MortonHelper.hpp
     OrthoTree.h
+    OrthoTree.hpp
     MortonHelper.h
     BoundingBox.h
+    BoundingBox.hpp
     )
 
 include_directories (
