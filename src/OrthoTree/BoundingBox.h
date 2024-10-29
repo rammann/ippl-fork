@@ -1,7 +1,7 @@
 #ifndef ORTHO_TREE_BOUNDS_GUARD
 #define ORTHO_TREE_BOUNDS_GUARD
 
-#include "Types.h"
+#include "OrthoTreeTypes.h"
 
 namespace ippl {
 

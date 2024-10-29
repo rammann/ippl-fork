@@ -7,7 +7,7 @@
 #include <cassert>
 #include <cmath>
 
-#include "Types.h"
+#include "OrthoTreeTypes.h"
 
 namespace ippl {
 

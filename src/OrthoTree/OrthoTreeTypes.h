@@ -4,6 +4,7 @@
 #include <cstdint>
 #include "OrthoTreeParticle.h"
 #include <Types/Vector.h>
+
 namespace ippl {
 
     using morton_code = uint64_t;

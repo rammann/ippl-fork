@@ -5,7 +5,7 @@
 #include <random>
 #include "Utility/ParameterList.h"
 #include "OrthoTree/OrthoTree.h"
-#include "OrthoTree/Types.h"
+#include "OrthoTree/OrthoTreeTypes.h"
 #include "OrthoTree/BoundingBox.h"
 
 #include <random>

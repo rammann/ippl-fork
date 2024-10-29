@@ -4,7 +4,6 @@
 #include "gtest/gtest.h"
 
 #include "OrthoTree/BoundingBox.h"
-#include "OrthoTree/Types.h"
 
 #include <algorithm>
 #include <cstdint>

@@ -1,5 +1,4 @@
 #include "MortonHelper.h"
-#include "Types.h"
 
 template <size_t Dim>
 morton_code Morton<Dim>::encode(const real_coordinate& coordinate, const real_coordinate& rasterizer, const size_t depth) const

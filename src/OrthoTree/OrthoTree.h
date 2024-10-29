@@ -1,7 +1,7 @@
 #ifndef ORTHOTREE_GUARD
 #define ORTHOTREE_GUARD
 
-#include "Types.h"
+#include "OrthoTreeTypes.h"
 #include "OrthoTreeParticle.h"
 #include "MortonHelper.h"
 #include "BoundingBox.h"
