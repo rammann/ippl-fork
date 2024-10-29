@@ -189,12 +189,6 @@ public:
      */
     inline bool is_descendant(morton_code child, morton_code parent) const;
 
-private:
-    const size_t max_depth;
-    const size_t depth_mask_shift;
-    const size_t depth_mask;
-    const size_t n_children;
-
     /**
      * @brief Returns the step size with siblings at a given level
      *
@@ -202,6 +196,12 @@ private:
      * @return morton_code
      */
     inline morton_code get_step_size(morton_code code) const;
+
+private:
+    const size_t max_depth;
+    const size_t depth_mask_shift;
+    const size_t depth_mask;
+    const size_t n_children;
 
     /**
      * @brief Spreads the coordinates of a single axis onto a morton code. This means:
