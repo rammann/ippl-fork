@@ -146,6 +146,8 @@ namespace ippl {
             });
         IpplTimings::stopTimer(scatterTimer);
 
+        Kokkos::fence();
+        
         static IpplTimings::TimerRef accumulateHaloTimer = IpplTimings::getTimer("accumulateHalo");
         IpplTimings::startTimer(accumulateHaloTimer);
         f.accumulateHalo();
@@ -227,6 +229,7 @@ namespace ippl {
                 op;                                               \
             },                                                    \
             Kokkos::fun<T>(temp));                                \
+        Kokkos::fence();                                          \
         T globaltemp = 0.0;                                       \
         Comm->allreduce(temp, globaltemp, 1, MPI_Op<T>());        \
         return globaltemp;                                        \

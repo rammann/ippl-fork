@@ -161,7 +161,7 @@ namespace ippl {
         
         /* Prepare RMA window for the ranks we need to send to */ 
         for(size_t ridx=0; ridx < nDestinationRanks; ridx++){
-            size_t rank = destinationRanks_hview[ridx];
+            int rank = destinationRanks_hview[ridx];
             if (rank == Comm->rank()){
                 // we do not need to send to ourselves
                 continue;
@@ -184,7 +184,7 @@ namespace ippl {
 
         int sends = 0;
         for(size_t ridx=0; ridx < nDestinationRanks; ridx++){
-            size_t rank = destinationRanks_hview[ridx];
+            int rank = destinationRanks_hview[ridx];
             if(rank == Comm->rank()){
                continue;
             } 
@@ -313,6 +313,8 @@ namespace ippl {
          * Step 3: save information on whether the particle was located
          * Step 4: run additional loop on non-located particles
          */
+        static IpplTimings::TimerRef neighborSearch = IpplTimings::getTimer("neighborSearch");
+        IpplTimings::startTimer(neighborSearch);
 
         Kokkos::parallel_scan(
             "ParticleSpatialLayout::locateParticles()",
@@ -364,6 +366,8 @@ namespace ippl {
 
         invalidCount  = red_val.count[0];
         outsideCount  = red_val.count[1];
+
+        IpplTimings::stopTimer(neighborSearch);
 
         /// Step 4 
         static IpplTimings::TimerRef nonNeighboringParticles = IpplTimings::getTimer("nonNeighboringParticles");
