@@ -48,16 +48,16 @@ namespace ippl {
          * @return list of morton codes of leaves of tree spanning root node
          */
 
-        Kokkos::vector<morton_code> build_tree_topdown_sequential(morton_code root_node, particle_t const& particles)
+        ippl::vector_t<morton_code> build_tree_topdown_sequential(morton_code root_node, particle_t const& particles)
         {
             // insert the root into the tree
-            Kokkos::vector<morton_code> tree; // subtree that will be returned
-            Kokkos::vector<morton_code> stack; // subtree that will be returned
+          ippl::vector_t<morton_code> tree; // subtree that will be returned
+          ippl::vector_t<morton_code> stack; // stack used to build the tree
 
 
             stack.push_back(root_node); // maybe store morton_code(0) s.t. we can call morton::root_val or smth
 
-            initialize_aid_list(particles) // initialize aid list - required for particle counting could be moved to constructor
+            initialize_aid_list(particles); // initialize aid list - required for particle counting could be moved to constructor
 
             while(stack.size() > 0){
                 morton_code current_node = stack.back();
@@ -65,7 +65,7 @@ namespace ippl {
 
               if(NumberOfParticles(current_node) > max_particles_per_node_m && morton_helper.get_depth(current_node) < max_depth_m){
                 
-                Kokkos::vector<morton_code> children = morton_helper.get_children(current_node); // subtree that will be returned
+                ippl::vector_t<morton_code> children = morton_helper.get_children(current_node);
                 
                 for(morton_code child : children){stack.push_back(child);}
 
@@ -82,7 +82,7 @@ namespace ippl {
          * @brief returns a list of morton_codes (nodes) / particle ids
          * this is intended for testing
          */
-        Kokkos::vector<Kokkos::pair<morton_code, Kokkos::vector<size_t>> get_orthotree() const;
+        //Kokkos::vector<Kokkos::pair<morton_code, Kokkos::vector<size_t>> get_orthotree() const;
 
         // todo @aaron, generic tree walker that takes 2 funcs (select & apply)
         void traverse_tree();
@@ -108,7 +108,7 @@ namespace ippl {
 
             for ( size_t i = 0; i < n_particles; ++i ) {
                 // real/grid_coordinate has lazy eval
-                const real_coordiante normalized = (particles.R(i) - root_bounds_m.get_min()) / root_bounds_size;
+                const real_coordinate normalized = (particles.R(i) - root_bounds_m.get_min()) / root_bounds_size;
                 const grid_coordinate grid_coord = static_cast<grid_coordinate>(normalized * nodes_per_edge);
                 aid_list[i] = { morton_helper.encode(grid_coord, max_depth_m), i };
             }
