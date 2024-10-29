@@ -13,14 +13,6 @@
 
 using namespace ippl;
 
-TEST(OrthoTreeTest, Constructor)
-{
-    static constexpr size_t Dim = 3;
-    ippl::OrthoTree<Dim> tree(5, 10, ippl::BoundingBox<Dim>({ 0.0, 0.0, 0.0 }, { 1.0, 1.0, 1.0 }));
-    EXPECT_EQ(1, 1);
-}
-
-
 TEST(OrthoTreeTest, BuildSimpleQuadTree)
 {
     static constexpr size_t Dim = 2;
@@ -39,7 +31,6 @@ TEST(OrthoTreeTest, BuildSimpleQuadTree)
         particles.R(i) = coordinates.at(i);
     }
 
-
     ippl::vector_t<morton_code> tree_codes = tree_2d.build_tree_topdown_sequential(0,particles);
 
     Morton<Dim> morton_helper(5);
@@ -48,7 +39,9 @@ TEST(OrthoTreeTest, BuildSimpleQuadTree)
     EXPECT_EQ(tree_codes, expected);
 }
 
-int main(int argc, char** argv) {
+// this is required to test the orthotree, as it depends on ippl
+int main(int argc, char** argv)
+{
     // Initialize MPI and IPPL
     ippl::initialize(argc, argv);
 
