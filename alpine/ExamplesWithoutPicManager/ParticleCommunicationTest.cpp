@@ -186,14 +186,14 @@ int main(int argc, char* argv[]) {
             Kokkos::parallel_for(
                 P->getLocalNum(),
                 generate_random<Vector_t<double, Dim>, Kokkos::Random_XorShift64_Pool<>, Dim>(
-                    P->P.getView(), rand_pool64, Rmin-Rmax,Rmax-Rmin));
+                    P->P.getView(), rand_pool64, 0.5*Rmin-Rmax,0.5*Rmax-Rmin));
             Kokkos::fence();
            
             // Displace
-            //P->R = P->R + P->P;
+            P->R = P->R + P->P;
             
             // Resample Position over entire domain since the boundary conditions are not implemented correctly
-            P->R = P->P; 
+            //P->R = P->P; 
 
             // Particle Update and Inter Rank Communication 
             P->update();
