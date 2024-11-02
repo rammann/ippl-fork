@@ -70,6 +70,14 @@ namespace ippl {
         void build_tree_naive(particle_t const& particles);
 
         /**
+         *
+         * @brief This function partitions the workload of building the tree across
+         * the available mpi ranks.
+         *
+         */
+        void partition(Kokkos::vector<morton_code>& octants);
+
+        /**
          * @brief Returns a vector with morton_codes and lists of particle ids inside this region
          * This is also not meant to be permanent, but it should suffice for the beginning
          * @return Kokkos::vector<Kokkos::pair<morton_code, Kokkos::vector<size_t>>>

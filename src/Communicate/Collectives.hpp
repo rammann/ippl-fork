@@ -1,5 +1,6 @@
 #include "Communicate/DataTypes.h"
 
+#include "Communicate/Communicator.h"
 #include "Communicate/Operations.h"
 
 namespace ippl {
@@ -58,6 +59,22 @@ namespace ippl {
         template <typename T, class Op>
         void Communicator::allreduce(T& inout, int count, Op op) {
             allreduce(&inout, count, op);
+        }
+
+        template <typename T, class Op> 
+        void Communicator::scan(T* input, T* output, int count, Op op) {
+            MPI_Datatype type = get_mpi_datatype<T>(*input);
+
+            MPI_Op mpiOp = get_mpi_op<Op, T>();
+
+            MPI_Scan(input, output, count, type, mpiOp, *comm_m);
+        }
+
+        template <typename T>
+        void Communicator::broadcast(T* data, int count, int root) {
+            MPI_Datatype type = get_mpi_datatype<T>(*data);
+
+            MPI_Bcast(data, count, type, root, *comm_m);
         }
     }  // namespace mpi
 }  // namespace ippl
