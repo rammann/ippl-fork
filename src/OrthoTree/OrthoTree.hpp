@@ -129,4 +129,20 @@ namespace ippl {
         return static_cast<size_t>(upper_bound_idx - lower_bound_idx);
     }
 
+    template<size_t Dim>
+    ippl::vector_t<morton_code> OrthoTree<Dim>::linearise_octants(const ippl::vector_t<morton_code>& octants)
+    {
+        ippl::vector_t<morton_code> linearised;
+        for(size_t i = 0; i < octants.size()-1; ++i)
+        {
+            if(morton_helper.is_ancestor(octants[i+1], octants[i]))
+            {
+                continue;
+            }
+            linearised.push_back(octants[i]);
+        }
+        linearised.push_back(octants.back());
+        return linearised;
+    }
+
 } // namespace ippl
