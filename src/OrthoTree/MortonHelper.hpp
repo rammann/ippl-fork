@@ -166,29 +166,29 @@ namespace ippl {
         return get_last_descendant(code, max_depth);
     }
 
-
-    // suggestion for alternative algorithm:
-    // only go up the levels on the larger node and check whether the other is descendant.
     template <size_t Dim>
     inline morton_code Morton<Dim>::get_nearest_common_ancestor(morton_code code_a, morton_code code_b) const
     {
-
         size_t depth_a = get_depth(code_a);
         size_t depth_b = get_depth(code_b);
 
-        // swap nodes such that b is the coarser nodes
-        if ( depth_a < depth_b ) {
-            std::swap(code_a, code_b);
-            std::swap(depth_a, depth_b);
+        // equalize depths
+        while (depth_a > depth_b) {
+            code_a = get_parent(code_a);
+            --depth_a;
+        }
+        while (depth_b > depth_a) {
+            code_b = get_parent(code_b);
+            --depth_b;
         }
 
-        morton_code ancestor_b = code_b;
-        // climb up until common ancestor is found
-        while ( !is_descendant(code_a, ancestor_b) ) {
-            ancestor_b = get_parent(ancestor_b);
+        // ascend together until common ancestor is found
+        while (code_a != code_b) {
+            code_a = get_parent(code_a);
+            code_b = get_parent(code_b);
         }
 
-        return ancestor_b;
+        return code_a;
     }
 
     template <size_t Dim>
