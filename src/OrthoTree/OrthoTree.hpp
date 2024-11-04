@@ -175,4 +175,66 @@ namespace ippl {
         tree_m = linearise_octants(tree_m);
     }
 
+    template <size_t Dim>
+    ippl::vector_t<morton_code> OrthoTree<Dim>::complete_tree(ippl::vector_t<morton_code>& tree)
+    {
+        // remove duplicates here
+        tree = linearise_octants(tree);
+        // partition (algo5) here
+        const int world_rank = Comm->rank();
+        const int world_size = Comm->size();
+
+        morton_code buff;
+        if ( world_rank == 0 ) {
+            // push front
+
+            const morton_code dfd_root = morton_helper.get_deepest_first_descendant(morton_code(0));
+            const morton_code A_finest = morton_helper.get_nearest_common_ancestor(dfd_root, tree[0]);
+            const morton_code first_child = morton_helper.get_first_child(A_finest);
+            buff = first_child;
+        }
+
+        if ( world_rank == world_size - 1 ) {
+            // push_back
+
+            const morton_code dfd_root = morton_helper.get_deepest_last_descendant(morton_code(0));
+            const morton_code A_finest = morton_helper.get_nearest_common_ancestor(dfd_root, tree[0]);
+            const morton_code last_child = morton_helper.get_last_child(A_finest);
+
+            tree.push_back(last_child);
+        }
+
+        if ( world_rank > 0 ) {
+            Comm->send(tree[0], 1, world_rank - 1, 0);
+        }
+
+        if ( world_rank < world_size - 1 ) {
+            mpi::Status status;
+            Comm->recv(&buff, 1, world_rank + 1, 0, status);
+            // if (status is ok ig?)
+            tree.push_back(buff);
+        }
+
+        vector_t<morton_code> R;
+        if ( world_rank == 0 ) {
+            R.push_back(buff);
+            for ( morton_code elem : complete_region(buff, tree[0]) ) {
+                R.push_back(elem);
+            }
+        }
+
+        for ( size_t i = 0; i < tree.size() - 1; ++i ) {
+            R.push_back(tree[i]);
+            for ( morton_code elem : complete_region(tree[i], tree[i+1]) ) {
+                R.push_back(elem);
+            }
+        }
+
+        if ( world_rank == world_size - 1 ) {
+            R.push_back(tree[tree.size() - 1]);
+        }
+
+        return R;
+    }
+
 } // namespace ippl

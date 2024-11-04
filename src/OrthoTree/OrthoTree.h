@@ -91,73 +91,13 @@ namespace ippl {
          */
         void linearise_tree();
 
-        void complete_tree(ippl::vector_t<morton_code>& tree)
-        {
-            // remove duplicates here
-            tree = linearise_octants(tree);
-            // partition (algo5) here
-            const int world_rank = Comm->rank();
-            const int world_size = Comm->size();
-
-            morton_code buff;
-            if ( world_rank == 0 ) {
-                // push front
-
-                const morton_code dfd_root = morton_helper.get_deepest_first_descendant(morton_code(0));
-                const morton_code A_finest = morton_helper.get_nearest_common_ancestor(dfd_root, tree[0]);
-                const morton_code first_child = morton_helper.get_first_child(A_finest);
-                buff = first_child;
-            }
-
-            if ( world_rank == world_size - 1 ) {
-                // push_back
-
-                const morton_code dfd_root = morton_helper.get_deepest_last_descendant(morton_code(0));
-                const morton_code A_finest = morton_helper.get_nearest_common_ancestor(dfd_root, tree[0]);
-                const morton_code last_child = morton_helper.get_last_child(A_finest);
-
-                tree.push_back(last_child);
-            }
-
-            if ( world_rank > 0 ) {
-                // send tree[0], rank-1
-
-                Comm->send(tree[0], 1, world_rank - 1, 0);
-                std::cout << (world_rank + 1) << " SENT TO " << world_rank - 1 << "\n";
-            }
-
-            if ( world_rank < world_size - 1 ) {
-                // receive, push_back
-                mpi::Status status;
-                Comm->recv(&buff, 1, world_rank + 1, 0, status);
-                std::cout << (world_rank + 1) << " RECEIVED FROM " << world_rank + 1 << "\n";
-                tree.push_back(buff);
-            }
-
-            Kokkos::vector<morton_code> R;
-            for ( size_t i = 0; i < tree.size() - 1; ++i ) {
-                if ( world_rank == 0 && i == 0 ) {
-                    auto A = complete_region(buff, tree[i]);
-
-                    R.push_back(buff);
-                    for ( morton_code elem : A ) {
-                        R.push_back(elem);
-                    }
-                }
-                else {
-                    auto A = complete_region(tree[i], tree[i+1]);
-
-                    R.push_back(tree[i]);
-                    for ( morton_code elem : A ) {
-                        R.push_back(elem);
-                    }
-                }
-            }
-
-            if ( world_rank == world_size - 1 ) {
-                R.push_back(tree[tree.size() - 1]);
-            }
-        }
+        /**
+         * @brief Implements algorithm 3.
+         *
+         * @param tree sorted distributed list of octants
+         * @return ippl::vector_t<morton_code>
+         */
+        ippl::vector_t<morton_code> complete_tree(ippl::vector_t<morton_code>& tree);
 
         /**
          * @brief Compares the following aspects of the trees:
