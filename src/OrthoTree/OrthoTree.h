@@ -77,6 +77,22 @@ namespace ippl {
         Kokkos::vector<Kokkos::pair<morton_code, Kokkos::vector<size_t>>> get_tree() const;
 
         /**
+         * @brief Linearises octants by removing ancestors that would cause overlaps
+         * @param list of octants - sorted
+         * @return list of linearised octants - sorted
+         * @warning THIS FUNCTION ASSUMES THAT THE OCTANTS ARE SORTED
+         */
+        ippl::vector_t<morton_code> linearise_octants(ippl::vector_t<morton_code> const& octants);
+
+        /**
+         * @brief Linearises octants comprising the tree by removing ancestors that would cause overlaps
+         * @return list of linearised octants - sorted
+         * @warning THIS FUNCTION ASSUMES THAT THE TREE IS SORTED
+         */
+        void linearise_tree();
+
+
+        /**
          * @brief Compares the following aspects of the trees:
          * - n_particles
          * - tree_m.size()

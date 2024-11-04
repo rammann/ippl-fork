@@ -140,7 +140,7 @@ namespace ippl {
         morton_code current_node = trial_nodes.back();
         trial_nodes.pop_back();
 
-        if (code_a < current_node and current_node < code_b and morton_helper.is_ancestor(code_b, current_node)) {
+        if ((code_a < current_node) && (current_node < code_b) && morton_helper.is_ancestor(code_b, current_node)) {
           min_lin_tree.push_back(current_node);
         }
         else if (morton_helper.is_ancestor(nearest_common_ancestor, current_node)) {
@@ -151,6 +151,28 @@ namespace ippl {
 
       std::sort(min_lin_tree.begin(), min_lin_tree.end());
       return min_lin_tree;
+    }
+
+    template<size_t Dim>
+    ippl::vector_t<morton_code> OrthoTree<Dim>::linearise_octants(const ippl::vector_t<morton_code>& octants)
+    {
+        ippl::vector_t<morton_code> linearised;
+        for(size_t i = 0; i < octants.size()-1; ++i)
+        {
+            if(morton_helper.is_ancestor(octants[i+1], octants[i]))
+            {
+                continue;
+            }
+            linearised.push_back(octants[i]);
+        }
+        linearised.push_back(octants.back());
+        return linearised;
+    }
+
+    template<size_t Dim>
+    void OrthoTree<Dim>::linearise_tree()
+    {
+        tree_m = linearise_octants(tree_m);
     }
 
 } // namespace ippl
