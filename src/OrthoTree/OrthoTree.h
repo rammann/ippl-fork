@@ -84,6 +84,13 @@ namespace ippl {
          */
         ippl::vector_t<morton_code> linearise_octants(ippl::vector_t<morton_code> const& octants);
 
+        /**
+         * @brief Linearises octants comprising the tree by removing ancestors that would cause overlaps
+         * @return list of linearised octants - sorted
+         * @warning THIS FUNCTION ASSUMES THAT THE TREE IS SORTED
+         */
+        void linearise_tree();
+
 
         /**
          * @brief Compares the following aspects of the trees:

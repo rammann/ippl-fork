@@ -145,4 +145,10 @@ namespace ippl {
         return linearised;
     }
 
+    template<size_t Dim>
+    void OrthoTree<Dim>::linearise_tree()
+    {
+        tree_m = linearise_octants(tree_m);
+    }
+
 } // namespace ippl
