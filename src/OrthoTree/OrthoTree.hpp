@@ -178,44 +178,50 @@ namespace ippl {
     template <size_t Dim>
     ippl::vector_t<morton_code> OrthoTree<Dim>::complete_tree(ippl::vector_t<morton_code>& tree)
     {
-        // remove duplicates here
-        tree = linearise_octants(tree);
+        // remove duplicates here (algo whatever)
+        // linearise tree (algo8)
         // partition (algo5) here
+
+        // i would suggest we only keep the core logic here
+        // this way we can test algo 3 without having to rely on remove_duplicates, algo8 and algo5
+        // we just need to actually apply those 3 funcs to the tree before calling this function
+
         const int world_rank = Comm->rank();
         const int world_size = Comm->size();
 
         morton_code buff;
         if ( world_rank == 0 ) {
-            // push front
-
             const morton_code dfd_root = morton_helper.get_deepest_first_descendant(morton_code(0));
             const morton_code A_finest = morton_helper.get_nearest_common_ancestor(dfd_root, tree[0]);
             const morton_code first_child = morton_helper.get_first_child(A_finest);
+            // this imitates push_front
             buff = first_child;
         }
 
         if ( world_rank == world_size - 1 ) {
-            // push_back
-
-            const morton_code dfd_root = morton_helper.get_deepest_last_descendant(morton_code(0));
-            const morton_code A_finest = morton_helper.get_nearest_common_ancestor(dfd_root, tree[0]);
+            const morton_code dld_root = morton_helper.get_deepest_last_descendant(morton_code(0));
+            const morton_code A_finest = morton_helper.get_nearest_common_ancestor(dld_root, tree[0]);
             const morton_code last_child = morton_helper.get_last_child(A_finest);
 
             tree.push_back(last_child);
         }
 
         if ( world_rank > 0 ) {
+            // maybe isend?
             Comm->send(tree[0], 1, world_rank - 1, 0);
         }
 
         if ( world_rank < world_size - 1 ) {
             mpi::Status status;
+            // maybe irecv?
             Comm->recv(&buff, 1, world_rank + 1, 0, status);
-            // if (status is ok ig?)
+            // if (status is ok we can proceed or smth?)
             tree.push_back(buff);
         }
 
         vector_t<morton_code> R;
+
+        // rank 0 works differently, as we need to 'simulate' push_front
         if ( world_rank == 0 ) {
             R.push_back(buff);
             for ( morton_code elem : complete_region(buff, tree[0]) ) {
@@ -223,7 +229,8 @@ namespace ippl {
             }
         }
 
-        for ( size_t i = 0; i < tree.size() - 1; ++i ) {
+        const size_t n = tree.size();
+        for ( size_t i = 0; i < n - 1; ++i ) {
             R.push_back(tree[i]);
             for ( morton_code elem : complete_region(tree[i], tree[i+1]) ) {
                 R.push_back(elem);
@@ -231,7 +238,7 @@ namespace ippl {
         }
 
         if ( world_rank == world_size - 1 ) {
-            R.push_back(tree[tree.size() - 1]);
+            R.push_back(tree[n - 1]);
         }
 
         return R;

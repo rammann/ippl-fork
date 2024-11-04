@@ -92,9 +92,15 @@ namespace ippl {
         void linearise_tree();
 
         /**
-         * @brief Implements algorithm 3.
+         * @brief Implements the logic part of algorithm 3.
          *
-         * @param tree sorted distributed list of octants
+         * @warning DOES NOT INCLUDE LINES 1-3 OF THE ALGORITHM
+         *
+         * @param tree sorted distributed list of octants with:
+         *  - removed duplicates (needs to be implemented)
+         *  - linearised (algo 8)
+         *  - workload distributed (algo 5)
+         *
          * @return ippl::vector_t<morton_code>
          */
         ippl::vector_t<morton_code> complete_tree(ippl::vector_t<morton_code>& tree);
