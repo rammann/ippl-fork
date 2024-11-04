@@ -36,7 +36,10 @@ int main(int argc, char* argv[])
             particles.rho(i) = 0;
         }
 
-        tree.build_tree_naive(particles);
+        // tree.build_tree_naive(particles);
+
+        Kokkos::vector<ippl::morton_code> vec = { 0, 1, 2, 3, 4 };
+        tree.complete_tree(vec);
     }
 
     ippl::finalize();
