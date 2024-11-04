@@ -91,10 +91,10 @@ namespace ippl {
          */
         void linearise_tree();
 
-        void complete_tree(Kokkos::vector<morton_code>& tree)
+        void complete_tree(ippl::vector_t<morton_code>& tree)
         {
             // remove duplicates here
-            linearise_octants(tree);
+            tree = linearise_octants(tree);
             // partition (algo5) here
             const int world_rank = Comm->rank();
             const int world_size = Comm->size();

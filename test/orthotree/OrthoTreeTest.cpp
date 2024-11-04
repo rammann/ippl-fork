@@ -15,7 +15,7 @@ int main(int argc, char* argv[])
     {
         static constexpr size_t Dim = 3;
         const size_t max_particles = 100;
-        const size_t max_depth = ;
+        const size_t max_depth = 5;
         const size_t num_particles = 1000;
 
         const auto MIN_BOUND = 0.0;
@@ -38,7 +38,10 @@ int main(int argc, char* argv[])
 
         // tree.build_tree_naive(particles);
 
-        Kokkos::vector<ippl::morton_code> vec = { 0, 1, 2, 3, 4 };
+        ippl::vector_t<ippl::morton_code> vec;
+        for ( ippl::morton_code c = 0; c < 100; ++c ) {
+            vec.push_back(c);
+        }
         tree.complete_tree(vec);
     }
 
