@@ -172,23 +172,19 @@ namespace ippl {
         size_t depth_a = get_depth(code_a);
         size_t depth_b = get_depth(code_b);
 
-        // equalize depths
-        while (depth_a > depth_b) {
-            code_a = get_parent(code_a);
-            --depth_a;
-        }
-        while (depth_b > depth_a) {
-            code_b = get_parent(code_b);
-            --depth_b;
+        // swap nodes such that b is the coarser nodes
+        if ( depth_a < depth_b ) {
+            std::swap(code_a, code_b);
+            std::swap(depth_a, depth_b);
         }
 
-        // ascend together until common ancestor is found
-        while (code_a != code_b) {
-            code_a = get_parent(code_a);
-            code_b = get_parent(code_b);
+        morton_code ancestor_b = code_b;
+        // climb up until common ancestor is found
+        while ( !is_descendant(code_a, ancestor_b) ) {
+            ancestor_b = get_parent(ancestor_b);
         }
 
-        return code_a;
+        return ancestor_b;
     }
 
     template <size_t Dim>

@@ -140,7 +140,7 @@ namespace ippl {
         morton_code current_node = trial_nodes.back();
         trial_nodes.pop_back();
 
-        if (code_a < current_node and current_node < code_b && morton_helper.is_ancestor(code_b, current_node)) {
+        if (code_a < current_node and current_node < code_b and morton_helper.is_ancestor(code_b, current_node)) {
           min_lin_tree.push_back(current_node);
         }
         else if (morton_helper.is_ancestor(nearest_common_ancestor, current_node)) {
