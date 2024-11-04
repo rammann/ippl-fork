@@ -166,13 +166,9 @@ namespace ippl {
         return get_last_descendant(code, max_depth);
     }
 
-
-    // suggestion for alternative algorithm:
-    // only go up the levels on the larger node and check whether the other is descendant.
     template <size_t Dim>
     inline morton_code Morton<Dim>::get_nearest_common_ancestor(morton_code code_a, morton_code code_b) const
     {
-
         size_t depth_a = get_depth(code_a);
         size_t depth_b = get_depth(code_b);
 

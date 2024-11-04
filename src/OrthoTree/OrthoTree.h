@@ -125,6 +125,15 @@ namespace ippl {
          **/
         size_t get_num_particles_in_octant(morton_code octant);
 
+        /**
+          * @brief algorithm 2 sequential construction of a minimal linear octree between two octants
+          *
+          * @param morton codes code_a and code_b of the octants
+          *
+          * @return list of morton codes of minimal linear octree between the two octants
+          **/
+        ippl::vector_t<morton_code> complete_region(morton_code code_a, morton_code code_b); 
+
     public:
         // SIMONS FUNCTIONS DONT EDIT, TOUCH OR USE THIS IN YOUR CODE:
 
