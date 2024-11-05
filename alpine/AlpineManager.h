@@ -119,6 +119,8 @@ public:
     void scatterCIC() {
         Inform m("scatter ");
         this->fcontainer_m->getRho() = 0.0;
+        
+        std::cout << "1" << std::endl;
 
         ippl::ParticleAttrib<double> *q = &this->pcontainer_m->q;
         typename Base::particle_position_type *R = &this->pcontainer_m->R;
@@ -128,8 +130,12 @@ public:
         Vector_t<double, Dim> rmax	= rmax_m;
         Vector_t<double, Dim> hr        = hr_m;
 
+        std::cout << "2" << std::endl;
+        
         scatter(*q, *rho, *R);
         double relError = std::fabs((Q-(*rho).sum())/Q);
+        
+        std::cout << "3" << std::endl;
 
         m << relError << endl;
 
