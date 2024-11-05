@@ -63,12 +63,9 @@ namespace ippl {
         : rlayout_m(fl, mesh)
         , flayout_m(fl)
     {   
-/*        std::cout << "Constructor" << std::endl;
         nRecvs.resize(Comm->size());
-        std::cout << "After resize" << std::endl;
         window.create(*Comm, nRecvs.begin(), nRecvs.end());
-        std::cout << "After window create" << std::endl;
- */   }
+    }
 
     template <typename T, unsigned Dim, class Mesh, typename... Properties>
     void ParticleSpatialLayout<T, Dim, Mesh, Properties...>::updateLayout(FieldLayout<Dim>& fl,
@@ -161,15 +158,16 @@ namespace ippl {
         static IpplTimings::TimerRef preprocTimer = IpplTimings::getTimer("sendPreprocess");
         IpplTimings::startTimer(preprocTimer);
         
-        mpi::rma::Window<mpi::rma::Active> window;
-        std::vector<size_type> nRecvs(nRanks, 0);
-        std::cout << "Before Filling 0" << std::endl;
+        //mpi::rma::Window<mpi::rma::Active> window;
+        //std::vector<size_type> nRecvs(nRanks, 0);
+        //std::cout << "Before Filling 0" << std::endl;
+       
         std::fill(nRecvs.begin(), nRecvs.end(), 0); 
 
-        IpplTimings::startTimer(createTimer);
-        window.create(*Comm, nRecvs.begin(), nRecvs.end());
-        IpplTimings::stopTimer(createTimer);
-        std::vector<size_type> nSends(nRanks, 0);
+        //IpplTimings::startTimer(createTimer);
+        //window.create(*Comm, nRecvs.begin(), nRecvs.end());
+        //IpplTimings::stopTimer(createTimer);
+        //std::vector<size_type> nSends(nRanks, 0);
 
         window.fence(0);
         
@@ -184,11 +182,13 @@ namespace ippl {
             }
             //nSends[rank] = rankSendCount_hview(rank);
             //window.put<size_type>(nSends.data() + rank, rank, Comm->rank());
-            IpplTimings::startTimer(putTimer);
-            std::cout << "Before window put" << std::endl;
+            //IpplTimings::startTimer(putTimer);
+            //std::cout << "Before window put" << std::endl;
+            
             window.put<size_type>(rankSendCount_hview(rank), rank, Comm->rank());
-            std::cout << "After window put" << std::endl;
-            IpplTimings::stopTimer(putTimer);
+           
+            //std::cout << "After window put" << std::endl;
+            //IpplTimings::stopTimer(putTimer);
         }
         window.fence(0);
 
