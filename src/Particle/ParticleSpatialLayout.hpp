@@ -61,7 +61,7 @@ namespace ippl {
     ParticleSpatialLayout<T, Dim, Mesh, Properties...>::ParticleSpatialLayout(FieldLayout<Dim>& fl,
                                                                               Mesh& mesh)
         : rlayout_m(fl, mesh)
-        , flayout_m(fl) {}
+        , flayout_m(fl) { }
 
     template <typename T, unsigned Dim, class Mesh, typename... Properties>
     void ParticleSpatialLayout<T, Dim, Mesh, Properties...>::updateLayout(FieldLayout<Dim>& fl,
@@ -148,26 +148,36 @@ namespace ippl {
 
         // 2.1 Remote Memory Access window for one-sided communication
         
+        static IpplTimings::TimerRef putTimer = IpplTimings::getTimer("putTimer");
+        static IpplTimings::TimerRef createTimer = IpplTimings::getTimer("createTimer");
+        static IpplTimings::TimerRef accessTimer = IpplTimings::getTimer("accessTimer");
         static IpplTimings::TimerRef preprocTimer = IpplTimings::getTimer("sendPreprocess");
         IpplTimings::startTimer(preprocTimer);
         
         mpi::rma::Window<mpi::rma::Active> window;
-        
         std::vector<size_type> nRecvs(nRanks, 0);
+  
+        IpplTimings::startTimer(createTimer);
         window.create(*Comm, nRecvs.begin(), nRecvs.end());
-        std::vector<size_type> nSends(nRanks, 0);
+        IpplTimings::stopTimer(createTimer);
+        //std::vector<size_type> nSends(nRanks, 0);
 
         window.fence(0);
         
-        /* Prepare RMA window for the ranks we need to send to */ 
+        // Prepare RMA window for the ranks we need to send to  
         for(size_t ridx=0; ridx < nDestinationRanks; ridx++){
+            IpplTimings::startTimer(accessTimer);
             int rank = destinationRanks_hview[ridx];
+            IpplTimings::stopTimer(accessTimer);
             if (rank == Comm->rank()){
                 // we do not need to send to ourselves
                 continue;
             }
-            nSends[rank] = rankSendCount_hview(rank);
-            window.put<size_type>(nSends.data() + rank, rank, Comm->rank());
+            //nSends[rank] = rankSendCount_hview(rank);
+            //window.put<size_type>(nSends.data() + rank, rank, Comm->rank());
+            IpplTimings::startTimer(putTimer);
+            window.put<size_type>(rankSendCount_hview(rank), rank, Comm->rank());
+            IpplTimings::stopTimer(putTimer);
         }
         window.fence(0);
 
@@ -188,7 +198,7 @@ namespace ippl {
             if(rank == Comm->rank()){
                continue;
             } 
-            hash_type hash("hash", nSends[rank]);
+            hash_type hash("hash", rankSendCount_hview(rank));
             fillHash(rank, particleRanks, hash);
             pc.sendToRank(rank, tag, sends++, requests, hash);
         }
