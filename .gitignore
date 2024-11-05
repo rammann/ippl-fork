@@ -1,4 +1,4 @@
-build/
+build*/
 doc/html
 doc/latex
 manual/*.aux
