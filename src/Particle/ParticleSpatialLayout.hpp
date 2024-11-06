@@ -63,8 +63,8 @@ namespace ippl {
         : rlayout_m(fl, mesh)
         , flayout_m(fl)
     {   
-        nRecvs.resize(Comm->size());
-        window.create(*Comm, nRecvs.begin(), nRecvs.end());
+        nRecvs_m.resize(Comm->size());
+        window_m.create(*Comm, nRecvs_m.begin(), nRecvs_m.end());
     }
 
     template <typename T, unsigned Dim, class Mesh, typename... Properties>
@@ -162,14 +162,14 @@ namespace ippl {
         //std::vector<size_type> nRecvs(nRanks, 0);
         //std::cout << "Before Filling 0" << std::endl;
        
-        std::fill(nRecvs.begin(), nRecvs.end(), 0); 
+        std::fill(nRecvs_m.begin(), nRecvs_m.end(), 0); 
 
         //IpplTimings::startTimer(createTimer);
         //window.create(*Comm, nRecvs.begin(), nRecvs.end());
         //IpplTimings::stopTimer(createTimer);
         //std::vector<size_type> nSends(nRanks, 0);
 
-        window.fence(0);
+        window_m.fence(0);
         
         // Prepare RMA window for the ranks we need to send to  
         for(size_t ridx=0; ridx < nDestinationRanks; ridx++){
@@ -185,12 +185,12 @@ namespace ippl {
             //IpplTimings::startTimer(putTimer);
             //std::cout << "Before window put" << std::endl;
             
-            window.put<size_type>(rankSendCount_hview(rank), rank, Comm->rank());
+            window_m.put<size_type>(rankSendCount_hview(rank), rank, Comm->rank());
            
             //std::cout << "After window put" << std::endl;
             //IpplTimings::stopTimer(putTimer);
         }
-        window.fence(0);
+        window_m.fence(0);
 
         IpplTimings::stopTimer(preprocTimer);
 
@@ -234,8 +234,8 @@ namespace ippl {
 
         int recvs = 0;
         for (int rank = 0; rank < nRanks; ++rank) {
-            if (nRecvs[rank] > 0) {
-                pc.recvFromRank(rank, tag, recvs++, nRecvs[rank]);
+            if (nRecvs_m[rank] > 0) {
+                pc.recvFromRank(rank, tag, recvs++, nRecvs_m[rank]);
             }
         }
         IpplTimings::stopTimer(recvTimer);
