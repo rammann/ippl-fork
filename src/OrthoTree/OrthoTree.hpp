@@ -84,7 +84,6 @@ namespace ippl {
       size_t avg_weight = total/n_procs, k = total % n_procs;
       Kokkos::vector<morton_code> total_octants;
       Kokkos::vector<mpi::Request> requests;
-
       Kokkos::vector<int> sizes(n_procs);
 
       // initialize the start and end index for which processor receives which
@@ -109,6 +108,8 @@ namespace ippl {
           endoffset = k;
         }
 
+        start = end;
+
         //calculate the start and end index for the processor
         for(size_t i = end; i < octants.size(); ++i){
           if(prefix_sum[i] > avg_weight * (p - 1) + startoffset){
@@ -117,12 +118,17 @@ namespace ippl {
           }
         }
 
+    
+
         for(size_t i = start; i < octants.size(); ++i){
           if(prefix_sum[i] > avg_weight * p + endoffset){
             end = i;
             break;
           }
+          if (i == octants.size() - 1)
+            end = octants.size();
         }
+
 
         //if the processor is the last one, add the remaining weight
         if(p == n_procs || end > octants.size()){
@@ -199,7 +205,7 @@ namespace ippl {
         l2++;
       }
 
-      std::cout << "num of received octants on rank " << rank << " is " << received_octants.size() << std::endl;
+      //std::cout << "num of received octants on rank " << rank << " is " << received_octants.size() << std::endl;
 
       return partitioned_octants;
       
