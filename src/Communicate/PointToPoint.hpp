@@ -12,9 +12,9 @@ namespace ippl {
 
         template <typename T>
         void Communicator::send(const T* buf, int count, int dest, int tag) {
-            MPI_Datatype type = get_mpi_datatype<T>(buf);
+            MPI_Datatype type = get_mpi_datatype<T>(*buf);
 
-            MPI_Send(&buf, count, type, dest, tag, comm_m);
+            MPI_Send(buf, count, type, dest, tag, comm_m);
         }
 
         template <typename T>

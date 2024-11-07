@@ -39,20 +39,3 @@ TEST(OrthoTreeTest, BuildSimpleQuadTree)
     EXPECT_EQ(tree_codes, expected);
 }
 
-// this is required to test the orthotree, as it depends on ippl
-int main(int argc, char** argv)
-{
-    // Initialize MPI and IPPL
-    ippl::initialize(argc, argv);
-
-    // Initialize Google Test
-    ::testing::InitGoogleTest(&argc, argv);
-
-    // Run all tests
-    int result = RUN_ALL_TESTS();
-
-    // Finalize IPPL and MPI
-    ippl::finalize();
-
-    return result;
-}

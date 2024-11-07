@@ -62,7 +62,7 @@ namespace ippl {
         }
 
         template <typename T, class Op> 
-        void Communicator::scan(T* input, T* output, int count, Op op) {
+        void Communicator::scan(T* input, T* output, int count, Op) {
             MPI_Datatype type = get_mpi_datatype<T>(*input);
 
             MPI_Op mpiOp = get_mpi_op<Op, T>();

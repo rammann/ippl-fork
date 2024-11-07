@@ -75,7 +75,7 @@ namespace ippl {
          * the available mpi ranks.
          *
          */
-        void partition(Kokkos::vector<morton_code>& octants);
+        Kokkos::vector<morton_code> partition(Kokkos::vector<morton_code>& octants, Kokkos::vector<size_t>& weights);
 
         /**
          * @brief Returns a vector with morton_codes and lists of particle ids inside this region
