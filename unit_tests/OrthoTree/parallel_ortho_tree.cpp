@@ -70,6 +70,37 @@ TEST(ParallelOrthoTreeTest, PartitionTestWeighted) {
   }
 } 
 
+TEST(ParallelOrthoTreeTest, PartitionTestDistributeUneven) {
+  ippl::mpi::Communicator comm;
+  unsigned rank = comm.rank();
+  unsigned n_procs = comm.size();
+  EXPECT_EQ(n_procs, 4);
+  ippl::OrthoTree<3> tree_3d(5, 1, ippl::BoundingBox<3>({0.0, 0.0, 0.0}, {1.0, 1.0, 1.0}));
+  Kokkos::vector<size_t> weights;
+  Kokkos::vector<ippl::morton_code> expected;
+  Kokkos::vector<ippl::morton_code> result;
+  if (rank == 0) {
+    Kokkos::vector<ippl::morton_code> data(6, 1);
+    weights = Kokkos::vector<size_t>(6, 1);
+    expected = Kokkos::vector<ippl::morton_code>(3, 1);
+    result = tree_3d.partition(data, weights);
+  
+  } else if (rank == 1) {
+    Kokkos::vector<ippl::morton_code> data(2, 1);
+    weights = Kokkos::vector<size_t>(2, 1);
+    expected = Kokkos::vector<ippl::morton_code>(3, 1);
+    result = tree_3d.partition(data, weights);
+  } else {
+    Kokkos::vector<ippl::morton_code> data(1, 1);
+    weights = Kokkos::vector<size_t>(1, 1);
+    expected = Kokkos::vector<ippl::morton_code>(2, 1);
+    result = tree_3d.partition(data, weights);
+  }
+  ASSERT_EQ(result.size(), expected.size());
+  for (size_t i = 0; i < expected.size(); i++) {
+    EXPECT_EQ(result[i], expected[i]); 
+  }
+}
 // this is required to test the orthotree, as it depends on ippl
 int main(int argc, char** argv)
 {

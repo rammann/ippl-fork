@@ -72,9 +72,6 @@ namespace ippl {
       for (size_t i = 0; i < prefix_sum.size(); ++i){
         prefix_sum[i] += total - max;
       }
-      for (auto sum: prefix_sum)
-        std::cout << sum << " ";
-      std::cout << std::endl;
 
       //broadcast the total weight to all processors
       Comm->broadcast<size_t>(&total, 1, n_procs - 1);
