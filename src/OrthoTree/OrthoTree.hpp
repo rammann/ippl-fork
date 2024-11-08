@@ -176,72 +176,74 @@ namespace ippl {
     }
 
     template <size_t Dim>
-    ippl::vector_t<morton_code> OrthoTree<Dim>::complete_tree(ippl::vector_t<morton_code>& tree)
+    Kokkos::vector<morton_code> OrthoTree<Dim>::complete_tree(Kokkos::vector<morton_code>& octants)
     {
-        // remove duplicates here (algo whatever)
-        // linearise tree (algo8)
-        // partition (algo5) here
-
-        // i would suggest we only keep the core logic here
-        // this way we can test algo 3 without having to rely on remove_duplicates, algo8 and algo5
-        // we just need to actually apply those 3 funcs to the tree before calling this function
-
-        const int world_rank = Comm->rank();
-        const int world_size = Comm->size();
-
-        morton_code buff;
-        if ( world_rank == 0 ) {
-            const morton_code dfd_root = morton_helper.get_deepest_first_descendant(morton_code(0));
-            const morton_code A_finest = morton_helper.get_nearest_common_ancestor(dfd_root, tree[0]);
-            const morton_code first_child = morton_helper.get_first_child(A_finest);
-            // this imitates push_front
-            buff = first_child;
+        // this removes duplicates, inefficient as of now
+        std::map<morton_code, int> m;
+        for ( auto octant : octants ) {
+            ++m[octant];
         }
 
-        if ( world_rank == world_size - 1 ) {
+        octants.clear();
+        for ( const auto [octant, count] : m ) {
+            octants.push_back(octant);
+        }
+
+        octants = linearise_octants(octants);
+
+        // algo5(octants);
+
+        morton_code first_rank0;
+        if ( world_rank == 0 ) {
+            const morton_code dfd_root = morton_helper.get_deepest_first_descendant(morton_code(0));
+            const morton_code A_finest = morton_helper.get_nearest_common_ancestor(dfd_root, octants[0]);
+            const morton_code first_child = morton_helper.get_first_child(A_finest);
+            // this imitates push_front
+            first_rank0 = first_child;
+        }
+        else if ( world_rank == world_size - 1 ) {
             const morton_code dld_root = morton_helper.get_deepest_last_descendant(morton_code(0));
-            const morton_code A_finest = morton_helper.get_nearest_common_ancestor(dld_root, tree[0]);
+            const morton_code A_finest = morton_helper.get_nearest_common_ancestor(dld_root, octants[0]);
             const morton_code last_child = morton_helper.get_last_child(A_finest);
 
-            tree.push_back(last_child);
+            octants.push_back(last_child);
         }
 
         if ( world_rank > 0 ) {
-            // maybe isend?
-            Comm->send(tree[0], 1, world_rank - 1, 0);
+            Comm->send(*octants.data(), 1, world_rank - 1, 0);
         }
 
+        morton_code buff;
         if ( world_rank < world_size - 1 ) {
             mpi::Status status;
-            // maybe irecv?
             Comm->recv(&buff, 1, world_rank + 1, 0, status);
-            // if (status is ok we can proceed or smth?)
-            tree.push_back(buff);
+            // do we need a status check here or not?
+            octants.push_back(buff);
         }
 
-        vector_t<morton_code> R;
-
+        Kokkos::vector<morton_code> R;
         // rank 0 works differently, as we need to 'simulate' push_front
         if ( world_rank == 0 ) {
-            R.push_back(buff);
-            for ( morton_code elem : complete_region(buff, tree[0]) ) {
+            R.push_back(first_rank0);
+            for ( morton_code elem : algo2(first_rank0, octants[0]) ) {
                 R.push_back(elem);
             }
         }
 
-        const size_t n = tree.size();
+        const size_t n = octants.size();
         for ( size_t i = 0; i < n - 1; ++i ) {
-            R.push_back(tree[i]);
-            for ( morton_code elem : complete_region(tree[i], tree[i+1]) ) {
+            for ( morton_code elem : algo2(octants[i], octants[i+1]) ) {
                 R.push_back(elem);
             }
+            R.push_back(octants[i]);
         }
 
         if ( world_rank == world_size - 1 ) {
-            R.push_back(tree[n - 1]);
+            R.push_back(octants[n - 1]);
         }
 
         return R;
     }
+}
 
 } // namespace ippl

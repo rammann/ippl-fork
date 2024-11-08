@@ -103,7 +103,7 @@ namespace ippl {
          *
          * @return ippl::vector_t<morton_code>
          */
-        ippl::vector_t<morton_code> complete_tree(ippl::vector_t<morton_code>& tree);
+        Kokkos::vector<morton_code> complete_tree(Kokkos::vector<morton_code>& tree);
 
         /**
          * @brief Compares the following aspects of the trees:
