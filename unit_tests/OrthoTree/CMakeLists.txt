@@ -28,6 +28,14 @@ target_link_libraries (
     ippl
     pthread
     GTest::gtest_main
+)
+
+add_executable (parallel_tree_test parallel_ortho_tree.cpp)
+target_link_libraries (
+    parallel_tree_test
+    ippl
+    pthread
+    GTest::gtest_main
     ${MPI_CXX_LIBRARIES}
 )
 

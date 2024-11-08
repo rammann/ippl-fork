@@ -15,7 +15,7 @@ int main(int argc, char* argv[])
     {
         static constexpr size_t Dim = 3;
         const size_t max_particles = 100;
-        const size_t max_depth = ;
+        const size_t max_depth = 3;
         const size_t num_particles = 1000;
 
         const auto MIN_BOUND = 0.0;
@@ -37,6 +37,14 @@ int main(int argc, char* argv[])
         }
 
         tree.build_tree_naive(particles);
+
+        auto lin_tree = (tree.get_tree());
+        Kokkos::vector<ippl::morton_code> tree_copy(lin_tree.size());
+        for ( size_t i = 0; i < lin_tree.size(); ++i ) {
+            tree_copy[i] = lin_tree[i].first;
+        }
+
+        tree.partition(tree_copy);
     }
 
     ippl::finalize();
