@@ -152,43 +152,21 @@ namespace ippl {
 
         // 2.1 Remote Memory Access window for one-sided communication
         
-        static IpplTimings::TimerRef putTimer = IpplTimings::getTimer("putTimer");
-        static IpplTimings::TimerRef createTimer = IpplTimings::getTimer("createTimer");
-        static IpplTimings::TimerRef accessTimer = IpplTimings::getTimer("accessTimer");
         static IpplTimings::TimerRef preprocTimer = IpplTimings::getTimer("sendPreprocess");
         IpplTimings::startTimer(preprocTimer);
-        
-        //mpi::rma::Window<mpi::rma::Active> window;
-        //std::vector<size_type> nRecvs(nRanks, 0);
-        //std::cout << "Before Filling 0" << std::endl;
        
         std::fill(nRecvs_m.begin(), nRecvs_m.end(), 0); 
-
-        //IpplTimings::startTimer(createTimer);
-        //window.create(*Comm, nRecvs.begin(), nRecvs.end());
-        //IpplTimings::stopTimer(createTimer);
-        //std::vector<size_type> nSends(nRanks, 0);
 
         window_m.fence(0);
         
         // Prepare RMA window for the ranks we need to send to  
         for(size_t ridx=0; ridx < nDestinationRanks; ridx++){
-            IpplTimings::startTimer(accessTimer);
             int rank = destinationRanks_hview[ridx];
-            IpplTimings::stopTimer(accessTimer);
             if (rank == Comm->rank()){
                 // we do not need to send to ourselves
                 continue;
             }
-            //nSends[rank] = rankSendCount_hview(rank);
-            //window.put<size_type>(nSends.data() + rank, rank, Comm->rank());
-            //IpplTimings::startTimer(putTimer);
-            //std::cout << "Before window put" << std::endl;
-            
             window_m.put<size_type>(rankSendCount_hview(rank), rank, Comm->rank());
-           
-            //std::cout << "After window put" << std::endl;
-            //IpplTimings::stopTimer(putTimer);
         }
         window_m.fence(0);
 
