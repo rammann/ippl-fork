@@ -160,6 +160,7 @@ namespace ippl {
         window_m.fence(0);
         
         // Prepare RMA window for the ranks we need to send to  
+        /* 
         for(size_t ridx=0; ridx < nDestinationRanks; ridx++){
             int rank = destinationRanks_hview[ridx];
             if (rank == Comm->rank()){
@@ -167,7 +168,17 @@ namespace ippl {
                 continue;
             }
             window_m.put<size_type>(rankSendCount_hview(rank), rank, Comm->rank());
-        }
+        }*/
+        Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace> policy(0, nDestinationRanks);
+        Kokkos::parallel_for("MPI Put", policy,
+            KOKKOS_LAMBDA(const size_type ridx){
+                int rank = destinationRanks_hview[ridx];
+                if (rank != Comm->rank()) {
+                    window_m.put<size_type>(rankSendCount_hview(rank), rank, Comm->rank()); 
+                }
+            }
+        );
+
         window_m.fence(0);
 
         IpplTimings::stopTimer(preprocTimer);
