@@ -344,4 +344,56 @@ namespace ippl {
         tree_m = linearise_octants(tree_m);
     }
 
+    template<size_t Dim>
+    Kokkos::vector<size_t> OrthoTree<Dim>::get_num_particles_in_octants_parallel(const Kokkos::vector<morton_code>& octants)
+    {
+
+        //get communicator info
+        const size_t n_procs = Comm->size();
+        const size_t rank = Comm->rank();
+
+        if(rank == 0){
+          for(size_t i = 1; i < n_procs-1; ++i){
+            size_t req_size;
+            mpi:Status stat;
+            Comm->recv<size_t>(&req_size,1,i,1,stat);
+            Kokkos::vector<morton_code> octants_buffer(req_size);
+            Kokkos::vector<size_t> num_particles(req_size);
+            Comm->recv<morton_code>(octants_buffer.data(), req_size, i, 0, stat);
+
+            for(size_t j = 0; j < req_size; ++j){
+              num_particles[j] = get_num_particles_in_octant(octants_buffer[j]);
+            }
+            Comm->send<size_t>(num_particles.data(), req_size, i, 0);
+          }
+
+          Kokkos::vector<size_t> num_particles = get_num_particles_in_octants_seqential(octants);
+          return num_particles;
+
+
+        }
+
+        else{
+          Comm->send<size_t>(octants.size(), 1, 0, 1);
+          Comm->send<morton_code>(octants.data(), octants.size(), 0, 0);
+          Kokkos::vector<size_t> num_particles(req_size);
+          Comm->recv<size_t>(num_particles.data(), req_size, 0, 0, stat);
+          return num_particles;
+
+        }
+
+    }
+
+    template<size_t Dim>
+    Kokkos::vector<morton_code> OrthoTree<Dim>::get_num_particles_in_octants_seqential(const Kokkos::vector<morton_code>& octants)
+    {
+        Kokkos::vector<size_t> num_particles;
+        num_particles.reserve(octants.size());
+        for (const auto& octant : octants) {
+            num_particles.push_back(get_num_particles_in_octant(octant));
+        }
+        return num_particles;
+    }
+
+  
 } // namespace ippl
