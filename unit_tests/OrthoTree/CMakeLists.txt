@@ -58,6 +58,16 @@ target_link_libraries (linearise_test
     ${MPI_CXX_LIBRARIES}
 )
 
+add_executable (linearise_test linearise.cpp)
+gtest_discover_tests (linearise_test PROPERTIES TEST_DISCOVERY_TIMEOUT 600)
+target_link_libraries (linearise_test
+    ippl
+    pthread
+    GTest::gtest_main
+    ${MPI_CXX_LIBRARIES}
+)
+
+
 
 # vi: set et ts=4 sw=4 sts=4:
 
