@@ -125,6 +125,9 @@ namespace ippl {
 
         Kokkos::vector<size_t> get_num_particles_in_octants_parallel(Kokkos::vector<morton_code> const& octants);
 
+        // setter for aid list also adapts n_particles
+        void set_aid_list(const aid_list_t& aid_list) {this->aid_list = aid_list; n_particles = aid_list.size();}
+
     private:
 
         /**

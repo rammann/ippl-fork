@@ -352,19 +352,20 @@ namespace ippl {
         const size_t n_procs = Comm->size();
         const size_t rank = Comm->rank();
 
+        mpi::Status stat;
+
         if(rank == 0){
           for(size_t i = 1; i < n_procs-1; ++i){
             size_t req_size;
-            mpi:Status stat;
-            Comm->recv<size_t>(&req_size,1,i,1,stat);
+            Comm->recv(&req_size,1,i,1,stat);
             Kokkos::vector<morton_code> octants_buffer(req_size);
             Kokkos::vector<size_t> num_particles(req_size);
-            Comm->recv<morton_code>(octants_buffer.data(), req_size, i, 0, stat);
+            Comm->recv(*octants_buffer.data(), req_size, i, 0, stat);
 
             for(size_t j = 0; j < req_size; ++j){
               num_particles[j] = get_num_particles_in_octant(octants_buffer[j]);
             }
-            Comm->send<size_t>(num_particles.data(), req_size, i, 0);
+            Comm->send(num_particles, req_size, i, 0);
           }
 
           Kokkos::vector<size_t> num_particles = get_num_particles_in_octants_seqential(octants);
@@ -374,10 +375,11 @@ namespace ippl {
         }
 
         else{
-          Comm->send<size_t>(octants.size(), 1, 0, 1);
-          Comm->send<morton_code>(octants.data(), octants.size(), 0, 0);
+          size_t req_size = octants.size();
+          Comm->send(req_size, 1, 0, 1);
+          Comm->send(octants.data(), octants.size(), 0, 0);
           Kokkos::vector<size_t> num_particles(req_size);
-          Comm->recv<size_t>(num_particles.data(), req_size, 0, 0, stat);
+          Comm->recv(num_particles.data(), req_size, 0, 0, stat);
           return num_particles;
 
         }
