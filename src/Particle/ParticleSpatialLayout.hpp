@@ -171,7 +171,7 @@ namespace ippl {
         }*/
         Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace> policy(0, nDestinationRanks);
         Kokkos::parallel_for("MPI Put", policy,
-            KOKKOS_LAMBDA(const size_type ridx){
+            [&](const size_type ridx){
                 int rank = destinationRanks_hview[ridx];
                 if (rank != Comm->rank()) {
                     window_m.put<size_type>(rankSendCount_hview(rank), rank, Comm->rank()); 
