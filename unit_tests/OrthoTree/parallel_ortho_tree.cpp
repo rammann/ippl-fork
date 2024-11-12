@@ -138,11 +138,13 @@ TEST(ParallelOrthoTreeTest, GetNumParticles){
 
     tree_2d.set_aid_list(aid_list);
 
-    Kokkos::vector<ippl::morton_code> octants = {morton_helper.encode({0,0},2)};
+    Kokkos::vector<ippl::morton_code> octants;
+    octants.push_back(morton_helper.encode({0,0},1));
 
     //test for rank 0
     Kokkos::vector<size_t> result = tree_2d.get_num_particles_in_octants_parallel(octants);
-    Kokkos::vector<size_t> expected = {4};
+    Kokkos::vector<size_t> expected(1);
+    expected[0] = 4;
     
     ASSERT_EQ(result.size(), expected.size());
     for (size_t i = 0; i < expected.size(); i++) {
