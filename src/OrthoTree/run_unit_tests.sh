@@ -1,5 +1,7 @@
 #!/bin/bash
 
+NUM_PROCESSORS=${1:-4}
+
 # Extract the root directory based on the script's location
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -24,11 +26,11 @@ else
     exit 1
 fi
 
-# Execute all test executables in the unit test directory
+# Execute all test executables in the unit test directory with mpiexec
 for test_executable in "$UNIT_TEST_DIR"/*; do
     if [[ -f "$test_executable" && -x "$test_executable" ]]; then
-        echo "Running test: $test_executable"
-        "$test_executable"
+        echo "Running test with $NUM_PROCESSORS processors: $test_executable"
+        mpiexec -n "$NUM_PROCESSORS" "$test_executable"
         if [[ $? -ne 0 ]]; then
             echo "Test $test_executable failed."
             exit 1
