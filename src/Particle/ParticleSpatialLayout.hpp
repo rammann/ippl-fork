@@ -93,8 +93,6 @@ namespace ippl {
             return;
         }
 
-        std::fill(nRecvs_m.begin(), nRecvs_m.end(), 0); 
-        
         /* particle MPI exchange:
          *   1. figure out which particles need to go where -> locateParticles(...)
          *   2. fill send buffer and send particles
@@ -157,9 +155,9 @@ namespace ippl {
         static IpplTimings::TimerRef preprocTimer = IpplTimings::getTimer("sendPreprocess");
         IpplTimings::startTimer(preprocTimer);
        
-        //std::fill(nRecvs_m.begin(), nRecvs_m.end(), 0); 
+        std::fill(nRecvs_m.begin(), nRecvs_m.end(), 0); 
 
-        //window_m.fence(0);
+        window_m.fence(0);
         
         // Prepare RMA window for the ranks we need to send to  
         for(size_t ridx=0; ridx < nDestinationRanks; ridx++){
