@@ -134,16 +134,17 @@ namespace ippl {
           *
           * @return list of morton codes of minimal linear octree between the two octants
           **/
-        ippl::vector_t<morton_code> complete_region(morton_code code_a, morton_code code_b); 
+        ippl::vector_t<morton_code> complete_region(morton_code code_a, morton_code code_b);
 
-
-         * @brief Returns the number of particles in the octants, asks rank 0 for the number of particles in the octants
+        /*
+         * @brief Returns the number of particles in the octants, asks rank 0 for the number of
+         * particles in the octants
          *
          * @param octant vector
          * @return size_t vector - number of particles in the octants
          */
-
-        Kokkos::vector<size_t> get_num_particles_in_octants_parallel(Kokkos::vector<morton_code> const& octants);
+        Kokkos::vector<size_t> get_num_particles_in_octants_parallel(
+            const Kokkos::vector<morton_code>& octants);
 
         // setter for aid list also adapts n_particles
         void set_aid_list(const aid_list_t& aid_list) {this->aid_list = aid_list; n_particles = aid_list.size();}
@@ -177,18 +178,8 @@ namespace ippl {
          * @warning THIS FUNCTION ASSUMES THAT THE OCTANTS ARE SORTED
          * @TODO parallelize this with Kokkos
          **/
-        Kokkos::vector<size_t> get_num_particles_in_octants_seqential(const Kokkos::vector<morton_code>& octants);
-
-        /**
-          * @brief algorithm 2 sequential construction of a minimal linear octree between two octants
-          *
-          * @param morton codes code_a and code_b of the octants
-          *
-          * @return list of morton codes of minimal linear octree between the two octants
-          **/
-        ippl::vector_t<morton_code> complete_region(morton_code code_a, morton_code code_b); 
-
-    
+        Kokkos::vector<size_t> get_num_particles_in_octants_seqential(
+            const Kokkos::vector<morton_code>& octants);
     };
 
 } // namespace ippl
