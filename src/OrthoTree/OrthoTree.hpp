@@ -358,17 +358,12 @@ namespace ippl {
           for(size_t i = 1; i < n_procs; ++i){
 
             int req_size;
-            std::cerr << "iteration: " << i << std::endl;
             Comm->recv(req_size,1,i,1,stat);
-            std::cerr<<"req_size: "<<req_size<<"from rank "<< i<<std::endl;
             Kokkos::vector<morton_code> octants_buffer(req_size);
-            Kokkos::vector<size_t> num_particles(req_size);
+            Kokkos::vector<size_t> num_particles;
             Comm->recv(octants_buffer.data(), req_size, i, 0, stat);
-            std::cerr<<"rank: "<<rank<<" octants received from rank "<<i<<std::endl;
 
-            for(size_t j = 0; j < req_size; ++j){
-              num_particles[j] = get_num_particles_in_octant(octants_buffer[j]);
-            }
+            num_particles = get_num_particles_in_octants_seqential(octants_buffer);
             Comm->send(*num_particles.data(), req_size, i, 0);
           }
 
@@ -382,10 +377,8 @@ namespace ippl {
           int req_size = octants.size();
           Comm->send(req_size, 1, 0, 1);
           Comm->send(*octants.data(), octants.size(), 0, 0);
-          //std::cerr<<"rank: "<<rank<<" octants sent"<<std::endl;
           Kokkos::vector<size_t> num_particles(req_size);
           Comm->recv(num_particles.data(), req_size, 0, 0, stat);
-          //std::cerr<<"rank: "<<rank<<" num_particles: "<<num_particles[0]<<std::endl;
           return num_particles;
 
         }
@@ -395,10 +388,10 @@ namespace ippl {
     template<size_t Dim>
     Kokkos::vector<morton_code> OrthoTree<Dim>::get_num_particles_in_octants_seqential(const Kokkos::vector<morton_code>& octants)
     {
-        Kokkos::vector<size_t> num_particles;
-        num_particles.reserve(octants.size());
-        for (const auto& octant : octants) {
-            num_particles.push_back(get_num_particles_in_octant(octant));
+        size_t num_octs = octants.size();
+        Kokkos::vector<size_t> num_particles(num_octs);
+        for (size_t i = 0; i < num_octs; ++i) {
+            num_particles[i] = get_num_particles_in_octant(octants[i]);
         }
         return num_particles;
     }
