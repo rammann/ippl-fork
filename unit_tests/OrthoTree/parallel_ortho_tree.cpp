@@ -101,11 +101,216 @@ TEST(ParallelOrthoTreeTest, PartitionTestDistributeUneven) {
     EXPECT_EQ(result[i], expected[i]); 
   }
 }
+
+TEST(ParallelOrthoTreeTest, GetNumParticles){
+  
+  //parallel stuff
+  ippl::mpi::Communicator comm;
+  unsigned rank = comm.rank();
+  unsigned n_procs = comm.size();
+  EXPECT_EQ(n_procs, 4);
+
+  //octree stuff
+  size_t max_depth = 3;
+
+  ippl::OrthoTree<2> tree_2d(max_depth, 1, ippl::BoundingBox<2>({0.0, 0.0}, {1.0, 1.0}));
+  ippl::Morton<2> morton_helper(max_depth);
+
+
+  if(rank == 0){
+    Kokkos::vector<Kokkos::pair<ippl::morton_code, size_t>>  aid_list;
+
+    //for rank 0
+    aid_list.push_back({morton_helper.encode({0, 0}, 3), 0});
+    aid_list.push_back({morton_helper.encode({0, 0}, 3), 0});
+    aid_list.push_back({morton_helper.encode({1, 1}, 3), 0});
+    aid_list.push_back({morton_helper.encode({3, 3}, 3), 0});
+
+    //for rank 1
+    aid_list.push_back({morton_helper.encode({6, 0}, 3), 0});
+    aid_list.push_back({morton_helper.encode({6, 1}, 3), 0});
+    aid_list.push_back({morton_helper.encode({1, 6}, 3), 0});
+
+    //for rank 3
+    aid_list.push_back({morton_helper.encode({7, 7}, 3), 0});
+    aid_list.push_back({morton_helper.encode({7, 7}, 3), 0});
+    aid_list.push_back({morton_helper.encode({7, 7}, 3), 0});
+
+    tree_2d.set_aid_list(aid_list);
+
+    Kokkos::vector<ippl::morton_code> octants;
+    octants.push_back(morton_helper.encode({0,0},1));
+
+    //test for rank 0
+    Kokkos::vector<size_t> result = tree_2d.get_num_particles_in_octants_parallel(octants);
+    Kokkos::vector<size_t> expected(1);
+    expected[0] = 4;
+    
+    ASSERT_EQ(result.size(), expected.size());
+    for (size_t i = 0; i < expected.size(); i++) {
+      EXPECT_EQ(result[i], expected[i]); 
+    }
+  }
+
+  if(rank == 1){
+    Kokkos::vector<ippl::morton_code> octants;
+
+    octants.push_back(morton_helper.encode({6,0},2));
+    octants.push_back(morton_helper.encode({4,2},2));
+    octants.push_back(morton_helper.encode({0,6},2));
+    
+    Kokkos::vector<size_t> expected(3);
+    expected[0] = 2;
+    expected[1] = 0;
+    expected[2] = 1;
+
+    Kokkos::vector<size_t> result = tree_2d.get_num_particles_in_octants_parallel(octants);
+
+    ASSERT_EQ(result.size(), expected.size());
+    for (size_t i = 0; i < expected.size(); i++) {
+      EXPECT_EQ(result[i], expected[i]); 
+    }
+  }
+
+  if(rank == 2){
+    Kokkos::vector<ippl::morton_code> octants;
+
+    octants.push_back(morton_helper.encode({2,4},2));
+    
+    Kokkos::vector<size_t> expected(1);
+    expected[0] = 0;
+
+    Kokkos::vector<size_t> result = tree_2d.get_num_particles_in_octants_parallel(octants);
+
+    ASSERT_EQ(result.size(), expected.size());
+    for (size_t i = 0; i < expected.size(); i++) {
+      EXPECT_EQ(result[i], expected[i]); 
+    }
+  }
+
+  if(rank == 3){
+    Kokkos::vector<ippl::morton_code> octants;
+
+    octants.push_back(morton_helper.encode({6,4},2));
+    octants.push_back(morton_helper.encode({7,7},3));
+    
+    Kokkos::vector<size_t> expected(2);
+    expected[0] = 0;
+    expected[1] = 3;
+
+    Kokkos::vector<size_t> result = tree_2d.get_num_particles_in_octants_parallel(octants);
+
+    ASSERT_EQ(result.size(), expected.size());
+    for (size_t i = 0; i < expected.size(); i++) {
+      EXPECT_EQ(result[i], expected[i]); 
+    }
+  }
+}
+TEST(ParallelOrthoTreeTest, GetNumParticlesProcessorEmpty){
+  
+  //parallel stuff
+  ippl::mpi::Communicator comm;
+  unsigned rank = comm.rank();
+  unsigned n_procs = comm.size();
+  EXPECT_EQ(n_procs, 4);
+
+  //octree stuff
+  size_t max_depth = 3;
+
+  ippl::OrthoTree<2> tree_2d(max_depth, 1, ippl::BoundingBox<2>({0.0, 0.0}, {1.0, 1.0}));
+  ippl::Morton<2> morton_helper(max_depth);
+
+
+  if(rank == 0){
+    Kokkos::vector<Kokkos::pair<ippl::morton_code, size_t>>  aid_list;
+
+    //for rank 0
+    aid_list.push_back({morton_helper.encode({0, 0}, 3), 0});
+    aid_list.push_back({morton_helper.encode({0, 0}, 3), 0});
+    aid_list.push_back({morton_helper.encode({1, 1}, 3), 0});
+    aid_list.push_back({morton_helper.encode({3, 3}, 3), 0});
+
+    //for rank 1
+    aid_list.push_back({morton_helper.encode({6, 0}, 3), 0});
+    aid_list.push_back({morton_helper.encode({6, 1}, 3), 0});
+    aid_list.push_back({morton_helper.encode({1, 6}, 3), 0});
+
+    //for rank 3
+    aid_list.push_back({morton_helper.encode({7, 7}, 3), 0});
+    aid_list.push_back({morton_helper.encode({7, 7}, 3), 0});
+    aid_list.push_back({morton_helper.encode({7, 7}, 3), 0});
+
+    tree_2d.set_aid_list(aid_list);
+
+    Kokkos::vector<ippl::morton_code> octants;
+    octants.push_back(morton_helper.encode({0,0},1));
+
+    //test for rank 0
+    Kokkos::vector<size_t> result = tree_2d.get_num_particles_in_octants_parallel(octants);
+    Kokkos::vector<size_t> expected(1);
+    expected[0] = 4;
+    
+    ASSERT_EQ(result.size(), expected.size());
+    for (size_t i = 0; i < expected.size(); i++) {
+      EXPECT_EQ(result[i], expected[i]); 
+    }
+  }
+
+  if(rank == 1){
+    Kokkos::vector<ippl::morton_code> octants;
+
+    
+    Kokkos::vector<size_t> expected;
+
+    Kokkos::vector<size_t> result = tree_2d.get_num_particles_in_octants_parallel(octants);
+
+    ASSERT_EQ(result.size(), expected.size());
+    for (size_t i = 0; i < expected.size(); i++) {
+      EXPECT_EQ(result[i], expected[i]); 
+    }
+  }
+
+  if(rank == 2){
+    Kokkos::vector<ippl::morton_code> octants;
+
+    octants.push_back(morton_helper.encode({2,4},2));
+    
+    Kokkos::vector<size_t> expected(1);
+    expected[0] = 0;
+
+    Kokkos::vector<size_t> result = tree_2d.get_num_particles_in_octants_parallel(octants);
+
+    ASSERT_EQ(result.size(), expected.size());
+    for (size_t i = 0; i < expected.size(); i++) {
+      EXPECT_EQ(result[i], expected[i]); 
+    }
+  }
+
+  if(rank == 3){
+    Kokkos::vector<ippl::morton_code> octants;
+
+    octants.push_back(morton_helper.encode({6,4},2));
+    octants.push_back(morton_helper.encode({7,7},3));
+    
+    Kokkos::vector<size_t> expected(2);
+    expected[0] = 0;
+    expected[1] = 3;
+
+    Kokkos::vector<size_t> result = tree_2d.get_num_particles_in_octants_parallel(octants);
+
+    ASSERT_EQ(result.size(), expected.size());
+    for (size_t i = 0; i < expected.size(); i++) {
+      EXPECT_EQ(result[i], expected[i]); 
+    }
+  }
+
+
+}
 // this is required to test the orthotree, as it depends on ippl
 int main(int argc, char** argv)
 {
     // Initialize MPI and IPPL
-    ippl::initialize(argc, argv);
+    ippl::initialize(argc, argv,MPI_COMM_WORLD);
 
     // Initialize Google Test
     ::testing::InitGoogleTest(&argc, argv);
@@ -118,3 +323,4 @@ int main(int argc, char** argv)
 
     return result;
 }
+

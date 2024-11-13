@@ -114,6 +114,18 @@ namespace ippl {
          */
         bool operator==(const OrthoTree& other);
 
+        /**
+         * @brief Returns the number of particles in the octants, asks rank 0 for the number of particles in the octants
+         *
+         * @param octant vector
+         * @return size_t vector - number of particles in the octants
+         */
+
+        Kokkos::vector<size_t> get_num_particles_in_octants_parallel(Kokkos::vector<morton_code> const& octants);
+
+        // setter for aid list also adapts n_particles
+        void set_aid_list(const aid_list_t& aid_list) {this->aid_list = aid_list; n_particles = aid_list.size();}
+
     private:
 
         /**
@@ -132,6 +144,17 @@ namespace ippl {
          * @return number of particles in the cell specified by the morton code
          **/
         size_t get_num_particles_in_octant(morton_code octant);
+
+        /**
+         * @brief counts the number of particles covered by the cell decribed by the morton codes
+         *        initialize_aid_list needs to be called first
+         *
+         * @param vector of morton codes
+         * @return number of particles in the cells specified by the morton code vector
+         * @warning THIS FUNCTION ASSUMES THAT THE OCTANTS ARE SORTED
+         * @TODO parallelize this with Kokkos
+         **/
+        Kokkos::vector<size_t> get_num_particles_in_octants_seqential(const Kokkos::vector<morton_code>& octants);
 
         /**
           * @brief algorithm 2 sequential construction of a minimal linear octree between two octants
