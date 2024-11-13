@@ -119,8 +119,6 @@ namespace ippl {
          *
          * @param octant vector
          * @return size_t vector - number of particles in the octants
-         * @TODO implement
-         * @TODO test
          */
 
         Kokkos::vector<size_t> get_num_particles_in_octants_parallel(Kokkos::vector<morton_code> const& octants);
@@ -147,6 +145,15 @@ namespace ippl {
          **/
         size_t get_num_particles_in_octant(morton_code octant);
 
+        /**
+         * @brief counts the number of particles covered by the cell decribed by the morton codes
+         *        initialize_aid_list needs to be called first
+         *
+         * @param vector of morton codes
+         * @return number of particles in the cells specified by the morton code vector
+         * @warning THIS FUNCTION ASSUMES THAT THE OCTANTS ARE SORTED
+         * @TODO parallelize this with Kokkos
+         **/
         Kokkos::vector<size_t> get_num_particles_in_octants_seqential(const Kokkos::vector<morton_code>& octants);
 
         /**

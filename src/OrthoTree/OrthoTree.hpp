@@ -388,7 +388,6 @@ namespace ippl {
     template<size_t Dim>
     Kokkos::vector<morton_code> OrthoTree<Dim>::get_num_particles_in_octants_seqential(const Kokkos::vector<morton_code>& octants)
     {
-      //TODO: parallelize this with Kokkos
         size_t num_octs = octants.size();
         Kokkos::vector<size_t> num_particles(num_octs);
         for (size_t i = 0; i < num_octs; ++i) {
