@@ -206,7 +206,7 @@ TEST(ParallelOrthoTreeTest, GetNumParticles){
     }
   }
 }
-TEST(ParallelOrthoTreeTest, GetNumParticlesProcessor){
+TEST(ParallelOrthoTreeTest, GetNumParticlesProcessorEmpty){
   
   //parallel stuff
   ippl::mpi::Communicator comm;
