@@ -58,7 +58,6 @@ namespace ippl {
         aid_list_t aid_list;
 
     public:
-        //friend classes for testing
 
         OrthoTree(size_t max_depth, size_t max_particles_per_node, const bounds_t& root_bounds);
 

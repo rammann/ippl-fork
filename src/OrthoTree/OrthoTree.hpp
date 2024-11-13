@@ -144,7 +144,6 @@ namespace ippl {
           min_lin_tree.push_back(current_node);
         }
         else if (morton_helper.is_ancestor(code_a, current_node) || morton_helper.is_ancestor(code_b, current_node)) {
-            //if(code_a == current_node || code_b == current_node) continue;
           ippl::vector_t<morton_code> children = morton_helper.get_children(current_node); 
           for (morton_code& child : children) trial_nodes.push_back(child);
         }
