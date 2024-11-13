@@ -347,6 +347,9 @@ namespace ippl {
     template <size_t Dim>
     Kokkos::vector<morton_code> OrthoTree<Dim>::complete_tree(Kokkos::vector<morton_code>& octants)
     {
+        int world_rank = Comm->rank();
+        int world_size = Comm->size();
+
         // this removes duplicates, inefficient as of now
         std::map<morton_code, int> m;
         for ( auto octant : octants ) {
