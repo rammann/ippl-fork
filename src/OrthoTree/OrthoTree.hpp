@@ -1,3 +1,9 @@
+#include <ostream>
+#include "OrthoTree/OrthoTreeTypes.h"
+#include "Communicate/Communicator.h"
+#include "Communicate/Operations.h"
+#include "Communicate/Request.h"
+#include "Kokkos_Vector.hpp"
 #include "OrthoTree.h"
 
 namespace ippl {
@@ -37,6 +43,169 @@ namespace ippl {
 
         // if we sort the tree after construction we can compare two trees
         std::sort(tree_m.begin(), tree_m.end());
+    }
+
+    template <size_t Dim>
+    Kokkos::vector<morton_code> OrthoTree<Dim>::partition(Kokkos::vector<morton_code>& octants, Kokkos::vector<size_t>& weights) {
+      //get communicator info
+      const size_t n_procs = Comm->size();
+      const size_t rank = Comm->rank();
+
+      //initialize the prefix_sum and the total weight
+      Kokkos::vector<size_t> prefix_sum;
+      prefix_sum.reserve(octants.size());
+      size_t max = 0, total;
+
+      //calculate the prefix_sum for the weight of each octant in octants
+      // get weight here later
+      for(unsigned i = 0 ; i < octants.size(); ++i){
+        max += weights[i];
+        prefix_sum.push_back(max);
+      }
+
+
+
+      //scan to get get the propper offsets for the prefix_sum
+      Comm->scan(&max, &total, 1, std::plus<morton_code>());
+      
+      //calculate the actual scan prefix_sum on each processor
+      for (size_t i = 0; i < prefix_sum.size(); ++i){
+        prefix_sum[i] += total - max;
+      }
+
+      //broadcast the total weight to all processors
+      Comm->broadcast<size_t>(&total, 1, n_procs - 1);
+
+      //initialize the average weight
+      //might want to get a double? needs checking
+      size_t avg_weight = total/n_procs, k = total % n_procs;
+      Kokkos::vector<morton_code> total_octants;
+      Kokkos::vector<mpi::Request> requests;
+      Kokkos::vector<int> sizes(n_procs);
+
+      // initialize the start and end index for which processor receives which
+      // local octants. Doing this here allows us to update these incrementally
+      // in a two-pointer approach
+      size_t start = 0, end = 0;
+      //loop thorugh all processors
+      for (size_t p = 1; p <= n_procs; ++p){
+
+        // no need to send data to myself
+        if (p -1 == rank) continue;
+        //initialize the start and end index
+        size_t startoffset = 0, endoffset = 0;
+
+        // calculate the start and end offset for the processor in order
+        // to distribute the remainder of total/n_procs evenly
+        if (p <= k){
+          startoffset = p - 1;
+          endoffset = p;
+        } else {
+          startoffset = k;
+          endoffset = k;
+        }
+
+        start = end;
+
+        //calculate the start and end index for the processor
+        for(size_t i = end; i < octants.size(); ++i){
+          if(prefix_sum[i] > avg_weight * (p - 1) + startoffset){
+            start = i;
+            break;
+          }
+        }
+
+    
+
+        for(size_t i = start; i < octants.size(); ++i){
+          if(prefix_sum[i] > avg_weight * p + endoffset){
+            end = i;
+            break;
+          }
+          if (i == octants.size() - 1)
+            end = octants.size();
+        }
+
+
+        //if the processor is the last one, add the remaining weight
+        if(p == n_procs || end > octants.size()){
+          end = octants.size();
+        }
+
+        //initialize the new octants for the processor
+        Kokkos::vector<morton_code> new_octants;
+
+        //loop through the octants and add the octants to the new octants
+        for(size_t i = start; i < end; ++i){
+          new_octants.push_back(octants[i]);
+          total_octants.push_back(octants[i]);
+        }
+
+        // send the number of new octants to the processor
+        requests.push_back(mpi::Request());
+        sizes[p-1] = new_octants.size();
+        Comm->isend((sizes[p-1]), 1, p-1, 1, requests[requests.size()-1]);
+        //send the new octants to the processor
+    
+        requests.push_back(mpi::Request());
+        //Comm->isend(new_octants.size(), 1, p-1, 0, request1);
+        if (sizes[p-1] > 0)
+            Comm->isend<morton_code>(*new_octants.data(), 
+                                    new_octants.size(), p-1, 
+                                    0, 
+                                    requests[requests.size() -1]);
+      }
+
+
+      std::vector<mpi::Request> receives;
+      //initialize the new octants for the current processor 
+      Kokkos::vector<morton_code> received_octants;
+      for(size_t p = 0; p < n_procs; ++p){
+        if (p == rank) continue;
+        int size;
+        //receives.push_back(mpi::Request());
+        //receive the number of new octants
+        mpi::Status stat;
+        Comm->recv(&size, 1, p, 1, stat);
+        //initialize the new octants
+        Kokkos::vector<morton_code> octants_buffer(size);
+        //receive the new octants
+        //Comm->irecv(&size, 1, p, 0, receive_size);
+        if (size > 0) {
+          Comm->recv(octants_buffer.data(), size, p, 0, stat);
+          //add the new octants to the received octants
+          received_octants.insert(received_octants.end(), 
+                                  octants_buffer.begin(), 
+                                  octants_buffer.end());
+        
+        }
+      }
+      //add the received octants to octants and remove total_octants
+      Kokkos::vector<morton_code> partitioned_octants;
+      unsigned int l1 = 0, l2 = 0, l3 = 0;
+      while(l1 < octants.size()){
+        if(l2 == received_octants.size() || octants[l1] < received_octants[l2]){
+          if (l3 < total_octants.size() && octants[l1] == total_octants[l3]){
+            l3++;
+          } else {
+            partitioned_octants.push_back(octants[l1]);
+          }
+          l1++;
+        } else {
+          partitioned_octants.push_back(received_octants[l2]);
+          l2++;
+        }
+      }
+
+      while (l2 < received_octants.size()){
+        partitioned_octants.push_back(received_octants[l2]);
+        l2++;
+      }
+
+      //std::cout << "num of received octants on rank " << rank << " is " << received_octants.size() << std::endl;
+
+      return partitioned_octants;
+      
     }
 
     template <size_t Dim>
@@ -244,6 +413,57 @@ namespace ippl {
 
         return R;
     }
-}
 
+    template<size_t Dim>
+    Kokkos::vector<size_t> OrthoTree<Dim>::get_num_particles_in_octants_parallel(const Kokkos::vector<morton_code>& octants)
+    {
+
+        //get communicator info
+        const size_t n_procs = Comm->size();
+        const size_t rank = Comm->rank();
+
+        mpi::Status stat;
+
+        if(rank == 0){
+          for(size_t i = 1; i < n_procs; ++i){
+
+            int req_size;
+            Comm->recv(req_size,1,i,1,stat);
+            Kokkos::vector<morton_code> octants_buffer(req_size);
+            Kokkos::vector<size_t> num_particles;
+            Comm->recv(octants_buffer.data(), req_size, i, 0, stat);
+
+            num_particles = get_num_particles_in_octants_seqential(octants_buffer);
+            Comm->send(*num_particles.data(), req_size, i, 0);
+          }
+
+          Kokkos::vector<size_t> num_particles = get_num_particles_in_octants_seqential(octants);
+          return num_particles;
+
+
+        }
+
+        else{
+          int req_size = octants.size();
+          Comm->send(req_size, 1, 0, 1);
+          Comm->send(*octants.data(), octants.size(), 0, 0);
+          Kokkos::vector<size_t> num_particles(req_size);
+          Comm->recv(num_particles.data(), req_size, 0, 0, stat);
+          return num_particles;
+
+        }
+
+    }
+
+    template<size_t Dim>
+    Kokkos::vector<morton_code> OrthoTree<Dim>::get_num_particles_in_octants_seqential(const Kokkos::vector<morton_code>& octants)
+    {
+        size_t num_octs = octants.size();
+        Kokkos::vector<size_t> num_particles(num_octs);
+        for (size_t i = 0; i < num_octs; ++i) {
+            num_particles[i] = get_num_particles_in_octant(octants[i]);
+        }
+        return num_particles;
+    }
+  
 } // namespace ippl
