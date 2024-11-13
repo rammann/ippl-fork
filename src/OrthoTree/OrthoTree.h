@@ -99,6 +99,19 @@ namespace ippl {
          */
         void linearise_tree();
 
+        /**
+         * @brief Implements the logic part of algorithm 3.
+         *
+         * @warning DOES NOT INCLUDE LINES 1-3 OF THE ALGORITHM
+         *
+         * @param tree sorted distributed list of octants with:
+         *  - removed duplicates (needs to be implemented)
+         *  - linearised (algo 8)
+         *  - workload distributed (algo 5)
+         *
+         * @return ippl::vector_t<morton_code>
+         */
+        Kokkos::vector<morton_code> complete_tree(Kokkos::vector<morton_code>& tree);
 
         /**
          * @brief Compares the following aspects of the trees:
