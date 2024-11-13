@@ -124,6 +124,12 @@ namespace ippl {
             template <typename T, class Op>
             void allreduce(T& inout, int count, Op op);
 
+            template <typename T, class Op>
+            void scan(T* input, T* output, int count, Op op);
+
+            template <typename T>
+            void broadcast(T* data, int count, int root);
+
             /////////////////////////////////////////////////////////////////////////////////////
             template <typename MemorySpace = Kokkos::DefaultExecutionSpace::memory_space>
             using archive_type = detail::Archive<MemorySpace>;
