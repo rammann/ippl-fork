@@ -373,7 +373,6 @@ namespace ippl {
           }
 
           Kokkos::vector<size_t> num_particles = get_num_particles_in_octants_seqential(octants);
-          std::cerr<<"rank: "<<rank<<" num_particles: "<<num_particles[0]<<std::endl;
           return num_particles;
 
 
