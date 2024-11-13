@@ -115,6 +115,15 @@ namespace ippl {
         bool operator==(const OrthoTree& other);
 
         /**
+          * @brief algorithm 2 sequential construction of a minimal linear octree between two octants
+          *
+          * @param morton codes code_a and code_b of the octants
+          *
+          * @return list of morton codes of minimal linear octree between the two octants
+          **/
+        ippl::vector_t<morton_code> complete_region(morton_code code_a, morton_code code_b); 
+
+
          * @brief Returns the number of particles in the octants, asks rank 0 for the number of particles in the octants
          *
          * @param octant vector
@@ -125,6 +134,7 @@ namespace ippl {
 
         // setter for aid list also adapts n_particles
         void set_aid_list(const aid_list_t& aid_list) {this->aid_list = aid_list; n_particles = aid_list.size();}
+
 
     private:
 
@@ -165,45 +175,7 @@ namespace ippl {
           **/
         ippl::vector_t<morton_code> complete_region(morton_code code_a, morton_code code_b); 
 
-    public:
-        // SIMONS FUNCTIONS DONT EDIT, TOUCH OR USE THIS IN YOUR CODE:
-
-        /**
-         * @brief algorithm 1' topdown sequential construction of octree
-         *
-         * @param morton code of root_node, particles
-         *
-         * @return list of morton codes of leaves of tree spanning root node
-         **/
-        ippl::vector_t<morton_code> build_tree_topdown_sequential(morton_code root_node, particle_t const& particles)
-        {
-            // insert the root into the tree
-            ippl::vector_t<morton_code> tree;
-            ippl::vector_t<morton_code> stack; // stack used to build the tree
-
-            stack.push_back(root_node); // maybe store morton_code(0) s.t. we can call morton::root_val or smth
-
-            initialize_aid_list(particles); // initialize aid list - required for particle counting could be moved to constructor
-
-            while ( stack.size() > 0 ) {
-                morton_code current_node = stack.back();
-                stack.pop_back();
-
-                if ( get_num_particles_in_octant(current_node) > max_particles_per_node_m && morton_helper.get_depth(current_node) < max_depth_m ) {
-
-                    ippl::vector_t<morton_code> children = morton_helper.get_children(current_node);
-
-                    for ( morton_code child : children ) { stack.push_back(child); }
-
-                }
-                else {
-                    tree.push_back(current_node);
-                }
-            }
-
-            std::sort(tree.begin(), tree.end());
-            return tree;
-        }
+    
     };
 
 } // namespace ippl

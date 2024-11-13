@@ -309,10 +309,10 @@ namespace ippl {
         morton_code current_node = trial_nodes.back();
         trial_nodes.pop_back();
 
-        if ((code_a < current_node) && (current_node < code_b) && morton_helper.is_ancestor(code_b, current_node)) {
+        if ((code_a < current_node) && (current_node < code_b) && !morton_helper.is_ancestor(code_b, current_node)) {
           min_lin_tree.push_back(current_node);
         }
-        else if (morton_helper.is_ancestor(nearest_common_ancestor, current_node)) {
+        else if (morton_helper.is_ancestor(code_a, current_node) || morton_helper.is_ancestor(code_b, current_node)) {
           ippl::vector_t<morton_code> children = morton_helper.get_children(current_node); 
           for (morton_code& child : children) trial_nodes.push_back(child);
         }
