@@ -199,6 +199,7 @@ namespace ippl {
             } 
             hash_type hash("hash", rankSendCount_hview(rank));
             fillHash(rank, particleRanks, hash);
+            cudaStreamSynchronize();
             pc.sendToRank(rank, tag, sends++, requests, hash);
         }
        
