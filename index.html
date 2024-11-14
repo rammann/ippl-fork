@@ -188,8 +188,10 @@ need to pass the –cpus-per-task option to srun otherwise will not use more tha
 <h2><a class="anchor" id="autotoc_md14"></a>
 SBATCH –exclusive            # The allocations will be exclusive if turned on (remove extra hashtag to turn on)</h2>
 <p >#SBATCH &ndash;gpus=4 # No. of GPUs (max. 8)</p>
-<p >#SBATCH &ndash;output=&lt;output_file_name&gt;.out # Name of output file #SBATCH &ndash;error=&lt;error_file_name&gt;.err # Name of error file</p>
-<p >srun ./&lt;your_executable&gt; &lt;args&gt; &ndash;kokkos-map-device-id-by=mpi_rank ``` </p>
+<p >#SBATCH &ndash;output=&lt;output_file_name&gt;.out # Name of output file #SBATCH &ndash;error=&lt;error_file_name&gt;.err # Name of error file srun ./&lt;your_executable&gt; &lt;args&gt; &ndash;kokkos-map-device-id-by=mpi_rank </p><div class="fragment"><div class="line">## Profiling with NVIDIA Nsight Systems</div>
+<div class="line">module :</div>
+</div><!-- fragment --><p> module load Nsight-Systems/2024.4.1 </p><div class="fragment"><div class="line">run :</div>
+</div><!-- fragment --><p> srun &lt;srun_args&gt; nsys profile &ndash;trace=cuda,nvtx,mpi &ndash;force-overwrite=true &ndash;output=my_report.q{SLURM_PROCID} \ &lt;your_executable&gt; &lt;executable_args&gt; <code> This will generate a</code>my_report.{rank}.nsys-rep``` for each MPI Rank which can be loaded and inspected with the NVIDIA Nsight Systems tool: <a href="https://developer.nvidia.com/nsight-systems">https://developer.nvidia.com/nsight-systems</a> </p>
 </div></div><!-- PageDoc -->
 </div><!-- contents -->
 <!-- start footer part -->
