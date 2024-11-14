@@ -191,8 +191,6 @@ namespace ippl {
 
         int tag = Comm->next_tag(mpi::tag::P_SPATIAL_LAYOUT, mpi::tag::P_LAYOUT_CYCLE);
 
-        cudaStream_t stream;
-        cudaStreamCreate(&stream);
         int sends = 0;
         for(size_t ridx=0; ridx < nDestinationRanks; ridx++){
             int rank = destinationRanks_hview[ridx];
@@ -201,7 +199,6 @@ namespace ippl {
             } 
             hash_type hash("hash", rankSendCount_hview(rank));
             fillHash(rank, particleRanks, hash);
-            cudaStreamSynchronize(stream);
             pc.sendToRank(rank, tag, sends++, requests, hash);
         }
        
