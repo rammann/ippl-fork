@@ -154,6 +154,17 @@ For example, to run a job on 4 GPUs (max on Gwendolen is 8 GPUs, which are all o
 
 #SBATCH --output=<output_file_name>.out  # Name of output file
 #SBATCH --error=<error_file_name>.err    # Name of error file
-
 srun ./<your_executable> <args> --kokkos-map-device-id-by=mpi_rank
 ```
+## Profiling with NVIDIA Nsight Systems
+module :
+```
+module load Nsight-Systems/2024.4.1
+```
+run :
+```
+srun <srun_args> nsys profile --trace=cuda,nvtx,mpi --force-overwrite=true --output=my_report.%q{SLURM_PROCID} \
+    <your_executable> <executable_args>
+```
+This will generate a ```my_report.{rank}.nsys-rep``` for each MPI Rank which can be loaded and inspected with the NVIDIA Nsight Systems tool: https://developer.nvidia.com/nsight-systems
+
