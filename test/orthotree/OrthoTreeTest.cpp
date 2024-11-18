@@ -15,7 +15,7 @@ int main(int argc, char* argv[])
     {
         static constexpr size_t Dim = 3;
         const size_t max_particles = 100;
-        const size_t max_depth = 3;
+        const size_t max_depth = 5;
         const size_t num_particles = 1000;
 
         const auto MIN_BOUND = 0.0;
@@ -36,6 +36,15 @@ int main(int argc, char* argv[])
             particles.rho(i) = 0;
         }
 
+// stuff 1
+        // tree.build_tree_naive(particles);
+
+        ippl::vector_t<ippl::morton_code> vec;
+        for ( ippl::morton_code c = 0; c < 100; ++c ) {
+            vec.push_back(c);
+        }
+        tree.complete_tree(vec);
+// stuff 2
         tree.build_tree_naive(particles);
 
         auto lin_tree = (tree.get_tree());
@@ -45,6 +54,7 @@ int main(int argc, char* argv[])
         }
 
         tree.partition(tree_copy);
+
     }
 
     ippl::finalize();

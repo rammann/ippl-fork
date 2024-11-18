@@ -309,10 +309,10 @@ namespace ippl {
         morton_code current_node = trial_nodes.back();
         trial_nodes.pop_back();
 
-        if ((code_a < current_node) && (current_node < code_b) && morton_helper.is_ancestor(code_b, current_node)) {
+        if ((code_a < current_node) && (current_node < code_b) && !morton_helper.is_ancestor(code_b, current_node)) {
           min_lin_tree.push_back(current_node);
         }
-        else if (morton_helper.is_ancestor(nearest_common_ancestor, current_node)) {
+        else if (morton_helper.is_ancestor(code_a, current_node) || morton_helper.is_ancestor(code_b, current_node)) {
           ippl::vector_t<morton_code> children = morton_helper.get_children(current_node); 
           for (morton_code& child : children) trial_nodes.push_back(child);
         }
@@ -387,6 +387,123 @@ namespace ippl {
       }
 
       return partitioned_tree;
+    }
+
+    template <size_t Dim>
+    Kokkos::vector<morton_code> OrthoTree<Dim>::complete_tree(Kokkos::vector<morton_code>& octants)
+    {
+        int world_rank = Comm->rank();
+        int world_size = Comm->size();
+
+        // this removes duplicates, inefficient as of now
+        std::map<morton_code, int> m;
+        for ( auto octant : octants ) {
+            ++m[octant];
+        }
+
+        octants.clear();
+        for ( const auto [octant, count] : m ) {
+            octants.push_back(octant);
+        }
+
+        octants = linearise_octants(octants);
+
+        // algo5(octants);
+
+        morton_code first_rank0;
+        if ( world_rank == 0 ) {
+            const morton_code dfd_root = morton_helper.get_deepest_first_descendant(morton_code(0));
+            const morton_code A_finest = morton_helper.get_nearest_common_ancestor(dfd_root, octants[0]);
+            const morton_code first_child = morton_helper.get_first_child(A_finest);
+            // this imitates push_front
+            first_rank0 = first_child;
+        }
+        else if ( world_rank == world_size - 1 ) {
+            const morton_code dld_root = morton_helper.get_deepest_last_descendant(morton_code(0));
+            const morton_code A_finest = morton_helper.get_nearest_common_ancestor(dld_root, octants[0]);
+            const morton_code last_child = morton_helper.get_last_child(A_finest);
+
+            octants.push_back(last_child);
+        }
+
+        if ( world_rank > 0 ) {
+            Comm->send(*octants.data(), 1, world_rank - 1, 0);
+        }
+
+        morton_code buff;
+        if ( world_rank < world_size - 1 ) {
+            mpi::Status status;
+            Comm->recv(&buff, 1, world_rank + 1, 0, status);
+            // do we need a status check here or not?
+            octants.push_back(buff);
+        }
+
+        Kokkos::vector<morton_code> R;
+        // rank 0 works differently, as we need to 'simulate' push_front
+        if ( world_rank == 0 ) {
+            R.push_back(first_rank0);
+            for (morton_code elem : complete_region(first_rank0, octants[0])) {
+                R.push_back(elem);
+            }
+        }
+
+        const size_t n = octants.size();
+        for ( size_t i = 0; i < n - 1; ++i ) {
+            for (morton_code elem : complete_region(octants[i], octants[i + 1])) {
+                R.push_back(elem);
+            }
+            R.push_back(octants[i]);
+        }
+
+        if ( world_rank == world_size - 1 ) {
+            R.push_back(octants[n - 1]);
+        }
+
+        return R;
+    }
+
+    template <size_t Dim>
+    Kokkos::vector<size_t> OrthoTree<Dim>::get_num_particles_in_octants_parallel(
+        const Kokkos::vector<morton_code>& octants) {
+        //get communicator info
+        const size_t n_procs = Comm->size();
+        const size_t rank = Comm->rank();
+
+        mpi::Status stat;
+
+        if (rank == 0) {
+            for (size_t i = 1; i < n_procs; ++i) {
+                int req_size;
+                Comm->recv(req_size, 1, i, 1, stat);
+                Kokkos::vector<morton_code> octants_buffer(req_size);
+                Kokkos::vector<size_t> num_particles;
+                Comm->recv(octants_buffer.data(), req_size, i, 0, stat);
+
+                num_particles = get_num_particles_in_octants_seqential(octants_buffer);
+                Comm->send(*num_particles.data(), req_size, i, 0);
+            }
+
+            Kokkos::vector<size_t> num_particles = get_num_particles_in_octants_seqential(octants);
+            return num_particles;
+        } else {
+            int req_size = octants.size();
+            Comm->send(req_size, 1, 0, 1);
+            Comm->send(*octants.data(), octants.size(), 0, 0);
+            Kokkos::vector<size_t> num_particles(req_size);
+            Comm->recv(num_particles.data(), req_size, 0, 0, stat);
+            return num_particles;
+        }
+    }
+
+    template <size_t Dim>
+    Kokkos::vector<size_t> OrthoTree<Dim>::get_num_particles_in_octants_seqential(
+        const Kokkos::vector<morton_code>& octants) {
+        size_t num_octs = octants.size();
+        Kokkos::vector<size_t> num_particles(num_octs);
+        for (size_t i = 0; i < num_octs; ++i) {
+            num_particles[i] = get_num_particles_in_octant(octants[i]);
+        }
+        return num_particles;
     }
 
 } // namespace ippl

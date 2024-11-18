@@ -99,6 +99,19 @@ namespace ippl {
          */
         void linearise_tree();
 
+        /**
+         * @brief Implements the logic part of algorithm 3.
+         *
+         * @warning DOES NOT INCLUDE LINES 1-3 OF THE ALGORITHM
+         *
+         * @param tree sorted distributed list of octants with:
+         *  - removed duplicates (needs to be implemented)
+         *  - linearised (algo 8)
+         *  - workload distributed (algo 5)
+         *
+         * @return ippl::vector_t<morton_code>
+         */
+        Kokkos::vector<morton_code> complete_tree(Kokkos::vector<morton_code>& tree);
 
         /**
          * @brief Compares the following aspects of the trees:
@@ -114,6 +127,29 @@ namespace ippl {
          */
         bool operator==(const OrthoTree& other);
 
+        /**
+          * @brief algorithm 2 sequential construction of a minimal linear octree between two octants
+          *
+          * @param morton codes code_a and code_b of the octants
+          *
+          * @return list of morton codes of minimal linear octree between the two octants
+          **/
+        ippl::vector_t<morton_code> complete_region(morton_code code_a, morton_code code_b);
+
+        /*
+         * @brief Returns the number of particles in the octants, asks rank 0 for the number of
+         * particles in the octants
+         *
+         * @param octant vector
+         * @return size_t vector - number of particles in the octants
+         */
+        Kokkos::vector<size_t> get_num_particles_in_octants_parallel(
+            const Kokkos::vector<morton_code>& octants);
+
+        // setter for aid list also adapts n_particles
+        void set_aid_list(const aid_list_t& aid_list) {this->aid_list = aid_list; n_particles = aid_list.size();}
+
+
     private:
 
         /**
@@ -123,15 +159,6 @@ namespace ippl {
          * @param particles
          */
         void initialize_aid_list(particle_t const& particles);
-
-        /**
-         * @brief counts the number of particles covered by the cell decribed by the morton code
-         *        initialize_aid_list needs to be called first
-         *
-         * @param morton_code
-         * @return number of particles in the cell specified by the morton code
-         **/
-        size_t get_num_particles_in_octant(morton_code octant);
 
         /**
           * @brief algorithm 2 sequential construction of a minimal linear octree between two octants
@@ -149,47 +176,32 @@ namespace ippl {
           *
           * @return block partitioned octree, and unpartitioned_tree is re-distributed
           **/
-        Kokkos::vector<morton_code> block_partition(ippl::vector_t<morton_code>& unpartitioned_tree); 
+        Kokkos::vector<morton_code> block_partition(ippl::vector_t<morton_code>& unpartitioned_tree);
+
+        /**
+         * @brief counts the number of particles covered by the cell decribed by the morton code
+         *        initialize_aid_list needs to be called first
+         *
+         * @param morton_code
+         * @return number of particles in the cell specified by the morton code
+         **/
+        size_t get_num_particles_in_octant(morton_code octant);
 
     public:
         // SIMONS FUNCTIONS DONT EDIT, TOUCH OR USE THIS IN YOUR CODE:
 
         /**
          * @brief algorithm 1' topdown sequential construction of octree
+         * @brief counts the number of particles covered by the cell decribed by the morton codes
+         *        initialize_aid_list needs to be called first
          *
-         * @param morton code of root_node, particles
-         *
-         * @return list of morton codes of leaves of tree spanning root node
+         * @param vector of morton codes
+         * @return number of particles in the cells specified by the morton code vector
+         * @warning THIS FUNCTION ASSUMES THAT THE OCTANTS ARE SORTED
+         * @TODO parallelize this with Kokkos
          **/
-        ippl::vector_t<morton_code> build_tree_topdown_sequential(morton_code root_node, particle_t const& particles)
-        {
-            // insert the root into the tree
-            ippl::vector_t<morton_code> tree;
-            ippl::vector_t<morton_code> stack; // stack used to build the tree
-
-            stack.push_back(root_node); // maybe store morton_code(0) s.t. we can call morton::root_val or smth
-
-            initialize_aid_list(particles); // initialize aid list - required for particle counting could be moved to constructor
-
-            while ( stack.size() > 0 ) {
-                morton_code current_node = stack.back();
-                stack.pop_back();
-
-                if ( get_num_particles_in_octant(current_node) > max_particles_per_node_m && morton_helper.get_depth(current_node) < max_depth_m ) {
-
-                    ippl::vector_t<morton_code> children = morton_helper.get_children(current_node);
-
-                    for ( morton_code child : children ) { stack.push_back(child); }
-
-                }
-                else {
-                    tree.push_back(current_node);
-                }
-            }
-
-            std::sort(tree.begin(), tree.end());
-            return tree;
-        }
+        Kokkos::vector<size_t> get_num_particles_in_octants_seqential(
+            const Kokkos::vector<morton_code>& octants);
     };
 
 } // namespace ippl

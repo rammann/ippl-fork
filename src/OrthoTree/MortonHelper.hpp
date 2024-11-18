@@ -98,7 +98,7 @@ namespace ippl {
     {
 
         // descendants are always larger than their parents
-        if ( child < parent ) return false;
+        if ( child <= parent ) return false;
 
         const morton_code step = get_step_size(parent);
         const morton_code next_neighbour = parent + step;
