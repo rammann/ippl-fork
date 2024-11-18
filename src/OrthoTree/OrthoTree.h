@@ -142,6 +142,15 @@ namespace ippl {
           **/
         ippl::vector_t<morton_code> complete_region(morton_code code_a, morton_code code_b); 
 
+        /**
+          * @brief algorithm 4 parallel partitioning of octants into large contiguous blocks
+          *
+          * @param unpartitioned octree unpartitioned_tree
+          *
+          * @return block partitioned octree, and unpartitioned_tree is re-distributed
+          **/
+        Kokkos::vector<morton_code> block_partition(ippl::vector_t<morton_code>& unpartitioned_tree); 
+
     public:
         // SIMONS FUNCTIONS DONT EDIT, TOUCH OR USE THIS IN YOUR CODE:
 
