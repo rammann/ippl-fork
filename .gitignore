@@ -1,5 +1,7 @@
 build/
 build_octree/
+build_gh/
+build_master/
 doc/html
 doc/latex
 manual/*.aux
