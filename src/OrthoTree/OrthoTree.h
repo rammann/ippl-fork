@@ -57,8 +57,10 @@ namespace ippl {
         // this list should not be edited, we will probably need it if we implement the tree update as well
         aid_list_t aid_list;
 
-    public:
+        const int world_rank;
+        const int world_size;
 
+    public:
         OrthoTree(size_t max_depth, size_t max_particles_per_node, const bounds_t& root_bounds);
 
         /**
@@ -69,13 +71,47 @@ namespace ippl {
          */
         void build_tree_naive(particle_t const& particles);
 
+        Kokkos::vector<morton_code> build_tree(particle_t const& particles) {
+            std::vector<morton_code> octant_buffer;
+
+            if (world_rank == 0) {
+                aid_list                 = initialize_aid_list(particles);
+                size_t batch_size        = aid_list.size() / world_size;
+                size_t rank_0_batch_size = (aid_list.size() % batch_size) + batch_size;
+
+                for (int rank = 1; rank < world_size; ++rank) {
+                    octant_buffer.clear();
+                    octant_buffer.reserve(2);
+
+                    size_t start_idx = (rank - 1) * batch_size;
+                    octant_buffer[0] = aid_list[start_idx].first;
+                    octant_buffer[1] = aid_list[start_idx + batch_size].first;
+
+                    Comm->send(*octant_buffer.data(), 2, rank, 0);
+                }
+
+                octant_buffer.clear();
+                octant_buffer[0] = aid_list[(world_rank - 1) * batch_size].first;
+                octant_buffer[1] = aid_list.back().first;
+            } else {
+                mpi::Status status;
+                std::vector<morton_code> octant_buffer;
+                octant_buffer.reserve(2);
+                Comm->recv(octant_buffer.data(), 2, 0, 0, status);
+            }
+
+            // block_partition(); // todo make this take two octants instead of a list
+            // todo build tree here
+        }
+
         /**
          *
          * @brief This function partitions the workload of building the tree across
          * the available mpi ranks.
          *
          */
-        Kokkos::vector<morton_code> partition(Kokkos::vector<morton_code>& octants, Kokkos::vector<size_t>& weights);
+        Kokkos::vector<morton_code> partition(Kokkos::vector<morton_code>& octants,
+                                              Kokkos::vector<size_t>& weights);
 
         /**
          * @brief Returns a vector with morton_codes and lists of particle ids inside this region

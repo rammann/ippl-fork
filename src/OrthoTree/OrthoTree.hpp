@@ -9,10 +9,14 @@
 namespace ippl {
 
     template <size_t Dim>
-    OrthoTree<Dim>::OrthoTree(size_t max_depth, size_t max_particles_per_node, const bounds_t& root_bounds)
-        : max_depth_m(max_depth), max_particles_per_node_m(max_particles_per_node),
-        root_bounds_m(root_bounds), morton_helper(max_depth)
-    { }
+    OrthoTree<Dim>::OrthoTree(size_t max_depth, size_t max_particles_per_node,
+                              const bounds_t& root_bounds)
+        : max_depth_m(max_depth)
+        , max_particles_per_node_m(max_particles_per_node)
+        , root_bounds_m(root_bounds)
+        , morton_helper(max_depth)
+        , world_rank(Comm->rank())
+        , world_size(Comm->size()) {}
 
     template <size_t Dim>
     void OrthoTree<Dim>::build_tree_naive(particle_t const& particles)
@@ -248,7 +252,7 @@ namespace ippl {
     }
 
     template <size_t Dim>
-    void OrthoTree<Dim>::initialize_aid_list(particle_t const& particles)
+  OrthoTree<Dim>::aid_list_t OrthoTree<Dim>::initialize_aid_list(particle_t const& particles)
     {
         // maybe get getGlobalNum() in the future?
         n_particles = particles.getLocalNum();
@@ -257,7 +261,8 @@ namespace ippl {
         // store dimensions of root bounding box
         const real_coordinate root_bounds_size = root_bounds_m.get_max() - root_bounds_m.get_min();
 
-        aid_list.resize(n_particles);
+        aid_list_t ret_aid_list;
+        ret_aid_list.resize(n_particles);
 
         for ( size_t i = 0; i < n_particles; ++i ) {
             // normalize particle coordinate inside the grid
@@ -266,14 +271,15 @@ namespace ippl {
 
             // calculate the grid coordinate relative to the bounding box and grid size
             const grid_coordinate grid_coord = static_cast<grid_coordinate>(normalized * grid_size);
-            aid_list[i] = { morton_helper.encode(grid_coord, max_depth_m), i };
+            ret_aid_list[i]                  = {morton_helper.encode(grid_coord, max_depth_m), i};
         }
 
         // list is sorted by asccending morton codes
-        std::sort(aid_list.begin(), aid_list.end(), [ ] (const auto& a, const auto& b)
-        {
+        std::sort(ret_aid_list.begin(), ret_aid_list.end(), [](const auto& a, const auto& b) {
             return a.first < b.first;
         });
+
+        return ret_aid_list;
     }
 
     template <size_t Dim>
