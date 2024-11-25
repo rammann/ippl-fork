@@ -161,6 +161,24 @@ namespace ippl {
         void initialize_aid_list(particle_t const& particles);
 
         /**
+          * @brief algorithm 2 sequential construction of a minimal linear octree between two octants
+          *
+          * @param morton codes code_a and code_b of the octants
+          *
+          * @return list of morton codes of minimal linear octree between the two octants
+          **/
+        ippl::vector_t<morton_code> complete_region(morton_code code_a, morton_code code_b); 
+
+        /**
+          * @brief algorithm 4 parallel partitioning of octants into large contiguous blocks
+          *
+          * @param unpartitioned octree unpartitioned_tree
+          *
+          * @return block partitioned octree, and unpartitioned_tree is re-distributed
+          **/
+        Kokkos::vector<morton_code> block_partition(ippl::vector_t<morton_code>& unpartitioned_tree);
+
+        /**
          * @brief counts the number of particles covered by the cell decribed by the morton code
          *        initialize_aid_list needs to be called first
          *
@@ -169,7 +187,11 @@ namespace ippl {
          **/
         size_t get_num_particles_in_octant(morton_code octant);
 
+    public:
+        // SIMONS FUNCTIONS DONT EDIT, TOUCH OR USE THIS IN YOUR CODE:
+
         /**
+         * @brief algorithm 1' topdown sequential construction of octree
          * @brief counts the number of particles covered by the cell decribed by the morton codes
          *        initialize_aid_list needs to be called first
          *

@@ -344,6 +344,51 @@ namespace ippl {
         tree_m = linearise_octants(tree_m);
     }
 
+    template<size_t Dim>
+    Kokkos::vector<morton_code> OrthoTree<Dim>::block_partition(ippl::vector_t<morton_code>& unpartitioned_tree)
+    {
+      size_t len = unpartitioned_tree.size();
+      ippl::vector_t<morton_code> base_tree = complete_region(unpartitioned_tree[0], unpartitioned_tree[len-1]);
+
+      Kokkos::vector<morton_code> base_tree2;
+      size_t lowest_level = len;
+      for (const morton_code& octant : base_tree) {
+        lowest_level = std::min(lowest_level, morton_helper.get_depth(octant));
+      }
+      for (morton_code octant : base_tree) {
+        if (morton_helper.get_depth(octant) == lowest_level) {
+          base_tree2.push_back(octant);
+        }
+      }
+
+      Kokkos::vector<morton_code> base_tree3 = complete_tree(base_tree2);
+
+      Kokkos::vector<size_t> weights(base_tree3.size(), 0);
+      for (size_t i = 0; i < base_tree3.size(); ++i) {
+        morton_code base_tree_octant = base_tree3[i];
+        weights[i] = std::count_if(unpartitioned_tree.begin(), unpartitioned_tree.end(),
+            [&base_tree_octant](const morton_code& unpartitioned_tree_octant) {
+              return unpartitioned_tree_octant == base_tree_octant 
+                  || morton_helper.is_descendent(unpartitioned_tree_octant, base_tree_octant);
+            });
+      } 
+
+      Kokkos::vector<morton_code> partitioned_tree = partition(base_tree2, weights);
+
+      ippl::vector_t<morton_code> global_unpartitioned_tree = unpartitioned_tree;
+      unpartitioned_tree.clear();
+      for (morton_code gup_octant : global_unpartitioned_tree) {
+        for (const morton_code& p_octant : partitioned_tree) {
+          if (gup_octant == p_octant || morton_helper.is_descendent(gup_octant, p_octant)) {
+              unpartitioned_tree.push_back(gup_octant);
+              break;
+          }
+        } 
+      }
+
+      return partitioned_tree;
+    }
+
     template <size_t Dim>
     Kokkos::vector<morton_code> OrthoTree<Dim>::complete_tree(Kokkos::vector<morton_code>& octants)
     {
