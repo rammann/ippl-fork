@@ -57,8 +57,8 @@ namespace ippl {
         // this list should not be edited, we will probably need it if we implement the tree update as well
         aid_list_t aid_list;
 
-        const int world_rank;
-        const int world_size;
+        int world_rank;
+        int world_size;
 
     public:
         OrthoTree(size_t max_depth, size_t max_particles_per_node, const bounds_t& root_bounds);
@@ -71,14 +71,27 @@ namespace ippl {
          */
         void build_tree_naive(particle_t const& particles);
 
+        /**
+         * @brief We take this as an entry function.
+         * Each proc will return its own part of the tree?
+         *
+         * @param particles
+         * @return Kokkos::vector<morton_code>
+         */
         Kokkos::vector<morton_code> build_tree(particle_t const& particles) {
+            world_rank = Comm->rank();
+            world_size = Comm->size();
+            std::cerr << "Rank " << world_rank << " received " << particles.getLocalNum()
+                      << std::endl;
             std::vector<morton_code> octant_buffer;
 
             if (world_rank == 0) {
+                std::cerr << "spreading aid_list\n";
                 aid_list                 = initialize_aid_list(particles);
                 size_t batch_size        = aid_list.size() / world_size;
                 size_t rank_0_batch_size = (aid_list.size() % batch_size) + batch_size;
-
+                std::cerr << "rank 0 got the aid_list\n";
+                // send the coresponding min/max octant to each proc
                 for (int rank = 1; rank < world_size; ++rank) {
                     octant_buffer.clear();
                     octant_buffer.reserve(2);
@@ -87,20 +100,25 @@ namespace ippl {
                     octant_buffer[0] = aid_list[start_idx].first;
                     octant_buffer[1] = aid_list[start_idx + batch_size].first;
 
-                    Comm->send(*octant_buffer.data(), 2, rank, 0);
+                    Comm->send(octant_buffer.data(), 2, rank, 0);
                 }
-
+                std::cerr << "rank0 has sent all the thingies\n";
+                // assign the last block to rank=0
                 octant_buffer.clear();
-                octant_buffer[0] = aid_list[(world_rank - 1) * batch_size].first;
+                octant_buffer[0] = aid_list[(world_size - 1) * batch_size].first;
                 octant_buffer[1] = aid_list.back().first;
             } else {
                 mpi::Status status;
-                std::vector<morton_code> octant_buffer;
+                octant_buffer.clear();
                 octant_buffer.reserve(2);
-                Comm->recv(octant_buffer.data(), 2, 0, 0, status);
+                std::cerr << "rank=" << world_rank << " tries to receive its thingy\n";
+                Comm->recv(octant_buffer, 2, 0, 0, status);
+                std::cerr << "rank=" << world_rank << " got its thingy\n";
             }
 
-            // block_partition(); // todo make this take two octants instead of a list
+            Comm->barrier();
+            std::cerr << "done spreading aid_list, entering block_partition\n";
+            auto octants = block_partition(octant_buffer);
             // todo build tree here
         }
 
@@ -112,7 +130,6 @@ namespace ippl {
          */
         Kokkos::vector<morton_code> partition(Kokkos::vector<morton_code>& octants,
                                               Kokkos::vector<size_t>& weights);
-
         /**
          * @brief Returns a vector with morton_codes and lists of particle ids inside this region
          * This is also not meant to be permanent, but it should suffice for the beginning
@@ -163,15 +180,6 @@ namespace ippl {
          */
         bool operator==(const OrthoTree& other);
 
-        /**
-          * @brief algorithm 2 sequential construction of a minimal linear octree between two octants
-          *
-          * @param morton codes code_a and code_b of the octants
-          *
-          * @return list of morton codes of minimal linear octree between the two octants
-          **/
-        ippl::vector_t<morton_code> complete_region(morton_code code_a, morton_code code_b);
-
         /*
          * @brief Returns the number of particles in the octants, asks rank 0 for the number of
          * particles in the octants
@@ -185,25 +193,23 @@ namespace ippl {
         // setter for aid list also adapts n_particles
         void set_aid_list(const aid_list_t& aid_list) {this->aid_list = aid_list; n_particles = aid_list.size();}
 
+        /**
+         * @brief algorithm 2 sequential construction of a minimal linear octree between two octants
+         *
+         * @param morton codes code_a and code_b of the octants
+         *
+         * @return list of morton codes of minimal linear octree between the two octants
+         **/
+        ippl::vector_t<morton_code> complete_region(morton_code code_a, morton_code code_b);
 
     private:
-
         /**
          * @brief initializes the aid list which has form vec{pair{morton_code, size_t}}
          * will sort the aidlist in ascending morton codes
          *
          * @param particles
          */
-        void initialize_aid_list(particle_t const& particles);
-
-        /**
-          * @brief algorithm 2 sequential construction of a minimal linear octree between two octants
-          *
-          * @param morton codes code_a and code_b of the octants
-          *
-          * @return list of morton codes of minimal linear octree between the two octants
-          **/
-        ippl::vector_t<morton_code> complete_region(morton_code code_a, morton_code code_b); 
+        aid_list_t initialize_aid_list(particle_t const& particles);
 
         /**
           * @brief algorithm 4 parallel partitioning of octants into large contiguous blocks

@@ -14,15 +14,13 @@ namespace ippl {
         : max_depth_m(max_depth)
         , max_particles_per_node_m(max_particles_per_node)
         , root_bounds_m(root_bounds)
-        , morton_helper(max_depth)
-        , world_rank(Comm->rank())
-        , world_size(Comm->size()) {}
+        , morton_helper(max_depth) {}
 
     template <size_t Dim>
     void OrthoTree<Dim>::build_tree_naive(particle_t const& particles)
     {
         // this needs to be initialized before constructing the tree
-        initialize_aid_list(particles);
+        this->aid_list = initialize_aid_list(particles);
 
         std::stack<std::pair<morton_code, size_t>> s;
         s.push({ morton_code(0), particles.getLocalNum() });
@@ -51,23 +49,17 @@ namespace ippl {
 
     template <size_t Dim>
     Kokkos::vector<morton_code> OrthoTree<Dim>::partition(Kokkos::vector<morton_code>& octants, Kokkos::vector<size_t>& weights) {
-      //get communicator info
-      const size_t n_procs = Comm->size();
-      const size_t rank = Comm->rank();
+        // initialize the prefix_sum and the total weight
+        Kokkos::vector<size_t> prefix_sum;
+        prefix_sum.reserve(octants.size());
+        size_t max = 0, total;
 
-      //initialize the prefix_sum and the total weight
-      Kokkos::vector<size_t> prefix_sum;
-      prefix_sum.reserve(octants.size());
-      size_t max = 0, total;
-
-      //calculate the prefix_sum for the weight of each octant in octants
-      // get weight here later
-      for(unsigned i = 0 ; i < octants.size(); ++i){
-        max += weights[i];
-        prefix_sum.push_back(max);
-      }
-
-
+        // calculate the prefix_sum for the weight of each octant in octants
+        //  get weight here later
+        for (unsigned i = 0; i < octants.size(); ++i) {
+            max += weights[i];
+            prefix_sum.push_back(max);
+        }
 
       //scan to get get the propper offsets for the prefix_sum
       Comm->scan(&max, &total, 1, std::plus<morton_code>());
@@ -78,111 +70,106 @@ namespace ippl {
       }
 
       //broadcast the total weight to all processors
-      Comm->broadcast<size_t>(&total, 1, n_procs - 1);
+      Comm->broadcast<size_t>(&total, 1, world_size - 1);
 
       //initialize the average weight
       //might want to get a double? needs checking
-      size_t avg_weight = total/n_procs, k = total % n_procs;
+      size_t avg_weight = total / world_size;
+      size_t k          = total % world_size;
+
       Kokkos::vector<morton_code> total_octants;
       Kokkos::vector<mpi::Request> requests;
-      Kokkos::vector<int> sizes(n_procs);
+      Kokkos::vector<int> sizes(world_size);
 
       // initialize the start and end index for which processor receives which
       // local octants. Doing this here allows us to update these incrementally
       // in a two-pointer approach
-      size_t start = 0, end = 0;
+      int start = 0, end = 0;
       //loop thorugh all processors
-      for (size_t p = 1; p <= n_procs; ++p){
+      for (int p = 1; p <= world_size; ++p) {
+          // no need to send data to myself
+          if (p - 1 == world_rank)
+              continue;
+          // initialize the start and end index
+          size_t startoffset = 0, endoffset = 0;
 
-        // no need to send data to myself
-        if (p -1 == rank) continue;
-        //initialize the start and end index
-        size_t startoffset = 0, endoffset = 0;
-
-        // calculate the start and end offset for the processor in order
-        // to distribute the remainder of total/n_procs evenly
-        if (p <= k){
-          startoffset = p - 1;
-          endoffset = p;
-        } else {
-          startoffset = k;
-          endoffset = k;
-        }
-
-        start = end;
-
-        //calculate the start and end index for the processor
-        for(size_t i = end; i < octants.size(); ++i){
-          if(prefix_sum[i] > avg_weight * (p - 1) + startoffset){
-            start = i;
-            break;
+          // calculate the start and end offset for the processor in order
+          // to distribute the remainder of total/world_size evenly
+          if (p <= k) {
+              startoffset = p - 1;
+              endoffset   = p;
+          } else {
+              startoffset = k;
+              endoffset   = k;
           }
-        }
 
-    
+          start = end;
 
-        for(size_t i = start; i < octants.size(); ++i){
-          if(prefix_sum[i] > avg_weight * p + endoffset){
-            end = i;
-            break;
+          // calculate the start and end index for the processor
+          for (size_t i = end; i < octants.size(); ++i) {
+              if (prefix_sum[i] > avg_weight * (p - 1) + startoffset) {
+                  start = i;
+                  break;
+              }
           }
-          if (i == octants.size() - 1)
-            end = octants.size();
-        }
 
+          for (size_t i = start; i < octants.size(); ++i) {
+              if (prefix_sum[i] > avg_weight * p + endoffset) {
+                  end = i;
+                  break;
+              }
+              if (i == octants.size() - 1)
+                  end = octants.size();
+          }
 
-        //if the processor is the last one, add the remaining weight
-        if(p == n_procs || end > octants.size()){
-          end = octants.size();
-        }
+          // if the processor is the last one, add the remaining weight
+          if (p == world_size || end > octants.size()) {
+              end = octants.size();
+          }
 
-        //initialize the new octants for the processor
-        Kokkos::vector<morton_code> new_octants;
+          // initialize the new octants for the processor
+          Kokkos::vector<morton_code> new_octants;
 
-        //loop through the octants and add the octants to the new octants
-        for(size_t i = start; i < end; ++i){
-          new_octants.push_back(octants[i]);
-          total_octants.push_back(octants[i]);
-        }
+          // loop through the octants and add the octants to the new octants
+          for (size_t i = start; i < end; ++i) {
+              new_octants.push_back(octants[i]);
+              total_octants.push_back(octants[i]);
+          }
 
-        // send the number of new octants to the processor
-        requests.push_back(mpi::Request());
-        sizes[p-1] = new_octants.size();
-        Comm->isend((sizes[p-1]), 1, p-1, 1, requests[requests.size()-1]);
-        //send the new octants to the processor
-    
-        requests.push_back(mpi::Request());
-        //Comm->isend(new_octants.size(), 1, p-1, 0, request1);
-        if (sizes[p-1] > 0)
-            Comm->isend<morton_code>(*new_octants.data(), 
-                                    new_octants.size(), p-1, 
-                                    0, 
-                                    requests[requests.size() -1]);
+          // send the number of new octants to the processor
+          requests.push_back(mpi::Request());
+          sizes[p - 1] = new_octants.size();
+          Comm->isend((sizes[p - 1]), 1, p - 1, 1, requests[requests.size() - 1]);
+          // send the new octants to the processor
+
+          requests.push_back(mpi::Request());
+          // Comm->isend(new_octants.size(), 1, p-1, 0, request1);
+          if (sizes[p - 1] > 0)
+              Comm->isend<morton_code>(*new_octants.data(), new_octants.size(), p - 1, 0,
+                                       requests[requests.size() - 1]);
       }
-
 
       std::vector<mpi::Request> receives;
       //initialize the new octants for the current processor 
       Kokkos::vector<morton_code> received_octants;
-      for(size_t p = 0; p < n_procs; ++p){
-        if (p == rank) continue;
-        int size;
-        //receives.push_back(mpi::Request());
-        //receive the number of new octants
-        mpi::Status stat;
-        Comm->recv(&size, 1, p, 1, stat);
-        //initialize the new octants
-        Kokkos::vector<morton_code> octants_buffer(size);
-        //receive the new octants
-        //Comm->irecv(&size, 1, p, 0, receive_size);
-        if (size > 0) {
-          Comm->recv(octants_buffer.data(), size, p, 0, stat);
-          //add the new octants to the received octants
-          received_octants.insert(received_octants.end(), 
-                                  octants_buffer.begin(), 
-                                  octants_buffer.end());
-        
-        }
+      for (size_t p = 0; p < world_size; ++p) {
+          if (p == world_rank)
+              continue;
+          int size;
+          // receives.push_back(mpi::Request());
+          // receive the number of new octants
+          mpi::Status stat;
+          Comm->recv(&size, 1, p, 1, stat);
+          // initialize the new octants
+          Kokkos::vector<morton_code> octants_buffer(size);
+          // receive the new octants
+          // Comm->irecv(&size, 1, p, 0, receive_size);
+          if (size > 0) {
+              Comm->recv(octants_buffer.data(), size, p, 0, stat);
+              // add the new octants to the received octants
+              received_octants.insert(received_octants.end(), octants_buffer.begin(),
+                                      octants_buffer.end());
+          }
       }
       //add the received octants to octants and remove total_octants
       Kokkos::vector<morton_code> partitioned_octants;
@@ -372,11 +359,13 @@ namespace ippl {
       Kokkos::vector<size_t> weights(base_tree3.size(), 0);
       for (size_t i = 0; i < base_tree3.size(); ++i) {
         morton_code base_tree_octant = base_tree3[i];
-        weights[i] = std::count_if(unpartitioned_tree.begin(), unpartitioned_tree.end(),
-            [&base_tree_octant](const morton_code& unpartitioned_tree_octant) {
-              return unpartitioned_tree_octant == base_tree_octant 
-                  || morton_helper.is_descendent(unpartitioned_tree_octant, base_tree_octant);
-            });
+        weights[i] =
+            std::count_if(unpartitioned_tree.begin(), unpartitioned_tree.end(),
+                          [&base_tree_octant, this](const morton_code& unpartitioned_tree_octant) {
+                              return (unpartitioned_tree_octant == base_tree_octant)
+                                     || (morton_helper.is_descendant(unpartitioned_tree_octant,
+                                                                     base_tree_octant));
+                          });
       } 
 
       Kokkos::vector<morton_code> partitioned_tree = partition(base_tree2, weights);
@@ -385,10 +374,10 @@ namespace ippl {
       unpartitioned_tree.clear();
       for (morton_code gup_octant : global_unpartitioned_tree) {
         for (const morton_code& p_octant : partitioned_tree) {
-          if (gup_octant == p_octant || morton_helper.is_descendent(gup_octant, p_octant)) {
-              unpartitioned_tree.push_back(gup_octant);
-              break;
-          }
+            if (gup_octant == p_octant || morton_helper.is_descendant(gup_octant, p_octant)) {
+                unpartitioned_tree.push_back(gup_octant);
+                break;
+            }
         } 
       }
 
@@ -396,11 +385,8 @@ namespace ippl {
     }
 
     template <size_t Dim>
-    Kokkos::vector<morton_code> OrthoTree<Dim>::complete_tree(Kokkos::vector<morton_code>& octants)
-    {
-        int world_rank = Comm->rank();
-        int world_size = Comm->size();
-
+    Kokkos::vector<morton_code> OrthoTree<Dim>::complete_tree(
+        Kokkos::vector<morton_code>& octants) {
         // this removes duplicates, inefficient as of now
         std::map<morton_code, int> m;
         for ( auto octant : octants ) {
@@ -412,7 +398,7 @@ namespace ippl {
             octants.push_back(octant);
         }
 
-        octants = linearise_octants(octants);
+        // octants = linearise_octants(octants);
 
         // algo5(octants);
 
@@ -472,13 +458,13 @@ namespace ippl {
     Kokkos::vector<size_t> OrthoTree<Dim>::get_num_particles_in_octants_parallel(
         const Kokkos::vector<morton_code>& octants) {
         //get communicator info
-        const size_t n_procs = Comm->size();
+        const size_t world_size = Comm->size();
         const size_t rank = Comm->rank();
 
         mpi::Status stat;
 
         if (rank == 0) {
-            for (size_t i = 1; i < n_procs; ++i) {
+            for (size_t i = 1; i < world_size; ++i) {
                 int req_size;
                 Comm->recv(req_size, 1, i, 1, stat);
                 Kokkos::vector<morton_code> octants_buffer(req_size);

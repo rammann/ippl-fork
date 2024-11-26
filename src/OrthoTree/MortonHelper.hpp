@@ -55,7 +55,9 @@ namespace ippl {
     template <size_t Dim>
     inline morton_code Morton<Dim>::get_parent(morton_code code) const
     {
-        const morton_code depth = get_depth(code);
+        assert(code != morton_code(0) && "root has not parent");
+
+        const morton_code depth             = get_depth(code);
         const morton_code parent_depth_bits = depth - 1;
 
         // the first part removes irellevant bits (basically only keeping bits that ALL descendants of a code share with its ancestor)

@@ -31,30 +31,42 @@ int main(int argc, char* argv[])
         std::uniform_real_distribution<double> unif(MIN_BOUND, MAX_BOUND);
 
         particles.create(num_particles);
-        for ( unsigned int i = 0; i < num_particles; ++i ) {
-            particles.R(i) = ippl::Vector<double, Dim> { unif(eng), unif(eng), unif(eng) };
-            particles.rho(i) = 0;
-        }
 
-// stuff 1
+        typename bunch_type::particle_position_type::HostMirror R_host =
+            particles.R.getHostMirror();
+        typename bunch_type::charge_container_type::HostMirror Q_host = particles.Q.getHostMirror();
+
+        for (int i = 0; i < num_particles; ++i) {
+            ippl::Vector<double, 3> r = {unif(eng), unif(eng), unif(eng)};
+            R_host(i)                 = r;
+            Q_host(i)                 = 0.0;
+        }
+        Kokkos::deep_copy(particles.R.getView(), R_host);
+        Kokkos::deep_copy(particles.Q.getView(), Q_host);
+
+        std::cerr << "building tree now\n";
+        tree.build_tree(particles);
+
+        // stuff 1
         // tree.build_tree_naive(particles);
 
-        ippl::vector_t<ippl::morton_code> vec;
-        for ( ippl::morton_code c = 0; c < 100; ++c ) {
-            vec.push_back(c);
-        }
-        tree.complete_tree(vec);
-// stuff 2
-        tree.build_tree_naive(particles);
+        // ippl::vector_t<ippl::morton_code> vec;
+        // for ( ippl::morton_code c = 0; c < 100; ++c ) {
+        //     vec.push_back(c);
+        // }
+        // tree.complete_tree(vec);
+        // stuff//  2
+        // tree.build_tree_naive(particles);
 
-        auto lin_tree = (tree.get_tree());
-        Kokkos::vector<ippl::morton_code> tree_copy(lin_tree.size());
-        for ( size_t i = 0; i < lin_tree.size(); ++i ) {
-            tree_copy[i] = lin_tree[i].first;
-        }
+        /*
+                auto lin_tree = (tree.get_tree());
+                Kokkos::vector<ippl::morton_code> tree_copy(lin_tree.size());
+                for ( size_t i = 0; i < lin_tree.size(); ++i ) {
+                    tree_copy[i] = lin_tree[i].first;
+                }
 
-        tree.partition(tree_copy);
-
+                tree.partition(tree_copy);
+        */
     }
 
     ippl::finalize();
