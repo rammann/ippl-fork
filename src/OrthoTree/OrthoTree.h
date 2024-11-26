@@ -83,52 +83,57 @@ namespace ippl {
             world_size = Comm->size();
             std::cerr << "Rank " << world_rank << " received " << particles.getLocalNum()
                       << std::endl;
-            std::vector<morton_code> octant_buffer;
 
+            std::vector<morton_code> octant_buffer;
             if (world_rank == 0) {
-                std::cerr << "spreading aid_list\n";
-                aid_list                 = initialize_aid_list(particles);
-                size_t batch_size        = aid_list.size() / world_size;
-                size_t rank_0_batch_size = (aid_list.size() % batch_size) + batch_size;
-                std::cerr << "rank 0 got the aid_list\n";
-                // send the coresponding min/max octant to each proc
+                aid_list = initialize_aid_list(particles);
+                std::cerr << "aid list has size: " << aid_list.size() << std::endl;
+                const size_t total_num_particles = particles.getTotalNum();
+                const size_t batch_size          = total_num_particles / world_size;
+                const size_t rank_0_size         = batch_size + (total_num_particles % batch_size);
+
                 for (int rank = 1; rank < world_size; ++rank) {
+                    const int start = ((rank - 1) * batch_size) + rank_0_size;
+                    const int end   = start + batch_size;
+
                     octant_buffer.clear();
                     octant_buffer.reserve(2);
+                    octant_buffer[0] = aid_list[start].first;
+                    octant_buffer[1] = aid_list[end - 1].first;
 
-                    size_t start_idx = (rank - 1) * batch_size;
-                    octant_buffer[0] = aid_list[start_idx].first;
-                    octant_buffer[1] = aid_list[start_idx + batch_size].first;
+                    std::cerr << "sending to rank " << rank << ": " << octant_buffer[0] << ", "
+                              << octant_buffer[1] << std::endl;
+
                     try {
-                        Comm->send(octant_buffer.data(), 2, rank, 0);
-                    } catch (IpplException& e) {
-                        std::cerr << "ERROR in send: " << e.what() << std::endl;
-                        assert(false);
+                        Comm->send(*octant_buffer.data(), 2, rank, 0);
+                    } catch (const IpplException& e) {
+                        std::cerr << "error during send in build_tree(): " << e.what() << std::endl;
                     }
+                    std::cerr << "sent to rank " << rank << std::endl;
                 }
-                std::cerr << "rank0 has sent all the thingies\n";
-                // assign the last block to rank=0
+
                 octant_buffer.clear();
-                octant_buffer[0] = aid_list[(world_size - 1) * batch_size].first;
-                octant_buffer[1] = aid_list.back().first;
+                octant_buffer.reserve(2);
+                octant_buffer[0] = aid_list[0].first;
+                octant_buffer[1] = aid_list[rank_0_size - 1].first;
             } else {
                 mpi::Status status;
                 octant_buffer.clear();
                 octant_buffer.reserve(2);
-                std::cerr << "rank=" << world_rank << " tries to receive its thingy\n";
                 try {
                     Comm->recv(octant_buffer, 2, 0, 0, status);
-                } catch (IpplException& e) {
-                    std::cerr << "ERROR in recv: " << e.what() << std::endl;
-                    assert(false);
+                } catch (const IpplException& e) {
+                    std::cerr << "error during receive in build_tree(): " << e.what() << std::endl;
                 }
-                std::cerr << "rank=" << world_rank << " got its thingy\n";
+                std::cerr << "rank " << world_rank << "received its octants" << std::endl;
             }
 
             Comm->barrier();
             std::cerr << "done spreading aid_list, entering block_partition\n";
             auto octants = block_partition(octant_buffer);
             // todo build tree here
+
+            return {};
         }
 
         /**
