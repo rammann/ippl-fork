@@ -99,8 +99,12 @@ namespace ippl {
                     size_t start_idx = (rank - 1) * batch_size;
                     octant_buffer[0] = aid_list[start_idx].first;
                     octant_buffer[1] = aid_list[start_idx + batch_size].first;
-
-                    Comm->send(octant_buffer.data(), 2, rank, 0);
+                    try {
+                        Comm->send(octant_buffer.data(), 2, rank, 0);
+                    } catch (IpplException& e) {
+                        std::cerr << "ERROR in send: " << e.what() << std::endl;
+                        assert(false);
+                    }
                 }
                 std::cerr << "rank0 has sent all the thingies\n";
                 // assign the last block to rank=0
@@ -112,7 +116,12 @@ namespace ippl {
                 octant_buffer.clear();
                 octant_buffer.reserve(2);
                 std::cerr << "rank=" << world_rank << " tries to receive its thingy\n";
-                Comm->recv(octant_buffer, 2, 0, 0, status);
+                try {
+                    Comm->recv(octant_buffer, 2, 0, 0, status);
+                } catch (IpplException& e) {
+                    std::cerr << "ERROR in recv: " << e.what() << std::endl;
+                    assert(false);
+                }
                 std::cerr << "rank=" << world_rank << " got its thingy\n";
             }
 
