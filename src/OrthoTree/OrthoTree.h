@@ -82,7 +82,7 @@ namespace ippl {
             world_rank = Comm->rank();
             world_size = Comm->size();
 
-            std::vector<morton_code> octant_buffer;
+            Kokkos::vector<morton_code> octant_buffer;
             if (world_rank == 0) {
                 aid_list = initialize_aid_list(particles);
                 std::cerr << "aid list has size: " << aid_list.size() << std::endl;
@@ -153,7 +153,7 @@ namespace ippl {
          * @return list of linearised octants - sorted
          * @warning THIS FUNCTION ASSUMES THAT THE OCTANTS ARE SORTED
          */
-        ippl::vector_t<morton_code> linearise_octants(ippl::vector_t<morton_code> const& octants);
+        Kokkos::vector<morton_code> linearise_octants(Kokkos::vector<morton_code> const& octants);
 
         /**
          * @brief Linearises octants comprising the tree by removing ancestors that would cause overlaps
@@ -210,7 +210,7 @@ namespace ippl {
          *
          * @return list of morton codes of minimal linear octree between the two octants
          **/
-        ippl::vector_t<morton_code> complete_region(morton_code code_a, morton_code code_b);
+        Kokkos::vector<morton_code> complete_region(morton_code code_a, morton_code code_b);
 
     private:
         /**
@@ -228,7 +228,8 @@ namespace ippl {
           *
           * @return block partitioned octree, and unpartitioned_tree is re-distributed
           **/
-        Kokkos::vector<morton_code> block_partition(ippl::vector_t<morton_code>& unpartitioned_tree);
+        Kokkos::vector<morton_code> block_partition(
+            Kokkos::vector<morton_code>& unpartitioned_tree);
 
         /**
          * @brief counts the number of particles covered by the cell decribed by the morton code

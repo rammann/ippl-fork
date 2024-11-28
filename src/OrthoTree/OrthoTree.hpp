@@ -49,6 +49,8 @@ namespace ippl {
 
     template <size_t Dim>
     Kokkos::vector<morton_code> OrthoTree<Dim>::partition(Kokkos::vector<morton_code>& octants, Kokkos::vector<size_t>& weights) {
+        std::cerr << "RANK " << world_rank << " has entered " << __func__
+                  << " with: octants_size: " << octants.size() << std::endl;
         // initialize the prefix_sum and the total weight
         Kokkos::vector<size_t> prefix_sum;
         prefix_sum.reserve(octants.size());
@@ -241,6 +243,8 @@ namespace ippl {
     template <size_t Dim>
   OrthoTree<Dim>::aid_list_t OrthoTree<Dim>::initialize_aid_list(particle_t const& particles)
     {
+        std::cerr << "RANK " << world_rank << " has entered " << __func__ << std::endl;
+
         // maybe get getGlobalNum() in the future?
         n_particles = particles.getLocalNum();
         const size_t grid_size = (size_t(1) << max_depth_m);
@@ -272,6 +276,8 @@ namespace ippl {
     template <size_t Dim>
     size_t OrthoTree<Dim>::get_num_particles_in_octant(morton_code octant)
     {
+        std::cerr << "RANK " << world_rank << " has entered " << __func__ << std::endl;
+
         const morton_code lower_bound_target = octant;
         // this is the same logic as in Morton::is_ancestor/Morton::is_descendant
         const morton_code upper_bound_target = octant + morton_helper.get_step_size(octant);
@@ -292,33 +298,39 @@ namespace ippl {
     }
 
     template <size_t Dim>
-    ippl::vector_t<morton_code> OrthoTree<Dim>::complete_region(morton_code code_a, morton_code code_b) 
-    { 
-      morton_code nearest_common_ancestor = morton_helper.get_nearest_common_ancestor(code_a, code_b);
-      ippl::vector_t<morton_code> trial_nodes = morton_helper.get_children(nearest_common_ancestor);
-      ippl::vector_t<morton_code> min_lin_tree;
+    Kokkos::vector<morton_code> OrthoTree<Dim>::complete_region(morton_code code_a,
+                                                                morton_code code_b) {
+        std::cerr << "RANK " << world_rank << " has entered " << __func__ << std::endl;
+        morton_code nearest_common_ancestor =
+            morton_helper.get_nearest_common_ancestor(code_a, code_b);
+        ippl::vector_t<morton_code> trial_nodes =
+            morton_helper.get_children(nearest_common_ancestor);
+        Kokkos::vector<morton_code> min_lin_tree;
 
-      while (trial_nodes.size() > 0) {
-        morton_code current_node = trial_nodes.back();
-        trial_nodes.pop_back();
+        while (trial_nodes.size() > 0) {
+            morton_code current_node = trial_nodes.back();
+            trial_nodes.pop_back();
 
-        if ((code_a < current_node) && (current_node < code_b) && !morton_helper.is_ancestor(code_b, current_node)) {
-          min_lin_tree.push_back(current_node);
+            if ((code_a < current_node) && (current_node < code_b)
+                && !morton_helper.is_ancestor(code_b, current_node)) {
+                min_lin_tree.push_back(current_node);
+            } else if (morton_helper.is_ancestor(code_a, current_node)
+                       || morton_helper.is_ancestor(code_b, current_node)) {
+                ippl::vector_t<morton_code> children = morton_helper.get_children(current_node);
+                for (morton_code& child : children)
+                    trial_nodes.push_back(child);
+            }
         }
-        else if (morton_helper.is_ancestor(code_a, current_node) || morton_helper.is_ancestor(code_b, current_node)) {
-          ippl::vector_t<morton_code> children = morton_helper.get_children(current_node); 
-          for (morton_code& child : children) trial_nodes.push_back(child);
-        }
-      }
 
-      std::sort(min_lin_tree.begin(), min_lin_tree.end());
-      return min_lin_tree;
+        std::sort(min_lin_tree.begin(), min_lin_tree.end());
+        return min_lin_tree;
     }
 
-    template<size_t Dim>
-    ippl::vector_t<morton_code> OrthoTree<Dim>::linearise_octants(const ippl::vector_t<morton_code>& octants)
-    {
-        ippl::vector_t<morton_code> linearised;
+    template <size_t Dim>
+    Kokkos::vector<morton_code> OrthoTree<Dim>::linearise_octants(
+        const Kokkos::vector<morton_code>& octants) {
+        std::cerr << "RANK " << world_rank << " has entered " << __func__ << std::endl;
+        Kokkos::vector<morton_code> linearised;
         for(size_t i = 0; i < octants.size()-1; ++i)
         {
             if(morton_helper.is_ancestor(octants[i+1], octants[i]))
@@ -337,58 +349,60 @@ namespace ippl {
         tree_m = linearise_octants(tree_m);
     }
 
-    template<size_t Dim>
-    Kokkos::vector<morton_code> OrthoTree<Dim>::block_partition(ippl::vector_t<morton_code>& unpartitioned_tree)
-    {
-      size_t len = unpartitioned_tree.size();
-      ippl::vector_t<morton_code> base_tree =
-          complete_region(unpartitioned_tree.front(), unpartitioned_tree.back());
+    template <size_t Dim>
+    Kokkos::vector<morton_code> OrthoTree<Dim>::block_partition(
+        Kokkos::vector<morton_code>& unpartitioned_tree) {
+        std::cerr << "RANK " << world_rank << " has entered " << __func__ << std::endl;
 
-      Kokkos::vector<morton_code> base_tree2;
-      size_t lowest_level = std::numeric_limits<morton_code>::max();
-      for (const morton_code& octant : base_tree) {
-          lowest_level = std::min(lowest_level, morton_helper.get_depth(octant));
-      }
+        Kokkos::vector<morton_code> base_tree =
+            complete_region(unpartitioned_tree.front(), unpartitioned_tree.back());
 
-      for (morton_code octant : base_tree) {
-        if (morton_helper.get_depth(octant) == lowest_level) {
-          base_tree2.push_back(octant);
+        Kokkos::vector<morton_code> base_tree2;
+        size_t lowest_level = std::numeric_limits<morton_code>::max();
+        for (const morton_code& octant : base_tree) {
+            lowest_level = std::min(lowest_level, morton_helper.get_depth(octant));
         }
-      }
 
-      Kokkos::vector<morton_code> base_tree3 = complete_tree(base_tree2);
-
-      Kokkos::vector<size_t> weights(base_tree3.size(), 0);
-      for (size_t i = 0; i < base_tree3.size(); ++i) {
-        morton_code base_tree_octant = base_tree3[i];
-        weights[i] =
-            std::count_if(unpartitioned_tree.begin(), unpartitioned_tree.end(),
-                          [&base_tree_octant, this](const morton_code& unpartitioned_tree_octant) {
-                              return (unpartitioned_tree_octant == base_tree_octant)
-                                     || (morton_helper.is_descendant(unpartitioned_tree_octant,
-                                                                     base_tree_octant));
-                          });
-      } 
-
-      Kokkos::vector<morton_code> partitioned_tree = partition(base_tree2, weights);
-
-      ippl::vector_t<morton_code> global_unpartitioned_tree = unpartitioned_tree;
-      unpartitioned_tree.clear();
-      for (morton_code gup_octant : global_unpartitioned_tree) {
-        for (const morton_code& p_octant : partitioned_tree) {
-            if (gup_octant == p_octant || morton_helper.is_descendant(gup_octant, p_octant)) {
-                unpartitioned_tree.push_back(gup_octant);
-                break;
+        for (morton_code octant : base_tree) {
+            if (morton_helper.get_depth(octant) == lowest_level) {
+                base_tree2.push_back(octant);
             }
-        } 
-      }
+        }
 
-      return partitioned_tree;
+        Kokkos::vector<morton_code> base_tree3 = complete_tree(base_tree2);
+
+        Kokkos::vector<size_t> weights(base_tree3.size(), 0);
+        for (size_t i = 0; i < base_tree3.size(); ++i) {
+            morton_code base_tree_octant = base_tree3[i];
+            weights[i]                   = std::count_if(
+                unpartitioned_tree.begin(), unpartitioned_tree.end(),
+                [&base_tree_octant, this](const morton_code& unpartitioned_tree_octant) {
+                    return (unpartitioned_tree_octant == base_tree_octant)
+                           || (morton_helper.is_descendant(unpartitioned_tree_octant,
+                                                                             base_tree_octant));
+                });
+        }
+
+        Kokkos::vector<morton_code> partitioned_tree = partition(base_tree2, weights);
+
+        Kokkos::vector<morton_code> global_unpartitioned_tree = unpartitioned_tree;
+        unpartitioned_tree.clear();
+        for (morton_code gup_octant : global_unpartitioned_tree) {
+            for (const morton_code& p_octant : partitioned_tree) {
+                if (gup_octant == p_octant || morton_helper.is_descendant(gup_octant, p_octant)) {
+                    unpartitioned_tree.push_back(gup_octant);
+                    break;
+                }
+            }
+        }
+
+        return partitioned_tree;
     }
 
     template <size_t Dim>
     Kokkos::vector<morton_code> OrthoTree<Dim>::complete_tree(
         Kokkos::vector<morton_code>& octants) {
+        std::cerr << "RANK " << world_rank << " has entered " << __func__ << std::endl;
         // this removes duplicates, inefficient as of now
         std::map<morton_code, int> m;
         for ( auto octant : octants ) {
@@ -463,6 +477,7 @@ namespace ippl {
     template <size_t Dim>
     Kokkos::vector<size_t> OrthoTree<Dim>::get_num_particles_in_octants_parallel(
         const Kokkos::vector<morton_code>& octants) {
+        std::cerr << "RANK " << world_rank << " has entered " << __func__ << std::endl;
         //get communicator info
         const size_t world_size = Comm->size();
         const size_t rank = Comm->rank();
@@ -496,6 +511,7 @@ namespace ippl {
     template <size_t Dim>
     Kokkos::vector<size_t> OrthoTree<Dim>::get_num_particles_in_octants_seqential(
         const Kokkos::vector<morton_code>& octants) {
+        std::cerr << "RANK " << world_rank << " has entered " << __func__ << std::endl;
         size_t num_octs = octants.size();
         Kokkos::vector<size_t> num_particles(num_octs);
         for (size_t i = 0; i < num_octs; ++i) {
