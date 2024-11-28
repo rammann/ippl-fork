@@ -81,8 +81,6 @@ namespace ippl {
         Kokkos::vector<morton_code> build_tree(particle_t const& particles) {
             world_rank = Comm->rank();
             world_size = Comm->size();
-            std::cerr << "Rank " << world_rank << " received " << particles.getLocalNum()
-                      << std::endl;
 
             std::vector<morton_code> octant_buffer;
             if (world_rank == 0) {
@@ -97,9 +95,8 @@ namespace ippl {
                     const int end   = start + batch_size;
 
                     octant_buffer.clear();
-                    octant_buffer.reserve(2);
-                    octant_buffer[0] = aid_list[start].first;
-                    octant_buffer[1] = aid_list[end - 1].first;
+                    octant_buffer.push_back(aid_list[start].first);
+                    octant_buffer.push_back(aid_list[end - 1].first);
 
                     std::cerr << "sending to rank " << rank << ": " << octant_buffer[0] << ", "
                               << octant_buffer[1] << std::endl;
@@ -113,15 +110,14 @@ namespace ippl {
                 }
 
                 octant_buffer.clear();
-                octant_buffer.reserve(2);
-                octant_buffer[0] = aid_list[0].first;
-                octant_buffer[1] = aid_list[rank_0_size - 1].first;
+                octant_buffer.push_back(aid_list[0].first);
+                octant_buffer.push_back(aid_list[rank_0_size - 1].first);
             } else {
                 mpi::Status status;
                 octant_buffer.clear();
                 octant_buffer.reserve(2);
                 try {
-                    Comm->recv(octant_buffer, 2, 0, 0, status);
+                    Comm->recv(octant_buffer.data(), 2, 0, 0, status);
                 } catch (const IpplException& e) {
                     std::cerr << "error during receive in build_tree(): " << e.what() << std::endl;
                 }
@@ -131,7 +127,7 @@ namespace ippl {
             Comm->barrier();
             std::cerr << "done spreading aid_list, entering block_partition\n";
             auto octants = block_partition(octant_buffer);
-            // todo build tree here
+            //  todo build tree here
 
             return {};
         }

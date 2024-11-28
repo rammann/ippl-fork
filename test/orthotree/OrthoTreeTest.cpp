@@ -53,11 +53,7 @@ int main(int argc, char* argv[])
         // Kokkos::deep_copy(bunch.rho.getView(), RHO_host);
 
         bunch.update();
-
-        if (ippl::Comm->rank() == 0) {
-            std::cerr << "building tree now\n";
-            tree.build_tree(bunch);
-        }
+        tree.build_tree(bunch);
 
         // stuff 1
         // tree.build_tree_naive(particles);
