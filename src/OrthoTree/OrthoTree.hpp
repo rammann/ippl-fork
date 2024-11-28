@@ -8,6 +8,11 @@
 
 namespace ippl {
 
+#define LOG std::cerr << "RANK " << world_rank << " in " << __func__ << ": "
+#define BARRIER_LOG  \
+    Comm->barrier(); \
+    LOG
+
     template <size_t Dim>
     OrthoTree<Dim>::OrthoTree(size_t max_depth, size_t max_particles_per_node,
                               const bounds_t& root_bounds)
@@ -49,8 +54,7 @@ namespace ippl {
 
     template <size_t Dim>
     Kokkos::vector<morton_code> OrthoTree<Dim>::partition(Kokkos::vector<morton_code>& octants, Kokkos::vector<size_t>& weights) {
-        std::cerr << "RANK " << world_rank << " has entered " << __func__
-                  << " with: octants_size: " << octants.size() << std::endl;
+        LOG;
         // initialize the prefix_sum and the total weight
         Kokkos::vector<size_t> prefix_sum;
         prefix_sum.reserve(octants.size());
@@ -243,8 +247,7 @@ namespace ippl {
     template <size_t Dim>
   OrthoTree<Dim>::aid_list_t OrthoTree<Dim>::initialize_aid_list(particle_t const& particles)
     {
-        std::cerr << "RANK " << world_rank << " has entered " << __func__ << std::endl;
-
+        LOG;
         // maybe get getGlobalNum() in the future?
         n_particles = particles.getLocalNum();
         const size_t grid_size = (size_t(1) << max_depth_m);
@@ -276,7 +279,7 @@ namespace ippl {
     template <size_t Dim>
     size_t OrthoTree<Dim>::get_num_particles_in_octant(morton_code octant)
     {
-        std::cerr << "RANK " << world_rank << " has entered " << __func__ << std::endl;
+        LOG;
 
         const morton_code lower_bound_target = octant;
         // this is the same logic as in Morton::is_ancestor/Morton::is_descendant
@@ -300,7 +303,7 @@ namespace ippl {
     template <size_t Dim>
     Kokkos::vector<morton_code> OrthoTree<Dim>::complete_region(morton_code code_a,
                                                                 morton_code code_b) {
-        std::cerr << "RANK " << world_rank << " has entered " << __func__ << std::endl;
+        LOG;
         morton_code nearest_common_ancestor =
             morton_helper.get_nearest_common_ancestor(code_a, code_b);
         ippl::vector_t<morton_code> trial_nodes =
@@ -329,7 +332,7 @@ namespace ippl {
     template <size_t Dim>
     Kokkos::vector<morton_code> OrthoTree<Dim>::linearise_octants(
         const Kokkos::vector<morton_code>& octants) {
-        std::cerr << "RANK " << world_rank << " has entered " << __func__ << std::endl;
+        LOG;
         Kokkos::vector<morton_code> linearised;
         for(size_t i = 0; i < octants.size()-1; ++i)
         {
@@ -352,8 +355,7 @@ namespace ippl {
     template <size_t Dim>
     Kokkos::vector<morton_code> OrthoTree<Dim>::block_partition(
         Kokkos::vector<morton_code>& unpartitioned_tree) {
-        std::cerr << "RANK " << world_rank << " has entered " << __func__ << std::endl;
-
+        LOG;
         Kokkos::vector<morton_code> base_tree =
             complete_region(unpartitioned_tree.front(), unpartitioned_tree.back());
 
@@ -402,7 +404,7 @@ namespace ippl {
     template <size_t Dim>
     Kokkos::vector<morton_code> OrthoTree<Dim>::complete_tree(
         Kokkos::vector<morton_code>& octants) {
-        std::cerr << "RANK " << world_rank << " has entered " << __func__ << std::endl;
+        LOG;
         // this removes duplicates, inefficient as of now
         std::map<morton_code, int> m;
         for ( auto octant : octants ) {
@@ -477,8 +479,8 @@ namespace ippl {
     template <size_t Dim>
     Kokkos::vector<size_t> OrthoTree<Dim>::get_num_particles_in_octants_parallel(
         const Kokkos::vector<morton_code>& octants) {
-        std::cerr << "RANK " << world_rank << " has entered " << __func__ << std::endl;
-        //get communicator info
+        LOG;
+        // get communicator info
         const size_t world_size = Comm->size();
         const size_t rank = Comm->rank();
 
@@ -511,7 +513,7 @@ namespace ippl {
     template <size_t Dim>
     Kokkos::vector<size_t> OrthoTree<Dim>::get_num_particles_in_octants_seqential(
         const Kokkos::vector<morton_code>& octants) {
-        std::cerr << "RANK " << world_rank << " has entered " << __func__ << std::endl;
+        LOG;
         size_t num_octs = octants.size();
         Kokkos::vector<size_t> num_particles(num_octs);
         for (size_t i = 0; i < num_octs; ++i) {
