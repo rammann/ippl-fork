@@ -341,13 +341,15 @@ namespace ippl {
     Kokkos::vector<morton_code> OrthoTree<Dim>::block_partition(ippl::vector_t<morton_code>& unpartitioned_tree)
     {
       size_t len = unpartitioned_tree.size();
-      ippl::vector_t<morton_code> base_tree = complete_region(unpartitioned_tree[0], unpartitioned_tree[len-1]);
+      ippl::vector_t<morton_code> base_tree =
+          complete_region(unpartitioned_tree.front(), unpartitioned_tree.back());
 
       Kokkos::vector<morton_code> base_tree2;
-      size_t lowest_level = len;
+      size_t lowest_level = std::numeric_limits<morton_code>::max();
       for (const morton_code& octant : base_tree) {
-        lowest_level = std::min(lowest_level, morton_helper.get_depth(octant));
+          lowest_level = std::min(lowest_level, morton_helper.get_depth(octant));
       }
+
       for (morton_code octant : base_tree) {
         if (morton_helper.get_depth(octant) == lowest_level) {
           base_tree2.push_back(octant);
@@ -398,9 +400,13 @@ namespace ippl {
             octants.push_back(octant);
         }
 
-        // octants = linearise_octants(octants);
+        octants = linearise_octants(octants);
+        Kokkos::vector<size_t> weights;
+        for (size_t i = 0; i < octants.size(); ++i) {
+            weights.push_back(1);
+        }
 
-        // algo5(octants);
+        octants = partition(octants, weights);
 
         morton_code first_rank0;
         if ( world_rank == 0 ) {
