@@ -16,7 +16,7 @@ int main(int argc, char* argv[])
         static constexpr size_t Dim = 3;
         const size_t max_particles  = 100;
         const size_t max_depth      = 5;
-        const size_t num_particles  = 100;  // per processor
+        const size_t num_particles  = 1000;  // per processor
 
         const auto MIN_BOUND = 0.0;
         const auto MAX_BOUND = 1.0;

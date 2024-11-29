@@ -8,11 +8,41 @@
 
 namespace ippl {
 
-#define LOG std::cerr << "RANK " << world_rank << " in " << __func__ << ": "
-#define BARRIER_LOG      \
-    Comm->barrier();     \
-    if (world_rank == 0) \
-    std::cerr << "\u001b[34m" << "reached barrier in " << __func__ << ":\u001b[0m "
+    int call_depth = 0;
+#define DEPTH_THINGY call_depth * 2
+#define LOG                                                                                    \
+    std::cerr << std::string(DEPTH_THINGY, ' ') << "RANK " << world_rank << " in " << __func__ \
+              << ": "
+
+#define BARRIER_LOG                                                                      \
+    Comm->barrier();                                                                     \
+    if (world_rank == 0)                                                                 \
+    std::cerr << "\u001b[34m" << std::string(DEPTH_THINGY, ' ') << "reached barrier in " \
+              << __func__ << ":\u001b[0m "
+
+#define START_BARRIER                                                                              \
+    do {                                                                                           \
+        Comm->barrier();                                                                           \
+        ++call_depth;                                                                              \
+        if (world_rank == 0)                                                                       \
+            std::cerr << std::endl                                                                 \
+                      << std::string(DEPTH_THINGY, ' ') << "T" << std::string(25, '=')             \
+                      << std::endl                                                                 \
+                      << "\u001b[34m" << std::string(DEPTH_THINGY, ' ') << "starting " << __func__ \
+                      << ":\u001b[0m " << std::endl;                                               \
+    } while (0)
+
+#define END_BARRIER                                                                                \
+    do {                                                                                           \
+        Comm->barrier();                                                                           \
+        if (world_rank == 0)                                                                       \
+            std::cerr << "\u001b[34m" << std::string(DEPTH_THINGY, ' ') << "finished " << __func__ \
+                      << ":\u001b[0m" << std::endl                                                 \
+                      << std::string(DEPTH_THINGY, ' ') << "L" << std::string(25, '=')             \
+                      << std::endl                                                                 \
+                      << std::endl;                                                                \
+        --call_depth;                                                                              \
+    } while (0)
 
     template <size_t Dim>
     OrthoTree<Dim>::OrthoTree(size_t max_depth, size_t max_particles_per_node,
@@ -111,7 +141,9 @@ namespace ippl {
 
     template <size_t Dim>
     Kokkos::vector<morton_code> OrthoTree<Dim>::partition(Kokkos::vector<morton_code>& octants, Kokkos::vector<size_t>& weights) {
-        BARRIER_LOG;
+        START_BARRIER;
+        LOG << "called with n_octants=" << octants.size() << std::endl;
+
         // initialize the prefix_sum and the total weight
         Kokkos::vector<size_t> prefix_sum;
         prefix_sum.reserve(octants.size());
@@ -126,7 +158,9 @@ namespace ippl {
 
       //scan to get get the propper offsets for the prefix_sum
       Comm->scan(&max, &total, 1, std::plus<morton_code>());
-      
+
+      BARRIER_LOG << "max=" << max << std::endl;
+
       //calculate the actual scan prefix_sum on each processor
       for (size_t i = 0; i < prefix_sum.size(); ++i){
         prefix_sum[i] += total - max;
@@ -144,7 +178,8 @@ namespace ippl {
       Kokkos::vector<mpi::Request> requests;
       Kokkos::vector<int> sizes(world_size);
 
-      BARRIER_LOG << "broadcasted total_weight =" << total << std::endl;
+      BARRIER_LOG << "broadcasted total_weight =" << total << " with k=" << k
+                  << " and avg_weight = " << avg_weight << std::endl;
 
       // initialize the start and end index for which processor receives which
       // local octants. Doing this here allows us to update these incrementally
@@ -152,9 +187,9 @@ namespace ippl {
       size_t start = 0, end = 0;
       //loop thorugh all processors
 
-      BARRIER_LOG << "starting fucky loop\n";
+      BARRIER_LOG << "starting first loop\n";
       for (size_t rank = 1; rank <= static_cast<size_t>(world_size); ++rank) {
-          if (rank - 1 == static_cast<size_t>(world_rank)) {  // no need to send data to myself
+          if (rank - 1 == static_cast<size_t>(Comm->rank())) {  // no need to send data to myself
               continue;
           }
 
@@ -206,20 +241,30 @@ namespace ippl {
               total_octants.push_back(octants[i]);
           }
 
+          LOG << "sending new octants size=" << new_octants.size() << " to rank=" << rank - 1
+              << std::endl;
           // send the number of new octants to the processor
-          requests.push_back(mpi::Request());
           sizes[rank - 1] = new_octants.size();
-          Comm->isend((sizes[rank - 1]), 1, rank - 1, 1, requests[requests.size() - 1]);
-          // send the new octants to the processor
 
           requests.push_back(mpi::Request());
+          Comm->isend((sizes[rank - 1]), 1, rank - 1, 1, requests.back());
+
+          // send the new octants to the processor
           // Comm->isend(new_octants.size(), 1, p-1, 0, request1);
+
           if (sizes[rank - 1] > 0) {
-              Comm->isend<morton_code>(*new_octants.data(), new_octants.size(), rank - 1, 0,
-                                       requests[requests.size() - 1]);
+              requests.push_back(mpi::Request());
+              LOG << "sending new octants to rank=" << rank - 1 << std::endl;
+              try {
+                  Comm->isend<morton_code>(*new_octants.data(), sizes[rank - 1], rank - 1, 0,
+                                           requests[requests.size() - 1]);
+              } catch (IpplException& e) {
+                  LOG << "ERROR IN ISEND OF 264 ORTHOTREE: " << e.what() << std::endl;
+              }
           }
       }
 
+      LOG << "exited the first loop" << std::endl;
       BARRIER_LOG << " finished the first loop\n";
 
       std::vector<mpi::Request> receives;
@@ -230,7 +275,7 @@ namespace ippl {
               continue;
           }
 
-          int size;
+          size_t size;
           // receives.push_back(mpi::Request());
           // receive the number of new octants
           mpi::Status stat;
@@ -276,7 +321,7 @@ namespace ippl {
 
       //std::cout << "num of received octants on rank " << rank << " is " << received_octants.size() << std::endl;
 
-      BARRIER_LOG << "finished partition\n";
+      END_BARRIER;
 
       return partitioned_octants;
     }
@@ -382,7 +427,7 @@ namespace ippl {
     template <size_t Dim>
     Kokkos::vector<morton_code> OrthoTree<Dim>::complete_region(morton_code code_a,
                                                                 morton_code code_b) {
-        BARRIER_LOG << "starting\n";
+        START_BARRIER;
 
         morton_code nearest_common_ancestor =
             morton_helper.get_nearest_common_ancestor(code_a, code_b);
@@ -405,7 +450,7 @@ namespace ippl {
 
         std::sort(min_lin_tree.begin(), min_lin_tree.end());
 
-        BARRIER_LOG << "finished\n";
+        END_BARRIER;
         // LOG << "finished with complete_region_size = " << min_lin_tree.size() << std::endl;
         return min_lin_tree;
     }
@@ -413,7 +458,8 @@ namespace ippl {
     template <size_t Dim>
     Kokkos::vector<morton_code> OrthoTree<Dim>::linearise_octants(
         const Kokkos::vector<morton_code>& octants) {
-        BARRIER_LOG << "starting\n";
+        START_BARRIER;
+
         LOG << "size: " << octants.size() << std::endl;
         Kokkos::vector<morton_code> linearised;
 
@@ -427,9 +473,9 @@ namespace ippl {
 
         linearised.push_back(octants.back());
 
-        BARRIER_LOG << "done\n";
         // LOG << "finished, size is: " << linearised.size() << std::endl;
 
+        END_BARRIER;
         return linearised;
     }
 
@@ -442,7 +488,8 @@ namespace ippl {
     template <size_t Dim>
     Kokkos::vector<morton_code> OrthoTree<Dim>::block_partition(
         Kokkos::vector<morton_code>& starting_octants) {
-        BARRIER_LOG << "starting\n";
+        START_BARRIER;
+
         LOG << "called with " << starting_octants.size() << " octants\n";  // should be 2!!
         assert(starting_octants.size() == 2 && "must receive two octants here??");
         Kokkos::vector<morton_code> T =
@@ -462,7 +509,13 @@ namespace ippl {
             }
         }
 
-        Kokkos::vector<morton_code> G  = complete_tree(C);
+        BARRIER_LOG << "calling complete_tree" << std::endl;
+        LOG << "C.size()=" << C.size() << std::endl;
+        BARRIER_LOG;
+        Kokkos::vector<morton_code> G = complete_tree(C);
+        BARRIER_LOG << "finished complete_tree" << std::endl;
+        LOG << "we now have n_octants = " << G.size() << std::endl;
+
         Kokkos::vector<size_t> weights = get_num_particles_in_octants_parallel(G);
         LOG << "weights have size: " << weights.size() << std::endl;
         /*
@@ -494,15 +547,17 @@ namespace ippl {
             }
         }
 
-        BARRIER_LOG << "finished\n";
         // LOG << "finished, partitioned_tree.size() = " << partitioned_tree.size() << std::endl;
+        END_BARRIER;
         return partitioned_tree;
     }
 
     template <size_t Dim>
     Kokkos::vector<morton_code> OrthoTree<Dim>::complete_tree(
         Kokkos::vector<morton_code>& octants) {
-        BARRIER_LOG << "starting\n";
+        START_BARRIER;
+
+        LOG << "called with n_octants=" << octants.size() << std::endl;
         // this removes duplicates, inefficient as of now
         std::map<morton_code, int> m;
         for ( auto octant : octants ) {
@@ -521,6 +576,8 @@ namespace ippl {
         LOG << " has " << octants.size() << " octants\n";
         octants = linearise_octants(octants);
         BARRIER_LOG << "done linearising octants\n";
+        LOG << "linearised to octants.size()=" << octants.size() << std::endl;
+        BARRIER_LOG << std::endl;
 
         Kokkos::vector<size_t> weights;
         for (size_t i = 0; i < octants.size(); ++i) {
@@ -582,7 +639,7 @@ namespace ippl {
             R.push_back(octants[n - 1]);
         }
 
-        BARRIER_LOG << "finished\n";
+        END_BARRIER;
         return R;
     }
 
@@ -622,8 +679,8 @@ namespace ippl {
             Comm->recv(num_particles.data(), req_size, 0, 0, stat);
         }
 
-        BARRIER_LOG << "finished\n";
         // LOG << "finished, num_particles.size() = " << num_particles.size() << std::endl;
+        END_BARRIER;
         return num_particles;
     }
 
