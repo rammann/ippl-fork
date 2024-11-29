@@ -78,59 +78,7 @@ namespace ippl {
          * @param particles
          * @return Kokkos::vector<morton_code>
          */
-        Kokkos::vector<morton_code> build_tree(particle_t const& particles) {
-            world_rank = Comm->rank();
-            world_size = Comm->size();
-
-            Kokkos::vector<morton_code> octant_buffer;
-            if (world_rank == 0) {
-                aid_list = initialize_aid_list(particles);
-                std::cerr << "aid list has size: " << aid_list.size() << std::endl;
-                const size_t total_num_particles = particles.getTotalNum();
-                const size_t batch_size          = total_num_particles / world_size;
-                const size_t rank_0_size         = batch_size + (total_num_particles % batch_size);
-
-                for (int rank = 1; rank < world_size; ++rank) {
-                    const int start = ((rank - 1) * batch_size) + rank_0_size;
-                    const int end   = start + batch_size;
-
-                    octant_buffer.clear();
-                    octant_buffer.push_back(aid_list[start].first);
-                    octant_buffer.push_back(aid_list[end - 1].first);
-
-                    std::cerr << "sending to rank " << rank << ": " << octant_buffer[0] << ", "
-                              << octant_buffer[1] << std::endl;
-
-                    try {
-                        Comm->send(*octant_buffer.data(), 2, rank, 0);
-                    } catch (const IpplException& e) {
-                        std::cerr << "error during send in build_tree(): " << e.what() << std::endl;
-                    }
-                    std::cerr << "sent to rank " << rank << std::endl;
-                }
-
-                octant_buffer.clear();
-                octant_buffer.push_back(aid_list[0].first);
-                octant_buffer.push_back(aid_list[rank_0_size - 1].first);
-            } else {
-                mpi::Status status;
-                octant_buffer.clear();
-                octant_buffer.reserve(2);
-                try {
-                    Comm->recv(octant_buffer.data(), 2, 0, 0, status);
-                } catch (const IpplException& e) {
-                    std::cerr << "error during receive in build_tree(): " << e.what() << std::endl;
-                }
-                std::cerr << "rank " << world_rank << "received its octants" << std::endl;
-            }
-
-            Comm->barrier();
-            std::cerr << "done spreading aid_list, entering block_partition\n";
-            auto octants = block_partition(octant_buffer);
-            //  todo build tree here
-
-            return {};
-        }
+        Kokkos::vector<morton_code> build_tree(particle_t const& particles);
 
         /**
          *
