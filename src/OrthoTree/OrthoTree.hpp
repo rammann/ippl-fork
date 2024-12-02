@@ -7,9 +7,10 @@
 #include "Communicate/Request.h"
 #include "Kokkos_Vector.hpp"
 #include "OrthoTree.h"
+
 namespace ippl {
 
-    // #define ENABLE_LOGGING_STUFF
+#define ENABLE_LOGGING_STUFF
 
 #ifdef ENABLE_LOGGING_STUFF
     int call_depth = 0;
@@ -165,6 +166,8 @@ namespace ippl {
         LOG << "calling block_partition with: " << octant_buffer.size() << " octants\n";
         auto octants = block_partition(octant_buffer);
         //  todo build tree here
+
+        LOG << "octants.size() = " << octants.size() << std::endl;
 
         return {};
     }
