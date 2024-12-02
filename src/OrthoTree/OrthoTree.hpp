@@ -79,7 +79,7 @@ namespace ippl {
         world_rank = Comm->rank();  // TODO: move this to constructor, but then all tests need a
                                     // main to init ippl
 
-        auto relevant_octants = get_relevant_aid_list(particles);
+        auto [min_octant, max_octant] = get_relevant_aid_list(particles);
         /**
          * The relevant morton_codes to start the algorithm have been sent to the other ranks.
          * We can now start the actual algorithm.
@@ -88,29 +88,71 @@ namespace ippl {
          * -> those octants are basically line 7 in algo4
          */
 
-        auto octants = block_partition(relevant_octants);
-        init_aid_list_from_octants(octants);
+        auto octants = block_partition(min_octant, max_octant);
+        init_aid_list_from_octants(octants.front(), octants.back());
 
-        // Each proc has now as much of the aid_list as he needs and can start building the tree.
+        // manually syncing full aid list
+        /*
+        size_t aid_list_size;
+        if (world_rank == 0) {
+            aid_list_size = this->aid_list.size();
+        }
+
+        Comm->broadcast(&aid_list_size, 1, 0);
+
+        std::vector<morton_code> octant_buff, id_buff;
+        if (world_rank == 0) {
+            for (const auto& [octant, id] : this->aid_list) {
+                octant_buff.push_back(octant);
+                id_buff.push_back(id);
+            }
+            for (size_t rank = 1; rank < static_cast<size_t>(world_size); ++rank) {
+                Comm->send(*octant_buff.data(), aid_list_size, rank, 0);
+                Comm->send(*id_buff.data(), aid_list_size, rank, 0);
+            }
+        } else {
+            octant_buff.resize(aid_list_size);
+            id_buff.resize(aid_list_size);
+
+            mpi::Status status1, status2;
+            Comm->recv(octant_buff.data(), aid_list_size, 0, 0, status1);
+            Comm->recv(id_buff.data(), aid_list_size, 0, 0, status1);
+
+            this->aid_list.clear();
+            for (size_t i = 0; i < aid_list_size; ++i) {
+                aid_list.push_back({octant_buff[i], id_buff[i]});
+            }
+        }
+        */
+
+        // Each proc has now as much of the aid_list as he needs and can start building the
+        // tree.
         Kokkos::View<morton_code*> tree_view = build_tree_from_octants(octants);
 
         Comm->barrier();
         logger.flush();
 
+        size_t total_particles = 0;
+        for (size_t i = 0; i < tree_view.size(); ++i) {
+            total_particles += get_num_particles_in_octant(tree_view[i]);
+        }
+
+        size_t global_total_particles = 0;
+        Comm->allreduce(&total_particles, &global_total_particles, 1, std::plus<size_t>());
+
+        Comm->barrier();
+
         {
             const size_t col_width = 15;
 
             auto printer = [col_width](const auto& rank, const auto& tree_size,
+                                       const auto& num_octants_from_algo_4,
                                        const auto& num_particles) {
                 std::cerr << std::left << std::setw(col_width) << rank << std::left
                           << std::setw(col_width) << tree_size << std::left << std::setw(col_width)
+                          << num_octants_from_algo_4 << std::left << std::setw(col_width)
                           << num_particles << std::endl;
             };
-
-            size_t total_particles = 0;
-            for (size_t i = 0; i < tree_view.size(); ++i) {
-                total_particles += get_num_particles_in_octant(tree_view[i]);
-            }
 
             {
                 int ring_buf;
@@ -119,24 +161,23 @@ namespace ippl {
                     Comm->recv(&ring_buf, 1, world_rank + 1, 0, status);
                 } else {
                     std::cerr << std::string(col_width * 3, '=') << std::endl;
-                    printer("rank", "octants", "particles");
+                    printer("rank", "octs_now", "octs_4", "particles");
                     std::cerr << std::string(col_width * 3, '-') << std::endl;
                 }
 
-                printer(world_rank, tree_view.size(), total_particles);
+                printer(world_rank, tree_view.size(), octants.size(), total_particles);
 
                 if (world_rank > 0) {
                     Comm->send(ring_buf, 1, world_rank - 1, 0);
                 }
             }
 
-            size_t global_total = 0;
-            Comm->scan(&total_particles, &global_total, 1, std::plus<size_t>());
-
             if (world_rank == 0) {
                 std::cerr << std::string(col_width * 3, '-') << std::endl
-                          << "We now have " << global_total << " particles" << std::endl
-                          << "(" << (100.0 * (double)global_total / (double)particles.getTotalNum())
+                          << "We now have " << global_total_particles << " particles" << std::endl
+                          << "("
+                          << (100.0 * (double)global_total_particles
+                              / (double)particles.getTotalNum())
                           << "% of starting value lol)" << std::endl
                           << std::string(col_width * 3, '-') << std::endl;
             }
@@ -146,7 +187,8 @@ namespace ippl {
     }
 
     template <size_t Dim>
-    Kokkos::vector<morton_code> OrthoTree<Dim>::get_relevant_aid_list(particle_t const& particles) {
+    std::pair<morton_code, morton_code> OrthoTree<Dim>::get_relevant_aid_list(
+        particle_t const& particles) {
         START_FUNC;
         /**
          * This block initialised the aid list on rank 0 (assuming all particles are already
@@ -157,6 +199,8 @@ namespace ippl {
          */
 
         Kokkos::vector<morton_code> octant_buffer;
+        morton_code min_octant, max_octant;
+
         if (world_rank == 0) {
             if (particles.getLocalNum() != particles.getTotalNum()) {
                 throw std::runtime_error("particles must all be gathered on rank 0!");
@@ -189,24 +233,32 @@ namespace ippl {
             }
 
             octant_buffer.clear();
-            octant_buffer.push_back(aid_list[0].first);
-            octant_buffer.push_back(aid_list[rank_0_size - 1].first);
+            min_octant = aid_list[0].first;
+            max_octant = aid_list[rank_0_size - 1].first;
         } else {
             mpi::Status status;
             octant_buffer.clear();
             octant_buffer.resize(2);
             Comm->recv(octant_buffer.data(), 2, 0, 0, status);
 
+            min_octant = octant_buffer[0];
+            max_octant = octant_buffer[1];
+
             LOG << "received its octants: size=" << octant_buffer.size()
                 << "with octants: " << octant_buffer[0] << ", " << octant_buffer[1] << endl;
         }
 
+        if (min_octant >= max_octant) {
+            throw std::runtime_error("this shouldnt happen (get_relevant_aid_list)");
+        }
+
         END_FUNC;
-        return octant_buffer;
+        return {min_octant, max_octant};
     }
 
     template <size_t Dim>
-    void OrthoTree<Dim>::init_aid_list_from_octants(const Kokkos::vector<morton_code>& octants) {
+    void OrthoTree<Dim>::init_aid_list_from_octants(morton_code min_octant,
+                                                    morton_code max_octant) {
         START_FUNC;
         /**
          * This if/else block corresponds to line 8 in algo4.
@@ -225,22 +277,22 @@ namespace ippl {
                 LOG << "received min/max octant from " << rank << endl;
 
                 // get size of range in aid list
-                auto lower_bound_idx = std::lower_bound(
-                    this->aid_list.begin(), this->aid_list.end(), octant_buffer.front(),
-                    [](const Kokkos::pair<unsigned long long, unsigned long>& pair,
-                       const morton_code& val) {
-                        return pair.first < val;
-                    });
+                auto lower_bound_idx =
+                    std::lower_bound(aid_list.begin(), aid_list.end(), octant_buffer.front(),
+                                     [](const auto& pair, const morton_code& val) {
+                                         return pair.first < val;
+                                     });
 
-                auto upper_bound_idx = std::upper_bound(
-                    this->aid_list.begin(), this->aid_list.end(), octant_buffer.back(),
-                    [](const morton_code& val,
-                       const Kokkos::pair<unsigned long long, unsigned long>& pair) {
-                        return val < pair.first;
-                    });
+                // apparently (gpt) using lower bound in both is better and more consistent
+                auto upper_bound_idx =
+                    std::lower_bound(aid_list.begin(), aid_list.end(), octant_buffer.back(),
+                                     [](const auto& pair, const morton_code& val) {
+                                         return pair.first < val;
+                                     });
+
+                size_t size_buff = static_cast<size_t>(upper_bound_idx - lower_bound_idx);
 
                 // send size to rank
-                size_t size_buff = static_cast<size_t>(upper_bound_idx - lower_bound_idx);
                 Comm->send(size_buff, 1, rank, 0);
                 LOG << "sent size to " << rank << endl;
 
@@ -258,11 +310,35 @@ namespace ippl {
 
                 LOG << "sent buffers to " << rank << endl;
             }
+
+            // REDUCING OWN AID LIST (RANK 0) TODO: REMOVE THIS SHIT
+
+            auto lower_bound_idx =
+                std::lower_bound(aid_list.begin(), aid_list.end(),
+                                 morton_helper.get_deepest_first_descendant(min_octant),
+                                 [](const auto& pair, const morton_code& val) {
+                                     return pair.first < val;
+                                 });
+
+            // apparently (gpt) using lower bound in both is better and more consistent
+            auto upper_bound_idx =
+                std::lower_bound(aid_list.begin(), aid_list.end(),
+                                 morton_helper.get_deepest_last_descendant(max_octant),
+                                 [](const auto& pair, const morton_code& val) {
+                                     return pair.first < val;
+                                 });
+
+            aid_list_t own_aid_list;
+            for (auto it = lower_bound_idx; it != upper_bound_idx; ++it) {
+                own_aid_list.push_back(*it);
+            }
+            this->aid_list = own_aid_list;
+
         } else {
             // send own min/max octants
             octant_buffer.clear();
-            octant_buffer.push_back(octants[0]);
-            octant_buffer.push_back(morton_helper.get_deepest_last_descendant(octants.back()));
+            octant_buffer.push_back(morton_helper.get_deepest_first_descendant(min_octant));
+            octant_buffer.push_back(morton_helper.get_deepest_last_descendant(max_octant));
             Comm->send(*octant_buffer.data(), 2, 0, 0);
 
             LOG << "sent min/max octants" << endl;
@@ -287,6 +363,11 @@ namespace ippl {
             for (size_t i = 0; i < size_buff; ++i) {
                 this->aid_list.push_back({octant_buffer[i], id_buffer[i]});
             }
+
+            std::sort(this->aid_list.begin(), this->aid_list.end(),
+                      [](const auto& a, const auto& b) {
+                          return a.first < b.first;
+                      });
 
             LOG << "DONE!" << endl;
         }
@@ -594,26 +675,24 @@ namespace ippl {
 
     template <size_t Dim>
     size_t OrthoTree<Dim>::get_num_particles_in_octant(morton_code octant) {
-        START_FUNC;
+        // No need to START_FUNC and END_FUNC here unless you want detailed logs
+
         const morton_code lower_bound_target = octant;
-        // this is the same logic as in Morton::is_ancestor/Morton::is_descendant
         const morton_code upper_bound_target = octant + morton_helper.get_step_size(octant);
 
-        auto lower_bound_idx = std::lower_bound(aid_list.begin(), aid_list.end(), lower_bound_target,
-        [ ] (const Kokkos::pair<unsigned long long, unsigned long>& pair, const morton_code& val)
-        {
-            return pair.first < val;
-        });
+        auto lower_bound_idx =
+            std::lower_bound(aid_list.begin(), aid_list.end(), lower_bound_target,
+                             [](const auto& pair, const morton_code& val) {
+                                 return pair.first < val;
+                             });
 
-        auto upper_bound_idx = std::upper_bound(aid_list.begin(), aid_list.end(), upper_bound_target,
-            [ ] (const morton_code& val, const Kokkos::pair<unsigned long long, unsigned long>& pair)
-        {
-            return val < pair.first;
-        });
+        // apparently (gpt) using lower bound in both is better and more consistent
+        auto upper_bound_idx =
+            std::lower_bound(aid_list.begin(), aid_list.end(), upper_bound_target,
+                             [](const auto& pair, const morton_code& val) {
+                                 return pair.first < val;
+                             });
 
-        logger << "finished with num particles = "
-               << static_cast<size_t>(upper_bound_idx - lower_bound_idx) << endl;
-        END_FUNC;
         return static_cast<size_t>(upper_bound_idx - lower_bound_idx);
     }
 
@@ -676,13 +755,12 @@ namespace ippl {
     }
 
     template <size_t Dim>
-    Kokkos::vector<morton_code> OrthoTree<Dim>::block_partition(
-        Kokkos::vector<morton_code>& starting_octants) {
+    Kokkos::vector<morton_code> OrthoTree<Dim>::block_partition(morton_code min_octant,
+                                                                morton_code max_octant) {
         START_FUNC;
-        logger << "called with " << starting_octants.size() << " octants" << endl;
+        logger << "called with min: " << min_octant << ", max: " << max_octant << endl;
 
-        Kokkos::vector<morton_code> T =
-            complete_region(starting_octants.front(), starting_octants.back());
+        Kokkos::vector<morton_code> T = complete_region(min_octant, max_octant);
 
         logger << "T.size() = " << T.size() << endl;
 
@@ -717,10 +795,13 @@ namespace ippl {
         }
         */
 
-        Kokkos::vector<morton_code> partitioned_tree = partition(G, weights);
+        auto partitioned_tree = partition(G, weights);
 
-        // TODO: THIS MIGHT BE WRONG??
-        Kokkos::vector<morton_code> global_unpartitioned_tree = starting_octants;
+        // TODO: THIS MIGHT BE WRONG? this is not needed, we sync the aid list outside of this
+        /*
+        Kokkos::vector<morton_code> global_unpartitioned_tree;
+        global_unpartitioned_tree.push_back(min_octant);
+        global_unpartitioned_tree.push_back(max_octant);
         starting_octants.clear();
         for (morton_code gup_octant : global_unpartitioned_tree) {
             for (const morton_code& p_octant : partitioned_tree) {
@@ -730,7 +811,7 @@ namespace ippl {
                 }
             }
         }
-
+*/
         logger << "finished, partitioned_tree.size() = " << partitioned_tree.size() << endl;
         END_FUNC;
         return partitioned_tree;

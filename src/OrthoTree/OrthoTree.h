@@ -168,8 +168,8 @@ namespace ippl {
         Kokkos::View<morton_code*> build_tree_from_octants(
             const Kokkos::vector<morton_code>& octants);
 
-        void init_aid_list_from_octants(const Kokkos::vector<morton_code>& octants);
-        Kokkos::vector<morton_code> get_relevant_aid_list(particle_t const& particles);
+        void init_aid_list_from_octants(morton_code min_octant, morton_code max_octant);
+        std::pair<morton_code, morton_code> get_relevant_aid_list(particle_t const& particles);
 
     private:
         /**
@@ -187,8 +187,7 @@ namespace ippl {
           *
           * @return block partitioned octree, and unpartitioned_tree is re-distributed
           **/
-        Kokkos::vector<morton_code> block_partition(
-            Kokkos::vector<morton_code>& unpartitioned_tree);
+        Kokkos::vector<morton_code> block_partition(morton_code min_octant, morton_code max_octant);
 
         /**
          * @brief counts the number of particles covered by the cell decribed by the morton code
