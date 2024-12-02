@@ -35,9 +35,11 @@ namespace ippl {
     LOG << "STARTING\n\n" << endl
 
     template <size_t Dim>
-    void OrthoTree<Dim>::build_tree_naive(particle_t const& particles) {
+    Kokkos::View<morton_code*> OrthoTree<Dim>::build_tree_naive(particle_t const& particles) {
         // this needs to be initialized before constructing the tree
         this->aid_list = initialize_aid_list(particles);
+
+        Kokkos::vector<morton_code> result_tree;
 
         std::stack<std::pair<morton_code, size_t>> s;
         s.push({ morton_code(0), particles.getLocalNum() });
@@ -46,7 +48,7 @@ namespace ippl {
             const auto& [octant, count] = s.top(); s.pop();
 
             if ( count <= max_particles_per_node_m || morton_helper.get_depth(octant) >= max_depth_m ) {
-                tree_m.push_back(octant);
+                result_tree.push_back(octant);
                 continue;
             }
 
@@ -61,17 +63,28 @@ namespace ippl {
         }
 
         // if we sort the tree after construction we can compare two trees
-        std::sort(tree_m.begin(), tree_m.end());
+        std::sort(result_tree.begin(), result_tree.end());
+
+        Kokkos::View<morton_code*> tree_view("tree_view_naive", result_tree.size());
+        tree_view.assign_data(result_tree.data());
+
+        return tree_view;
     }
 
     template <size_t Dim>
-    Kokkos::vector<morton_code> OrthoTree<Dim>::build_tree(particle_t const& particles) {
+    Kokkos::View<morton_code*> OrthoTree<Dim>::build_tree(particle_t const& particles) {
         START_FUNC;
         Kokkos::vector<morton_code> octant_buffer;
-
         world_rank = Comm->rank();
         world_size = Comm->size();
 
+        /**
+         * This block initialised the aid list on rank 0 (assuming all particles are already
+         * gathered on rank 0 beforehand).
+         *
+         * We then generate the AidList and split it into equally sized chuncks.
+         * Each proc receivees the first and last octant in its chunk.
+         */
         if (world_rank == 0) {
             this->aid_list = initialize_aid_list(particles);
             LOG << "aid list has size: " << aid_list.size() << endl;
@@ -116,6 +129,14 @@ namespace ippl {
             assert(octant_buffer.size() == 2 && "we should have exactly two octants");
         }
 
+        /**
+         * The relevant morton_codes to start the algorithm have been sent to the other ranks.
+         * We can now start the actual algorithm.
+         *
+         * auto octants = block_partition();
+         * -> those octants are basically line 7 in algo4
+         */
+
         LOG << "calling block_partition with: " << octant_buffer.size() << " octants\n";
         auto octants = block_partition(octant_buffer);
 
@@ -131,7 +152,11 @@ namespace ippl {
         logger.flush();
         Comm->barrier();
 
-        // spread aidlist to procs
+        /**
+         * This if/else block corresponds to line 8 in algo4.
+         * We send the relevant parts of the AidList to each processor so they can start building
+         * the tree.
+         */
         if (world_rank == 0) {
             for (size_t rank = 1; rank < static_cast<size_t>(world_size); ++rank) {
                 mpi::Status status;
@@ -211,6 +236,10 @@ namespace ippl {
             LOG << "DONE!" << endl;
         }
 
+        /**
+         * Each proc has now as much of the aid_list as he needs and can start building the tree.
+         */
+
         Comm->barrier();
         if (world_rank == 0) {
             LOG << "everybody got his shit" << endl;
@@ -247,8 +276,16 @@ namespace ippl {
         std::sort(result_tree.begin(), result_tree.end());
 
         LOG << "result tree has size: " << result_tree.size() << endl;
+        size_t total = 0;
+        for (auto octant : result_tree) {
+            total += get_num_particles_in_octant(octant);
+        }
+        LOG << "contains: " << total << " particles" << endl;
         END_FUNC;
-        return result_tree;
+
+        Kokkos::View<morton_code*> tree_view("tree_view_paralell", result_tree.size());
+        tree_view.assign_data(result_tree.data());
+        return tree_view;
     }
 
     template <size_t Dim>

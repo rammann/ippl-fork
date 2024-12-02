@@ -52,6 +52,9 @@ namespace ippl {
         // as of now the tree is stored only as morton codes, this needs to be discussed as a group
         Kokkos::vector<morton_code> tree_m;
 
+        // NEW TREE TYPE!
+        Kokkos::View<morton_code*> finished_tree;
+
         size_t n_particles;
 
         // this list should not be edited, we will probably need it if we implement the tree update as well
@@ -71,7 +74,7 @@ namespace ippl {
          *
          * @param particles An 'object of arrays' of particles (google it)
          */
-        void build_tree_naive(particle_t const& particles);
+        Kokkos::View<morton_code*> build_tree_naive(particle_t const& particles);
 
         /**
          * @brief We take this as an entry function.
@@ -80,7 +83,7 @@ namespace ippl {
          * @param particles
          * @return Kokkos::vector<morton_code>
          */
-        Kokkos::vector<morton_code> build_tree(particle_t const& particles);
+        Kokkos::View<morton_code*> build_tree(particle_t const& particles);
 
         /**
          *
