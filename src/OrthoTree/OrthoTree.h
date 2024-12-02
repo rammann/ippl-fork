@@ -60,6 +60,8 @@ namespace ippl {
         int world_rank;
         int world_size;
 
+        Inform logger;
+
     public:
         OrthoTree(size_t max_depth, size_t max_particles_per_node, const bounds_t& root_bounds);
 
