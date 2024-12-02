@@ -294,8 +294,8 @@ namespace ippl {
 
       LOG << "exited the first loop" << std::endl;
 
-      std::vector<mpi::Request> receives;
-      //initialize the new octants for the current processor 
+      // std::vector<mpi::Request> receives;
+      // initialize the new octants for the current processor
       Kokkos::vector<morton_code> received_octants;
       for (size_t rank = 0; rank < static_cast<size_t>(world_size); ++rank) {
           if (rank == static_cast<size_t>(world_rank)) {
@@ -304,14 +304,15 @@ namespace ippl {
 
           size_t size;
           // receives.push_back(mpi::Request());
-          // receive the number of new octants
+          //  receive the number of new octants
           mpi::Status stat;
-          Comm->irecv(&size, 1, rank, 1, stat);
+          Comm->recv(&size, 1, rank, 1, stat);
+          // Comm->irecv(&size, 1, rank, 0, receives);
           // initialize the new octants
           Kokkos::vector<morton_code> octants_buffer(size);
           // receive the new octants
-          // Comm->irecv(&size, 1, p, 0, receive_size);
           if (size > 0) {
+              mpi::Status stat;
               Comm->recv(octants_buffer.data(), size, rank, 0, stat);
               // add the new octants to the received octants
               received_octants.insert(received_octants.end(), octants_buffer.begin(),
