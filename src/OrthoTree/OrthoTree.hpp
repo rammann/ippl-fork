@@ -74,10 +74,80 @@ namespace ippl {
     template <size_t Dim>
     Kokkos::View<morton_code*> OrthoTree<Dim>::build_tree(particle_t const& particles) {
         START_FUNC;
-        Kokkos::vector<morton_code> octant_buffer;
-        world_rank = Comm->rank();
-        world_size = Comm->size();
 
+        world_size = Comm->size();
+        world_rank = Comm->rank();  // TODO: move this to constructor, but then all tests need a
+                                    // main to init ippl
+
+        auto relevant_octants = get_relevant_aid_list(particles);
+        /**
+         * The relevant morton_codes to start the algorithm have been sent to the other ranks.
+         * We can now start the actual algorithm.
+         *
+         * auto octants = block_partition();
+         * -> those octants are basically line 7 in algo4
+         */
+
+        auto octants = block_partition(relevant_octants);
+        init_aid_list_from_octants(octants);
+
+        // Each proc has now as much of the aid_list as he needs and can start building the tree.
+        Kokkos::View<morton_code*> tree_view = build_tree_from_octants(octants);
+
+        Comm->barrier();
+        logger.flush();
+
+        {
+            const size_t col_width = 15;
+
+            auto printer = [col_width](const auto& rank, const auto& tree_size,
+                                       const auto& num_particles) {
+                std::cerr << std::left << std::setw(col_width) << rank << std::left
+                          << std::setw(col_width) << tree_size << std::left << std::setw(col_width)
+                          << num_particles << std::endl;
+            };
+
+            size_t total_particles = 0;
+            for (size_t i = 0; i < tree_view.size(); ++i) {
+                total_particles += get_num_particles_in_octant(tree_view[i]);
+            }
+
+            {
+                int ring_buf;
+                if (world_rank + 1 < world_size) {
+                    mpi::Status status;
+                    Comm->recv(&ring_buf, 1, world_rank + 1, 0, status);
+                } else {
+                    std::cerr << std::string(col_width * 3, '=') << std::endl;
+                    printer("rank", "octants", "particles");
+                    std::cerr << std::string(col_width * 3, '-') << std::endl;
+                }
+
+                printer(world_rank, tree_view.size(), total_particles);
+
+                if (world_rank > 0) {
+                    Comm->send(ring_buf, 1, world_rank - 1, 0);
+                }
+            }
+
+            size_t global_total = 0;
+            Comm->scan(&total_particles, &global_total, 1, std::plus<size_t>());
+
+            if (world_rank == 0) {
+                std::cerr << std::string(col_width * 3, '-') << std::endl
+                          << "We now have " << global_total << " particles" << std::endl
+                          << "(" << (100.0 * (double)global_total / (double)particles.getTotalNum())
+                          << "% of starting value lol)" << std::endl
+                          << std::string(col_width * 3, '-') << std::endl;
+            }
+        }
+
+        return tree_view;
+    }
+
+    template <size_t Dim>
+    Kokkos::vector<morton_code> OrthoTree<Dim>::get_relevant_aid_list(particle_t const& particles) {
+        START_FUNC;
         /**
          * This block initialised the aid list on rank 0 (assuming all particles are already
          * gathered on rank 0 beforehand).
@@ -85,7 +155,13 @@ namespace ippl {
          * We then generate the AidList and split it into equally sized chuncks.
          * Each proc receivees the first and last octant in its chunk.
          */
+
+        Kokkos::vector<morton_code> octant_buffer;
         if (world_rank == 0) {
+            if (particles.getLocalNum() != particles.getTotalNum()) {
+                throw std::runtime_error("particles must all be gathered on rank 0!");
+            }
+
             this->aid_list = initialize_aid_list(particles);
             LOG << "aid list has size: " << aid_list.size() << endl;
 
@@ -117,50 +193,32 @@ namespace ippl {
             octant_buffer.push_back(aid_list[rank_0_size - 1].first);
         } else {
             mpi::Status status;
-            octant_buffer = Kokkos::vector<morton_code>(2);  // TODO: how can this be done nicely
-            try {
-                Comm->recv(octant_buffer.data(), 2, 0, 0, status);
-            } catch (const IpplException& e) {
-                LOG << "error during receive in build_tree(): " << e.what() << endl;
-            }
+            octant_buffer.clear();
+            octant_buffer.resize(2);
+            Comm->recv(octant_buffer.data(), 2, 0, 0, status);
 
             LOG << "received its octants: size=" << octant_buffer.size()
                 << "with octants: " << octant_buffer[0] << ", " << octant_buffer[1] << endl;
-            assert(octant_buffer.size() == 2 && "we should have exactly two octants");
         }
 
-        /**
-         * The relevant morton_codes to start the algorithm have been sent to the other ranks.
-         * We can now start the actual algorithm.
-         *
-         * auto octants = block_partition();
-         * -> those octants are basically line 7 in algo4
-         */
+        END_FUNC;
+        return octant_buffer;
+    }
 
-        LOG << "calling block_partition with: " << octant_buffer.size() << " octants\n";
-        auto octants = block_partition(octant_buffer);
-
-        logger.flush();
-        Comm->barrier();
-        if (world_rank == 0) {
-            LOG << "########## EVERYBODY GOT HERE" << endl;
-        }
-        Comm->barrier();
-        LOG << "octants.size() = " << octants.size() << endl;
-        logger.flush();
-        Comm->barrier();
-        logger.flush();
-        Comm->barrier();
-
+    template <size_t Dim>
+    void OrthoTree<Dim>::init_aid_list_from_octants(const Kokkos::vector<morton_code>& octants) {
+        START_FUNC;
         /**
          * This if/else block corresponds to line 8 in algo4.
-         * We send the relevant parts of the AidList to each processor so they can start building
-         * the tree.
+         * We send the relevant parts of the AidList to each processor so they can start
+         * building the tree.
          */
+        Kokkos::vector<morton_code> octant_buffer;
+        Kokkos::vector<morton_code> id_buffer;
+        size_t size_buff;
         if (world_rank == 0) {
             for (size_t rank = 1; rank < static_cast<size_t>(world_size); ++rank) {
                 mpi::Status status;
-                octant_buffer.clear();
                 octant_buffer = Kokkos::vector<morton_code>(2);
                 Comm->recv(octant_buffer.data(), 2, rank, 0, status);
 
@@ -182,12 +240,12 @@ namespace ippl {
                     });
 
                 // send size to rank
-                size_t size = static_cast<size_t>(upper_bound_idx - lower_bound_idx);
-                Comm->send(size, 1, rank, 0);
+                size_t size_buff = static_cast<size_t>(upper_bound_idx - lower_bound_idx);
+                Comm->send(size_buff, 1, rank, 0);
                 LOG << "sent size to " << rank << endl;
 
                 octant_buffer.clear();
-                Kokkos::vector<size_t> id_buffer;
+                id_buffer.clear();
                 for (auto it = lower_bound_idx; it != upper_bound_idx; ++it) {
                     octant_buffer.push_back(it->first);
                     id_buffer.push_back(it->second);
@@ -195,8 +253,8 @@ namespace ippl {
 
                 // send octantts
                 // send particle ids
-                Comm->send(*octant_buffer.data(), size, rank, 0);
-                Comm->send(*id_buffer.data(), size, rank, 0);
+                Comm->send(*octant_buffer.data(), size_buff, rank, 0);
+                Comm->send(*id_buffer.data(), size_buff, rank, 0);
 
                 LOG << "sent buffers to " << rank << endl;
             }
@@ -211,47 +269,46 @@ namespace ippl {
 
             // receive aid list size
             mpi::Status status1;
-            size_t size;
-            Comm->recv(&size, 1, 0, 0, status1);
-            LOG << "received size=" << size << endl;
+            Comm->recv(&size_buff, 1, 0, 0, status1);
+            LOG << "received size=" << size_buff << endl;
             // receive octants and receive ids
             octant_buffer.clear();
-            octant_buffer.reserve(size);
-            Kokkos::vector<size_t> id_buffer(size);
+            octant_buffer.reserve(size_buff);
+            id_buffer.clear();
+            id_buffer.reserve(size_buff);
 
             mpi::Status status2, status3;
-            Comm->recv(octant_buffer.data(), size, 0, 0, status2);
-            Comm->recv(id_buffer.data(), size, 0, 0, status3);
+            Comm->recv(octant_buffer.data(), size_buff, 0, 0, status2);
+            Comm->recv(id_buffer.data(), size_buff, 0, 0, status3);
             LOG << "received buffers" << endl;
+
             // copy octants and ids to own aid_list
-            for (size_t i = 0; i < size; ++i) {
+            this->aid_list.clear();
+            for (size_t i = 0; i < size_buff; ++i) {
                 this->aid_list.push_back({octant_buffer[i], id_buffer[i]});
             }
-
-            // uneccessary but who cares
-            std::sort(aid_list.begin(), aid_list.end(), [](const auto& a, const auto& b) {
-                return a.first < b.first;
-            });
 
             LOG << "DONE!" << endl;
         }
 
-        /**
-         * Each proc has now as much of the aid_list as he needs and can start building the tree.
-         */
+        END_FUNC;
+    }
 
-        Comm->barrier();
-        if (world_rank == 0) {
-            LOG << "everybody got his shit" << endl;
-        }
+    template <size_t Dim>
+    Kokkos::View<morton_code*> OrthoTree<Dim>::build_tree_from_octants(
+        const Kokkos::vector<morton_code>& octants) {
+        START_FUNC;
+        /**
+         * THIS CAN PROBABLY BE DONE MUCH SMARTER AND FASTER!!
+         */
 
         std::stack<std::pair<morton_code, size_t>> s;
 
-        for (auto octant : octants) {
-            s.push({octant, get_num_particles_in_octant(octant)});
+        for (size_t i = 0; i < octants.size(); ++i) {
+            s.push({octants[i], get_num_particles_in_octant(octants[i])});
         }
 
-        Kokkos::vector<morton_code> result_tree;
+        std::vector<morton_code> result_tree;  // TODO: remove this!
         while (!s.empty()) {
             const auto& [octant, count] = s.top();
             s.pop();
@@ -275,17 +332,9 @@ namespace ippl {
         // if we sort the tree after construction we can compare two trees
         std::sort(result_tree.begin(), result_tree.end());
 
-        LOG << "result tree has size: " << result_tree.size() << endl;
-        size_t total = 0;
-        for (auto octant : result_tree) {
-            total += get_num_particles_in_octant(octant);
-        }
-        LOG << "contains: " << total << " particles" << endl;
+        Kokkos::View<morton_code*> return_tree(result_tree.data());
         END_FUNC;
-
-        Kokkos::View<morton_code*> tree_view("tree_view_paralell", result_tree.size());
-        tree_view.assign_data(result_tree.data());
-        return tree_view;
+        return return_tree;
     }
 
     template <size_t Dim>

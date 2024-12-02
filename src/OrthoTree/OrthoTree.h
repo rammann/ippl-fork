@@ -165,6 +165,12 @@ namespace ippl {
          **/
         Kokkos::vector<morton_code> complete_region(morton_code code_a, morton_code code_b);
 
+        Kokkos::View<morton_code*> build_tree_from_octants(
+            const Kokkos::vector<morton_code>& octants);
+
+        void init_aid_list_from_octants(const Kokkos::vector<morton_code>& octants);
+        Kokkos::vector<morton_code> get_relevant_aid_list(particle_t const& particles);
+
     private:
         /**
          * @brief initializes the aid list which has form vec{pair{morton_code, size_t}}
