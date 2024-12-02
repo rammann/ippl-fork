@@ -122,6 +122,41 @@ namespace ippl {
         //  todo build tree here
         LOG << "octants.size() = " << octants.size() << endl;
 
+        morton_code from = octants[0];
+        morton_code to   = morton_helper.get_deepest_last_descendant(octants.back());
+
+        get_aid_list_from_to(from, to);
+
+        // spread aidlist to procs
+
+        morton_code from_buff, to_buff;
+        if (world_rank == 0) {
+            for (size_t rank = 1; rank < static_cast<size_t>(world_size); ++rank) {
+                mpi::Status status;
+                octant_buffer.clear();
+                octant_buffer = Kokkos::vector<morton_code>(2);
+                Comm->recv(octant_buffer.data(), 2, 0, 0, status);
+
+                // get size of range in aid list
+
+                // send size to rank
+
+                // send octantts
+                // send particle ids
+            }
+        } else {
+            octant_buffer.clear();
+            octant_buffer.push_back(from);
+            octant_buffer.push_back(to);
+            Comm->send(*octant_buffer.data(), 2, 0, 0);
+
+            // receive aid list size
+
+            // receive octants and receive ids
+
+            // copy octants and ids to own aid_list
+        }
+
         END_FUNC;
         return {};
     }
