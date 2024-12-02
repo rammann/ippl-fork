@@ -73,7 +73,7 @@ namespace ippl {
         world_size = Comm->size();
 
         if (world_rank == 0) {
-            aid_list = initialize_aid_list(particles);
+            this->aid_list = initialize_aid_list(particles);
             LOG << "aid list has size: " << aid_list.size() << endl;
 
             const size_t total_num_particles = particles.getTotalNum();
@@ -119,48 +119,136 @@ namespace ippl {
         LOG << "calling block_partition with: " << octant_buffer.size() << " octants\n";
         auto octants = block_partition(octant_buffer);
 
-        //  todo build tree here
+        logger.flush();
+        Comm->barrier();
+        if (world_rank == 0) {
+            LOG << "########## EVERYBODY GOT HERE" << endl;
+        }
+        Comm->barrier();
         LOG << "octants.size() = " << octants.size() << endl;
-
-        morton_code from = octants[0];
-        morton_code to   = morton_helper.get_deepest_last_descendant(octants.back());
-
-        get_aid_list_from_to(from, to);
+        logger.flush();
+        Comm->barrier();
+        logger.flush();
+        Comm->barrier();
 
         // spread aidlist to procs
-
-        morton_code from_buff, to_buff;
         if (world_rank == 0) {
             for (size_t rank = 1; rank < static_cast<size_t>(world_size); ++rank) {
                 mpi::Status status;
                 octant_buffer.clear();
                 octant_buffer = Kokkos::vector<morton_code>(2);
-                Comm->recv(octant_buffer.data(), 2, 0, 0, status);
+                Comm->recv(octant_buffer.data(), 2, rank, 0, status);
+
+                LOG << "received min/max octant from " << rank << endl;
 
                 // get size of range in aid list
-                
+                auto lower_bound_idx = std::lower_bound(
+                    this->aid_list.begin(), this->aid_list.end(), octant_buffer.front(),
+                    [](const Kokkos::pair<unsigned long long, unsigned long>& pair,
+                       const morton_code& val) {
+                        return pair.first < val;
+                    });
+
+                auto upper_bound_idx = std::upper_bound(
+                    this->aid_list.begin(), this->aid_list.end(), octant_buffer.back(),
+                    [](const morton_code& val,
+                       const Kokkos::pair<unsigned long long, unsigned long>& pair) {
+                        return val < pair.first;
+                    });
+
                 // send size to rank
-                Comm->(*octant_buffer.data(), batch_size, rank, 0);
-                Comm->send(*id_buff.data(), batch_size, rank, 0);
+                size_t size = static_cast<size_t>(upper_bound_idx - lower_bound_idx);
+                Comm->send(size, 1, rank, 0);
+                LOG << "sent size to " << rank << endl;
+
+                octant_buffer.clear();
+                Kokkos::vector<size_t> id_buffer;
+                for (auto it = lower_bound_idx; it != upper_bound_idx; ++it) {
+                    octant_buffer.push_back(it->first);
+                    id_buffer.push_back(it->second);
+                }
 
                 // send octantts
                 // send particle ids
+                Comm->send(*octant_buffer.data(), size, rank, 0);
+                Comm->send(*id_buffer.data(), size, rank, 0);
+
+                LOG << "sent buffers to " << rank << endl;
             }
         } else {
+            // send own min/max octants
             octant_buffer.clear();
-            octant_buffer.push_back(from);
-            octant_buffer.push_back(to);
+            octant_buffer.push_back(octants[0]);
+            octant_buffer.push_back(morton_helper.get_deepest_last_descendant(octants.back()));
             Comm->send(*octant_buffer.data(), 2, 0, 0);
 
+            LOG << "sent min/max octants" << endl;
+
             // receive aid list size
-
+            mpi::Status status1;
+            size_t size;
+            Comm->recv(&size, 1, 0, 0, status1);
+            LOG << "received size=" << size << endl;
             // receive octants and receive ids
+            octant_buffer.clear();
+            octant_buffer.reserve(size);
+            Kokkos::vector<size_t> id_buffer(size);
 
+            mpi::Status status2, status3;
+            Comm->recv(octant_buffer.data(), size, 0, 0, status2);
+            Comm->recv(id_buffer.data(), size, 0, 0, status3);
+            LOG << "received buffers" << endl;
             // copy octants and ids to own aid_list
+            for (size_t i = 0; i < size; ++i) {
+                this->aid_list.push_back({octant_buffer[i], id_buffer[i]});
+            }
+
+            // uneccessary but who cares
+            std::sort(aid_list.begin(), aid_list.end(), [](const auto& a, const auto& b) {
+                return a.first < b.first;
+            });
+
+            LOG << "DONE!" << endl;
         }
 
+        Comm->barrier();
+        if (world_rank == 0) {
+            LOG << "everybody got his shit" << endl;
+        }
+
+        std::stack<std::pair<morton_code, size_t>> s;
+
+        for (auto octant : octants) {
+            s.push({octant, get_num_particles_in_octant(octant)});
+        }
+
+        Kokkos::vector<morton_code> result_tree;
+        while (!s.empty()) {
+            const auto& [octant, count] = s.top();
+            s.pop();
+
+            if (count <= max_particles_per_node_m
+                || morton_helper.get_depth(octant) >= max_depth_m) {
+                result_tree.push_back(octant);
+                continue;
+            }
+
+            for (const auto& child_octant : morton_helper.get_children(octant)) {
+                const size_t count = get_num_particles_in_octant(child_octant);
+
+                // no need to push in this case
+                if (count > 0) {
+                    s.push({child_octant, count});
+                }
+            }
+        }
+
+        // if we sort the tree after construction we can compare two trees
+        std::sort(result_tree.begin(), result_tree.end());
+
+        LOG << "result tree has size: " << result_tree.size() << endl;
         END_FUNC;
-        return {};
+        return result_tree;
     }
 
     template <size_t Dim>
