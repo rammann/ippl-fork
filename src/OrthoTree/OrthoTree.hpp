@@ -9,6 +9,9 @@
 #include "OrthoTree.h"
 namespace ippl {
 
+    // #define ENABLE_LOGGING_STUFF
+
+#ifdef ENABLE_LOGGING_STUFF
     int call_depth = 0;
 #define DEPTH_THINGY call_depth * 2
 #define LOG                                                                                    \
@@ -44,6 +47,30 @@ namespace ippl {
                       << std::endl;                                                                \
         --call_depth;                                                                              \
     } while (0)
+
+#else
+    class NullStream : public std::ostream {
+    public:
+        NullStream()
+            : std::ostream(nullptr) {}
+
+        template <typename T>
+        NullStream& operator<<(const T&) {
+            return *this;
+        }
+
+        // Overload for manipulators like std::endl
+        NullStream& operator<<(std::ostream& (*)(std::ostream&)) { return *this; }
+    };
+
+    inline NullStream null_stream;
+
+#define DEPTH_THINGY  0
+#define LOG           null_stream
+#define BARRIER_LOG   null_stream
+#define START_BARRIER (void)0
+#define END_BARRIER   (void)0
+#endif
 
     template <size_t Dim>
     OrthoTree<Dim>::OrthoTree(size_t max_depth, size_t max_particles_per_node,
@@ -145,6 +172,9 @@ namespace ippl {
         START_BARRIER;
         LOG << "called with n_octants=" << octants.size() << std::endl;
 
+        world_rank = Comm->rank();
+        world_size = Comm->size();
+
         // initialize the prefix_sum and the total weight
         Kokkos::vector<size_t> prefix_sum;
         prefix_sum.reserve(octants.size());
@@ -245,23 +275,18 @@ namespace ippl {
           LOG << "sending new octants size=" << new_octants.size() << " to rank=" << rank - 1
               << std::endl;
           // send the number of new octants to the processor
-          sizes[rank - 1] = new_octants.size();
 
           requests.push_back(mpi::Request());
-          Comm->isend((sizes[rank - 1]), 1, rank - 1, 1, requests.back());
+          sizes[rank - 1] = new_octants.size();
+          Comm->isend((sizes[rank - 1]), 1, rank - 1, 1, requests[requests.size() - 1]);
 
           // send the new octants to the processor
           // Comm->isend(new_octants.size(), 1, p-1, 0, request1);
 
+          requests.push_back(mpi::Request());
           if (sizes[rank - 1] > 0) {
-              requests.push_back(mpi::Request());
-              LOG << "sending new octants to rank=" << rank - 1 << std::endl;
-              try {
-                  Comm->isend<morton_code>(*new_octants.data(), sizes[rank - 1], rank - 1, 0,
-                                           requests[requests.size() - 1]);
-              } catch (IpplException& e) {
-                  LOG << "ERROR IN ISEND OF 264 ORTHOTREE: " << e.what() << std::endl;
-              }
+              Comm->isend<morton_code>(*new_octants.data(), new_octants.size(), rank - 1, 0,
+                                       requests[requests.size() - 1]);
           }
       }
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #NUM_PROCESSORS=${1:-4}
-NUM_PROCESSORS=4
+NUM_PROCESSORS=1
 
 # Extract the root directory based on the script's location
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
