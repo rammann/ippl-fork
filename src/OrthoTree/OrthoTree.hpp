@@ -78,9 +78,7 @@ namespace ippl {
         : max_depth_m(max_depth)
         , max_particles_per_node_m(max_particles_per_node)
         , root_bounds_m(root_bounds)
-        , morton_helper(max_depth)
-        , world_rank(Comm->rank())
-        , world_size(Comm->size()) {}
+        , morton_helper(max_depth) {}
 
     template <size_t Dim>
     void OrthoTree<Dim>::build_tree_naive(particle_t const& particles)
@@ -116,6 +114,10 @@ namespace ippl {
     template <size_t Dim>
     Kokkos::vector<morton_code> OrthoTree<Dim>::build_tree(particle_t const& particles) {
         Kokkos::vector<morton_code> octant_buffer;
+
+        world_rank = Comm->rank();
+        world_size = Comm->size();
+
         if (world_rank == 0) {
             aid_list = initialize_aid_list(particles);
             LOG << "aid list has size: " << aid_list.size() << std::endl;
@@ -292,6 +294,7 @@ namespace ippl {
 
       LOG << "exited the first loop" << std::endl;
 
+      std::vector<mpi::Request> receives;
       //initialize the new octants for the current processor 
       Kokkos::vector<morton_code> received_octants;
       for (size_t rank = 0; rank < static_cast<size_t>(world_size); ++rank) {
@@ -303,7 +306,7 @@ namespace ippl {
           // receives.push_back(mpi::Request());
           // receive the number of new octants
           mpi::Status stat;
-          Comm->recv(&size, 1, rank, 1, stat);
+          Comm->irecv(&size, 1, rank, 1, stat);
           // initialize the new octants
           Kokkos::vector<morton_code> octants_buffer(size);
           // receive the new octants
@@ -581,6 +584,9 @@ namespace ippl {
         Kokkos::vector<morton_code>& octants) {
         START_BARRIER;
 
+        world_rank = Comm->rank();
+        world_size = Comm->size();
+
         LOG << "called with n_octants=" << octants.size() << std::endl;
         // this removes duplicates, inefficient as of now
         std::map<morton_code, int> m;
@@ -671,6 +677,9 @@ namespace ippl {
     Kokkos::vector<size_t> OrthoTree<Dim>::get_num_particles_in_octants_parallel(
         const Kokkos::vector<morton_code>& octants) {
         LOG;
+
+        world_rank = Comm->rank();
+        world_size = Comm->size();
 
         mpi::Status stat;
         Kokkos::vector<size_t> num_particles;
