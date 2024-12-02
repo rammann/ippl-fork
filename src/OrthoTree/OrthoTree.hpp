@@ -167,7 +167,7 @@ namespace ippl {
         auto octants = block_partition(octant_buffer);
         //  todo build tree here
 
-        LOG << "octants.size() = " << octants.size() << std::endl;
+        std::cerr << "octants.size() = " << octants.size() << std::endl;
 
         return {};
     }
