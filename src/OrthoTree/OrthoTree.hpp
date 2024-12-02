@@ -1,11 +1,12 @@
 #include <ostream>
+
 #include "OrthoTree/OrthoTreeTypes.h"
+
 #include "Communicate/Communicator.h"
 #include "Communicate/Operations.h"
 #include "Communicate/Request.h"
 #include "Kokkos_Vector.hpp"
 #include "OrthoTree.h"
-
 namespace ippl {
 
     int call_depth = 0;
@@ -265,9 +266,7 @@ namespace ippl {
       }
 
       LOG << "exited the first loop" << std::endl;
-      BARRIER_LOG << " finished the first loop\n";
 
-      std::vector<mpi::Request> receives;
       //initialize the new octants for the current processor 
       Kokkos::vector<morton_code> received_octants;
       for (size_t rank = 0; rank < static_cast<size_t>(world_size); ++rank) {
