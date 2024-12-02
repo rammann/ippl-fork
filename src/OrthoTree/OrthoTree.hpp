@@ -138,8 +138,10 @@ namespace ippl {
                 Comm->recv(octant_buffer.data(), 2, 0, 0, status);
 
                 // get size of range in aid list
-
+                
                 // send size to rank
+                Comm->(*octant_buffer.data(), batch_size, rank, 0);
+                Comm->send(*id_buff.data(), batch_size, rank, 0);
 
                 // send octantts
                 // send particle ids
