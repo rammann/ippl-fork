@@ -29,7 +29,6 @@ TEST(ParallelOrthoTreeTest, PartitionTestDistribute) {
     weights.clear();
     result = tree_3d.partition(data, weights);
   }
-
   ASSERT_EQ(result.size(), expected.size());
   for (size_t i = 0; i < expected.size(); i++) {
     EXPECT_EQ(result[i], expected[i]); 
