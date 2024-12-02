@@ -34,8 +34,7 @@ TEST(LineariseTestOct, LineariseOctantsTest) {
     Kokkos::vector<morton_code> linearised = tree.linearise_octants(octs);
     EXPECT_EQ(linearised.size(), expected.size());
     for (size_t i = 0; i < linearised.size(); ++i) {
-        std::cerr << "actual: " << linearised[i] << ", expected: " << expected[i] << std::endl;
-        // EXPECT_EQ(linearised[i], expected[i]);
+        EXPECT_EQ(linearised[i], expected[i]);
     }
 }
 
