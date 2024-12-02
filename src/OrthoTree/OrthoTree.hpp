@@ -679,11 +679,11 @@ namespace ippl {
     template <size_t Dim>
     Kokkos::vector<size_t> OrthoTree<Dim>::get_num_particles_in_octants_parallel(
         const Kokkos::vector<morton_code>& octants) {
-        LOG;
 
         world_rank = Comm->rank();
         world_size = Comm->size();
 
+        //LOG;
         mpi::Status stat;
         Kokkos::vector<size_t> num_particles;
 
@@ -716,14 +716,14 @@ namespace ippl {
         }
 
         // LOG << "finished, num_particles.size() = " << num_particles.size() << std::endl;
-        END_BARRIER;
+        //END_BARRIER;
         return num_particles;
     }
 
     template <size_t Dim>
     Kokkos::vector<size_t> OrthoTree<Dim>::get_num_particles_in_octants_seqential(
         const Kokkos::vector<morton_code>& octants) {
-        LOG;
+        //LOG;
         size_t num_octs = octants.size();
         Kokkos::vector<size_t> num_particles(num_octs);
         for (size_t i = 0; i < num_octs; ++i) {

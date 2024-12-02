@@ -278,7 +278,6 @@ TEST(ParallelOrthoTreeTest, GetNumParticlesProcessorEmpty){
     Kokkos::vector<ippl::morton_code> octants;
 
     octants.push_back(morton_helper.encode({2,4},2));
-    
     Kokkos::vector<size_t> expected(1);
     expected[0] = 0;
 
