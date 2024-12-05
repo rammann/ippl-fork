@@ -360,7 +360,6 @@ namespace ippl {
 
         // if we sort the tree after construction we can compare two trees
         std::sort(result_tree.begin(), result_tree.end());
-        octant_to_file(octants);
         Kokkos::View<morton_code*> return_tree(result_tree.data());
         END_FUNC;
         return return_tree;

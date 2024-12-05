@@ -275,16 +275,28 @@ namespace ippl {
                                      + "/src/OrthoTree/scripts/output/particles"
                                      + std::to_string(Comm->rank()) + ".txt";
 
+            static bool already_called = false;
+            if (already_called) {
+                throw std::runtime_error("you can only print octants once!");
+            }
+            already_called = true;
+
             std::ofstream file(outputPath);
             print_particles(file, particles);
             file.flush();
             file.close();
         }
 
-        void octant_to_file(const Kokkos::vector<morton_code>& octants) {
+        void octants_to_file(const Kokkos::vector<morton_code>& octants) {
             std::string outputPath = std::string(IPPL_SOURCE_DIR)
                                      + "/src/OrthoTree/scripts/output/octants"
                                      + std::to_string(Comm->rank()) + ".txt";
+
+            static bool already_called = false;
+            if (already_called) {
+                throw std::runtime_error("you can only print octants once!");
+            }
+            already_called = true;
 
             std::ofstream file(outputPath);
             print_octant_list(file, octants);
