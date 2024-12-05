@@ -38,6 +38,7 @@ namespace ippl {
 
         logger << "C.size()=" << C.size() << endl;
         Kokkos::vector<morton_code> G = complete_tree(C);
+        octant_to_file(G);
         logger << "we now have n_octants = " << G.size() << endl;
 
         Kokkos::vector<size_t> weights = get_num_particles_in_octants_parallel(G);
@@ -56,7 +57,6 @@ namespace ippl {
         */
 
         auto partitioned_tree = partition(G, weights);
-
         // TODO: THIS MIGHT BE WRONG? this is not needed, we sync the aid list outside of this
         /*
         Kokkos::vector<morton_code> global_unpartitioned_tree;

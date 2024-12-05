@@ -50,14 +50,14 @@ namespace ippl {
         if (world_rank == 0) {
             const morton_code dfd_root = morton_helper.get_deepest_first_descendant(morton_code(0));
             const morton_code A_finest =
-                morton_helper.get_nearest_common_ancestor(dfd_root, octants[0]);
+                morton_helper.get_nearest_common_ancestor(dfd_root, octants.front());
             const morton_code first_child = morton_helper.get_first_child(A_finest);
             // this imitates push_front
             first_rank0 = first_child;
         } else if (world_rank == world_size - 1) {
             const morton_code dld_root = morton_helper.get_deepest_last_descendant(morton_code(0));
             const morton_code A_finest =
-                morton_helper.get_nearest_common_ancestor(dld_root, octants[0]);
+                morton_helper.get_nearest_common_ancestor(dld_root, octants.back());
             const morton_code last_child = morton_helper.get_last_child(A_finest);
 
             octants.push_back(last_child);
