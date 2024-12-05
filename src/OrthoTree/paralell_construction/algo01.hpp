@@ -24,6 +24,10 @@ namespace ippl {
          */
 
         auto octants = block_partition(min_octant, max_octant);
+
+        octant_to_file(octants);
+        particles_to_file(particles);
+
         init_aid_list_from_octants(octants.front(), octants.back());
 
         // manually syncing full aid list

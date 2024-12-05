@@ -176,37 +176,8 @@ namespace ippl {
          */
         Kokkos::vector<Kokkos::pair<morton_code, Kokkos::vector<size_t>>> get_tree() const;
 
-        size_t getAidList_lowerBound(morton_code octant) {
-            if (this->aid_list.size() == 0) {
-                std::cerr << "AID LIST ON RANK " << Comm->rank() << " HAS NOT BEEN INITIALISED!";
-                throw std::runtime_error("AID LIST ON RANK " + std::to_string(Comm->rank())
-                                         + " HAS NOT BEEN INITIALISED!");
-            }
-
-            auto lower_bound_idx =
-                std::lower_bound(this->aid_list.begin(), this->aid_list.end(), octant,
-                                 [](const auto& pair, const morton_code& val) {
-                                     return pair.first < val;
-                                 });
-
-            return static_cast<size_t>(lower_bound_idx - this->aid_list.begin());
-        }
-
-        size_t getAidList_upperBound(morton_code octant) {
-            if (this->aid_list.size() == 0) {
-                std::cerr << "AID LIST ON RANK " << Comm->rank() << " HAS NOT BEEN INITIALISED!";
-                throw std::runtime_error("AID LIST ON RANK " + std::to_string(Comm->rank())
-                                         + " HAS NOT BEEN INITIALISED!");
-            }
-
-            auto upper_bound_idx =
-                std::upper_bound(this->aid_list.begin(), this->aid_list.end(), octant,
-                                 [](const morton_code& val, const auto& pair) {
-                                     return val < pair.first;
-                                 });
-
-            return static_cast<size_t>(upper_bound_idx - this->aid_list.begin());
-        }
+        size_t getAidList_lowerBound(morton_code octant);
+        size_t getAidList_upperBound(morton_code octant);
 
 #pragma endregion  // helpers
 
@@ -273,7 +244,8 @@ namespace ippl {
             return os << octant << " " << bounds.get_min() << " " << bounds.get_max();
         }
 
-        std::ostream& print_octant_list(std::ostream& os, const octant_list_t& octant_list) {
+        std::ostream& print_octant_list(std::ostream& os,
+                                        const Kokkos::vector<morton_code>& octant_list) {
             for (morton_code octant : octant_list) {
                 print_octant(os, octant);
                 os << std::endl;
@@ -283,7 +255,7 @@ namespace ippl {
         }
 
         std::ostream& print_particles(std::ostream& os, particle_t const& particles) {
-            for (size_t i = 0; i < n_particles_m; ++i) {
+            for (size_t i = 0; i < particles.getLocalNum(); ++i) {
                 os << i << " " << particles.R(i) << std::endl;
             }
 
@@ -300,7 +272,7 @@ namespace ippl {
             file.close();
         }
 
-        void octant_to_file(const octant_list_t& octants) {
+        void octant_to_file(const Kokkos::vector<morton_code>& octants) {
             std::string outputPath =
                 "../../../src/OrthoTree/output/octants" + std::to_string(Comm->rank()) + ".txt";
 
