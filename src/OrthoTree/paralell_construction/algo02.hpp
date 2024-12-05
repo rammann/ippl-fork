@@ -27,19 +27,21 @@ namespace ippl {
             morton_code current_node = stack.back();
             stack.pop_back();
 
-            if ((code_a < current_node) && (current_node < code_b)
-                && !morton_helper.is_ancestor(code_b, current_node)) {
+            bool is_between       = (code_a < current_node) && (current_node < code_b);
+            bool is_ancestor_of_b = morton_helper.is_ancestor(code_b, current_node);
+            bool is_ancestor_of_a = morton_helper.is_ancestor(code_a, current_node);
+
+            if (is_between && !is_ancestor_of_b) {
                 min_lin_tree.push_back(current_node);
-            } else if (morton_helper.is_ancestor(code_a, current_node)
-                       || morton_helper.is_ancestor(code_b, current_node)) {
-                for (morton_code& child : morton_helper.get_children(current_node))
+            } else if (is_ancestor_of_a || is_ancestor_of_b) {
+                for (morton_code& child : morton_helper.get_children(current_node)) {
                     stack.push_back(child);
+                }
             }
         }
 
         std::sort(min_lin_tree.begin(), min_lin_tree.end());
 
-        logger << "finished complete_region" << endl;
         END_FUNC;
         return min_lin_tree;
     }

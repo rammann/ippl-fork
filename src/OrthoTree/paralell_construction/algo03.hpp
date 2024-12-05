@@ -51,6 +51,11 @@ namespace ippl {
             const morton_code dfd_root = morton_helper.get_deepest_first_descendant(morton_code(0));
             const morton_code A_finest =
                 morton_helper.get_nearest_common_ancestor(dfd_root, octants.front());
+            if (morton_helper.get_depth(A_finest) >= max_depth_m) {
+                std::cerr << "RANK: " << world_rank << " A_FINEST is already at depest level!"
+                          << std::endl;
+                assert(false);
+            }
             const morton_code first_child = morton_helper.get_first_child(A_finest);
             // this imitates push_front
             first_rank0 = first_child;
@@ -58,6 +63,12 @@ namespace ippl {
             const morton_code dld_root = morton_helper.get_deepest_last_descendant(morton_code(0));
             const morton_code A_finest =
                 morton_helper.get_nearest_common_ancestor(dld_root, octants.back());
+
+            if (morton_helper.get_depth(A_finest) >= max_depth_m) {
+                std::cerr << "RANK: " << world_rank << " A_FINEST is already at depest level!"
+                          << std::endl;
+                assert(false);
+            }
             const morton_code last_child = morton_helper.get_last_child(A_finest);
 
             octants.push_back(last_child);
