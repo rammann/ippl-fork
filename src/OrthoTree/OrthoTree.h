@@ -10,7 +10,7 @@
 
 #include "OrthoTreeParticle.h"
 #include "helpers/BoundingBox.h"
-#include "helpers/Config.h.in"
+#include "helpers/Config.h"
 #include "helpers/MortonHelper.h"
 
 namespace ippl {
@@ -285,8 +285,6 @@ namespace ippl {
             std::string outputPath = std::string(IPPL_SOURCE_DIR)
                                      + "/src/OrthoTree/scripts/output/octants"
                                      + std::to_string(Comm->rank()) + ".txt";
-
-            std::cerr << "SOURCE DIR IS: " << IPPL_SOURCE_DIR << std::endl;
 
             std::ofstream file(outputPath);
             print_octant_list(file, octants);

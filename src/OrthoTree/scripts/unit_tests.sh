@@ -27,9 +27,6 @@ run_tests() {
     done
 }
 
-# Run the build script
-"$SCRIPT_DIR/build.sh" || exit 1
-
 cd "$UNIT_TEST_DIR" || exit 1
 if make -j$(nproc); then
     echo "Unit tests build successful."

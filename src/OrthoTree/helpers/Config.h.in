@@ -1,2 +1,3 @@
 #pragma once
+
 #define IPPL_SOURCE_DIR "@IPPL_SOURCE_DIR@"

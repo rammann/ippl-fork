@@ -11,13 +11,6 @@ NUM_PROCESSORS=$1
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Step 1: Run the build script
-echo "Running the build script..."
-"$SCRIPT_DIR/build.sh" || {
-    echo "Build failed. Exiting pipeline."
-    exit 1
-}
-
 # Step 2: Run the experiment script
 echo "Running the experiment with $NUM_PROCESSORS processors..."
 "$SCRIPT_DIR/experiment.sh" "$NUM_PROCESSORS" || {

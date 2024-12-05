@@ -13,9 +13,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEST_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)/build/test/orthotree"
 TEST_EXE="OrthoTreeTest"
 
-# Run the build script
-"$SCRIPT_DIR/build.sh" || exit 1
-
 # Navigate to the test directory
 cd "$TEST_DIR" || exit 1
 
