@@ -38,12 +38,7 @@ namespace ippl {
         octants = linearise_octants(octants);
 
         Kokkos::vector<size_t> weights(octants.size(), 1);
-
         octants = partition(octants, weights);
-
-        if (octants.size() == 0) {
-            throw std::runtime_error("SIZE IS ZERO HOW THE FUCK???");
-        }
 
         morton_code first_rank0;
         if (world_rank == 0) {
@@ -74,12 +69,9 @@ namespace ippl {
             // do we need a status check here or not?
             octants.push_back(buff);
         }
-        Comm->barrier();
-        if (world_rank == 0) {
-            LOG << "got here 1" << endl;
-        }
 
         Kokkos::vector<morton_code> R;
+
         // rank 0 works differently, as we need to 'simulate' push_front
         if (world_rank == 0) {
             R.push_back(first_rank0);
@@ -90,9 +82,10 @@ namespace ippl {
 
         Comm->barrier();
         if (world_rank == 0) {
-            LOG << "got here 2" << endl;
+            LOG << "GOT HERE" << endl;
         }
 
+        // currently a crash somewhere in this call stack
         const size_t n = octants.size();
         for (size_t i = 0; i < n - 1; ++i) {
             R.push_back(octants[i]);
@@ -103,14 +96,13 @@ namespace ippl {
 
         Comm->barrier();
         if (world_rank == 0) {
-            LOG << "got here 3" << endl;
+            LOG << "DIDNT GET HERE" << endl;
         }
 
         if (world_rank == world_size - 1) {
             R.push_back(octants[n - 1]);
         }
 
-        logger << "finished" << endl;
         END_FUNC;
         return R;
     }
