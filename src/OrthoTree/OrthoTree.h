@@ -264,6 +264,7 @@ namespace ippl {
         Kokkos::vector<size_t> get_num_particles_in_octants_seqential(
             const Kokkos::vector<morton_code>& octants);
 
+#pragma region print_helpers
         std::ostream& print_octant(std::ostream& os, morton_code octant) {
             const grid_coordinate grid = morton_helper.decode(octant);
             const auto bounds          = bounds_t::bounds_from_grid_coord(
@@ -273,10 +274,6 @@ namespace ippl {
         }
 
         std::ostream& print_octant_list(std::ostream& os, const octant_list_t& octant_list) {
-            // print root bounds:
-            // os << morton_code(0) << " " << root_bounds_m.get_min() << " " <<
-            // root_bounds_m.get_max() << std::endl;
-
             for (morton_code octant : octant_list) {
                 print_octant(os, octant);
                 os << std::endl;
@@ -288,7 +285,6 @@ namespace ippl {
         std::ostream& print_particles(std::ostream& os, particle_t const& particles) {
             for (size_t i = 0; i < n_particles_m; ++i) {
                 os << i << " " << particles.R(i) << std::endl;
-                // std::cout << i << " " << particles.R(i) << std::endl;
             }
 
             return os;
@@ -296,7 +292,7 @@ namespace ippl {
 
         void particles_to_file(particle_t const& particles) {
             std::string outputPath =
-                "../../../src/OrthoTree/output/particles" + std::to_string(world_rank) + ".txt";
+                "../../../src/OrthoTree/output/particles" + std::to_string(Comm->rank()) + ".txt";
 
             std::ofstream file(outputPath);
             print_particles(file, particles);
@@ -306,7 +302,7 @@ namespace ippl {
 
         void octant_to_file(const octant_list_t& octants) {
             std::string outputPath =
-                "../../../src/OrthoTree/output/octants" + std::to_string(world_rank) + ".txt";
+                "../../../src/OrthoTree/output/octants" + std::to_string(Comm->rank()) + ".txt";
 
             std::ofstream file(outputPath);
             print_octant_list(file, octants);
@@ -314,6 +310,7 @@ namespace ippl {
             file.close();
         }
     };
+#pragma endregion  // print_helpers
 
 } // namespace ippl
 
