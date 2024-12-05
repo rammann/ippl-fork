@@ -3,6 +3,7 @@
 
 #include <Kokkos_Pair.hpp>
 #include <Kokkos_Vector.hpp>
+#include <fstream>
 #include <vector>
 
 #include "OrthoTreeTypes.h"
@@ -264,7 +265,7 @@ namespace ippl {
 
         void particles_to_file(particle_t const& particles) {
             std::string outputPath =
-                "../../../src/OrthoTree/output/particles" + std::to_string(Comm->rank()) + ".txt";
+                "../src/OrthoTree/output/particles" + std::to_string(Comm->rank()) + ".txt";
 
             std::ofstream file(outputPath);
             print_particles(file, particles);
@@ -274,7 +275,7 @@ namespace ippl {
 
         void octant_to_file(const Kokkos::vector<morton_code>& octants) {
             std::string outputPath =
-                "../../../src/OrthoTree/output/octants" + std::to_string(Comm->rank()) + ".txt";
+                "../src/OrthoTree/output/octants" + std::to_string(Comm->rank()) + ".txt";
 
             std::ofstream file(outputPath);
             print_octant_list(file, octants);

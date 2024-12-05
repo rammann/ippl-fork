@@ -13,7 +13,7 @@ int main(int argc, char* argv[])
 {
     ippl::initialize(argc, argv);
     {
-        static constexpr size_t Dim = 3;
+        static constexpr size_t Dim = 2;
         const size_t max_particles  = 100;
         const size_t max_depth      = 5;
         const size_t num_particles  = 1000;  // per processor
@@ -21,9 +21,9 @@ int main(int argc, char* argv[])
         const auto MIN_BOUND = 0.0;
         const auto MAX_BOUND = 1.0;
 
-        ippl::OrthoTree<Dim> tree(max_depth, max_particles,
-                                  ippl::BoundingBox<Dim>({MIN_BOUND, MIN_BOUND, MIN_BOUND},
-                                                         {MAX_BOUND, MAX_BOUND, MAX_BOUND}));
+        ippl::OrthoTree<Dim> tree(
+            max_depth, max_particles,
+            ippl::BoundingBox<Dim>({MIN_BOUND, MIN_BOUND}, {MAX_BOUND, MAX_BOUND}));
 
         typedef ippl::ParticleSpatialLayout<double, Dim> playout_type;
         typedef ippl::OrthoTreeParticle<playout_type> bunch_type;
@@ -45,7 +45,8 @@ int main(int argc, char* argv[])
         // typename bunch_type::rho_container_type::HostMirror RHO_host   =
         // bunch.rho.getHostMirror();
         for (unsigned int i = 0; i < num_particles; ++i) {
-            R_host(i) = ippl::Vector<double, Dim>{unif(eng), unif(eng), unif(eng)};
+            // R_host(i) = ippl::Vector<double, Dim>{unif(eng), unif(eng), unif(eng)};
+            R_host(i) = ippl::Vector<double, Dim>{unif(eng), unif(eng)};
             //  RHO_host(i) = 0;
         }
 

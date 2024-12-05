@@ -152,13 +152,19 @@ namespace ippl {
         const morton_code lower_bound_target = octant;
         const morton_code upper_bound_target = octant + morton_helper.get_step_size(octant);
 
-        const size_t lower_bound_idx = getAidList_lowerBound(lower_bound_target);
-        const size_t upper_bound_idx = getAidList_upperBound(upper_bound_target);
+        auto lower_bound_it =
+            std::lower_bound(this->aid_list.begin(), this->aid_list.end(), lower_bound_target,
+                             [](const auto& pair, const morton_code& val) {
+                                 return pair.first < val;
+                             });
 
-        assert(lower_bound_idx <= upper_bound_idx
-               && "lower_bound_idx cant be larger than upper_bound_idx");
+        auto upper_bound_it =
+            std::upper_bound(this->aid_list.begin(), this->aid_list.end(), upper_bound_target,
+                             [](const morton_code& val, const auto& pair) {
+                                 return val < pair.first;
+                             });
 
-        return upper_bound_idx - lower_bound_idx;
+        return static_cast<size_t>(upper_bound_it - lower_bound_it);
     }
 
     template <size_t Dim>
@@ -224,13 +230,12 @@ namespace ippl {
                                      + " HAS NOT BEEN INITIALISED!");
         }
 
-        auto lower_bound_idx =
-            std::lower_bound(this->aid_list.begin(), this->aid_list.end(), octant,
-                             [](const auto& pair, const morton_code& val) {
-                                 return pair.first < val;
-                             });
+        auto lower_bound_it = std::lower_bound(this->aid_list.begin(), this->aid_list.end(), octant,
+                                               [](const auto& pair, const morton_code& val) {
+                                                   return pair.first < val;
+                                               });
 
-        return static_cast<size_t>(lower_bound_idx - this->aid_list.begin());
+        return static_cast<size_t>(lower_bound_it - this->aid_list.begin());
     }
 
     template <size_t Dim>
@@ -241,13 +246,12 @@ namespace ippl {
                                      + " HAS NOT BEEN INITIALISED!");
         }
 
-        auto upper_bound_idx =
-            std::upper_bound(this->aid_list.begin(), this->aid_list.end(), octant,
-                             [](const morton_code& val, const auto& pair) {
-                                 return val < pair.first;
-                             });
+        auto upper_bound_it = std::upper_bound(this->aid_list.begin(), this->aid_list.end(), octant,
+                                               [](const morton_code& val, const auto& pair) {
+                                                   return val < pair.first;
+                                               });
 
-        return static_cast<size_t>(upper_bound_idx - this->aid_list.begin());
+        return static_cast<size_t>(upper_bound_it - this->aid_list.begin());
     }
 #pragma endregion  // helpers
 }  // namespace ippl

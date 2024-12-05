@@ -215,22 +215,36 @@ namespace ippl {
 
                 LOG << "received min/max octant from " << rank << endl;
 
-                const size_t lower_bound_idx = getAidList_lowerBound(
-                    morton_helper.get_deepest_first_descendant(octant_buffer.front()));
+                // const size_t lower_bound_idx = getAidList_lowerBound(
+                // morton_helper.get_deepest_first_descendant(octant_buffer.front()));
 
-                const size_t upper_bound_idx = getAidList_lowerBound(
-                    morton_helper.get_deepest_last_descendant(octant_buffer.back()));
+                // const size_t upper_bound_idx =
+                // getAidList_lowerBound(morton_helper.get_deepest_last_descendant(octant_buffer.back()));
+
+                auto lower_bound_it = std::lower_bound(
+                    this->aid_list.begin(), this->aid_list.end(),
+                    morton_helper.get_deepest_first_descendant(octant_buffer.front()),
+                    [](const auto& pair, const morton_code& val) {
+                        return pair.first < val;
+                    });
+
+                auto upper_bound_it = std::upper_bound(
+                    this->aid_list.begin(), this->aid_list.end(),
+                    morton_helper.get_deepest_last_descendant(octant_buffer.back()),
+                    [](const morton_code& val, const auto& pair) {
+                        return val < pair.first;
+                    });
 
                 // send size to rank
-                size_t size_buff = static_cast<size_t>(upper_bound_idx - lower_bound_idx);
+                size_t size_buff = static_cast<size_t>(upper_bound_it - lower_bound_it);
                 Comm->send(size_buff, 1, rank, 0);
                 LOG << "sent size to " << rank << endl;
 
                 octant_buffer.clear();
                 id_buffer.clear();
-                for (size_t i = lower_bound_idx; i < upper_bound_idx; ++i) {
-                    octant_buffer.push_back(this->aid_list[i].first);
-                    id_buffer.push_back(this->aid_list[i].second);
+                for (auto it = lower_bound_it; it != upper_bound_it; ++it) {
+                    octant_buffer.push_back(it->first);
+                    id_buffer.push_back(it->second);
                 }
 
                 // send octantts
@@ -242,15 +256,29 @@ namespace ippl {
             }
 
             // REDUCING OWN AID LIST (RANK 0) TODO: MAYBE REMOVE THIS?
-            const size_t lower_bound_idx =
-                getAidList_lowerBound(morton_helper.get_deepest_first_descendant(min_octant));
+            // const size_t lower_bound_idx =
+            // getAidList_lowerBound(morton_helper.get_deepest_first_descendant(min_octant));
 
-            const size_t upper_bound_idx =
-                getAidList_lowerBound(morton_helper.get_deepest_last_descendant(max_octant));
+            // const size_t upper_bound_idx =
+            // getAidList_lowerBound(morton_helper.get_deepest_last_descendant(max_octant));
+
+            auto lower_bound_it =
+                std::lower_bound(this->aid_list.begin(), this->aid_list.end(),
+                                 morton_helper.get_deepest_first_descendant(min_octant),
+                                 [](const auto& pair, const morton_code& val) {
+                                     return pair.first < val;
+                                 });
+
+            auto upper_bound_it =
+                std::upper_bound(this->aid_list.begin(), this->aid_list.end(),
+                                 morton_helper.get_deepest_last_descendant(max_octant),
+                                 [](const morton_code& val, const auto& pair) {
+                                     return val < pair.first;
+                                 });
 
             aid_list_t own_aid_list;
-            for (size_t i = lower_bound_idx; i < upper_bound_idx; ++i) {
-                own_aid_list.push_back(this->aid_list[i]);
+            for (auto it = lower_bound_it; it != upper_bound_it; ++it) {
+                own_aid_list.push_back(*it);
             }
 
             this->aid_list = own_aid_list;
