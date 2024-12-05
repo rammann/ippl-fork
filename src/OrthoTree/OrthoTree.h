@@ -10,11 +10,13 @@
 
 #include "OrthoTreeParticle.h"
 #include "helpers/BoundingBox.h"
+#include "helpers/Config.h.in"
 #include "helpers/MortonHelper.h"
 
 namespace ippl {
 
-    // this is defined outside of Types.h on purpose, as this is likely to change in the finalised implementation
+    // this is defined outside of Types.h on purpose, as this is likely to change in the finalised
+    // implementation
     template <size_t Dim>
     using particle_type_template = OrthoTreeParticle<ippl::ParticleSpatialLayout<double, Dim>>;
 
@@ -41,8 +43,8 @@ namespace ippl {
     class OrthoTree {
         using real_coordinate = real_coordinate_template<Dim>;
         using grid_coordinate = grid_coordinate_template<Dim>;
-        using particle_t = particle_type_template<Dim>;
-        using bounds_t = BoundingBox<Dim>;
+        using particle_t      = particle_type_template<Dim>;
+        using bounds_t        = BoundingBox<Dim>;
 
         using aid_list_t = Kokkos::vector<Kokkos::pair<morton_code, size_t>>;
 
@@ -59,7 +61,8 @@ namespace ippl {
 
         size_t n_particles;
 
-        // this list should not be edited, we will probably need it if we implement the tree update as well
+        // this list should not be edited, we will probably need it if we implement the tree update
+        // as well
         aid_list_t aid_list;
 
         int world_rank;
@@ -71,8 +74,8 @@ namespace ippl {
         OrthoTree(size_t max_depth, size_t max_particles_per_node, const bounds_t& root_bounds);
 
         /**
-         * @brief This is the most basic way to build a tree. Its inefficien, but it (should) be correct.
-         * Can be used to compare against parallel implementations later on.
+         * @brief This is the most basic way to build a tree. Its inefficien, but it (should) be
+         * correct. Can be used to compare against parallel implementations later on.
          *
          * @param particles An 'object of arrays' of particles (google it)
          */
@@ -193,7 +196,10 @@ namespace ippl {
             const Kokkos::vector<morton_code>& octants);
 
         // setter for aid list also adapts n_particles
-        void set_aid_list(const aid_list_t& aid_list) {this->aid_list = aid_list; n_particles = aid_list.size();}
+        void set_aid_list(const aid_list_t& aid_list) {
+            this->aid_list = aid_list;
+            n_particles    = aid_list.size();
+        }
 
         Kokkos::View<morton_code*> build_tree_from_octants(
             const Kokkos::vector<morton_code>& octants);
@@ -237,6 +243,7 @@ namespace ippl {
             const Kokkos::vector<morton_code>& octants);
 
 #pragma region print_helpers
+
         std::ostream& print_octant(std::ostream& os, morton_code octant) {
             const grid_coordinate grid = morton_helper.decode(octant);
             const auto bounds          = bounds_t::bounds_from_grid_coord(
@@ -264,8 +271,9 @@ namespace ippl {
         }
 
         void particles_to_file(particle_t const& particles) {
-            std::string outputPath =
-                "../src/OrthoTree/output/particles" + std::to_string(Comm->rank()) + ".txt";
+            std::string outputPath = std::string(IPPL_SOURCE_DIR)
+                                     + "/src/OrthoTree/scripts/output/particles"
+                                     + std::to_string(Comm->rank()) + ".txt";
 
             std::ofstream file(outputPath);
             print_particles(file, particles);
@@ -274,8 +282,11 @@ namespace ippl {
         }
 
         void octant_to_file(const Kokkos::vector<morton_code>& octants) {
-            std::string outputPath =
-                "../src/OrthoTree/output/octants" + std::to_string(Comm->rank()) + ".txt";
+            std::string outputPath = std::string(IPPL_SOURCE_DIR)
+                                     + "/src/OrthoTree/scripts/output/octants"
+                                     + std::to_string(Comm->rank()) + ".txt";
+
+            std::cerr << "SOURCE DIR IS: " << IPPL_SOURCE_DIR << std::endl;
 
             std::ofstream file(outputPath);
             print_octant_list(file, octants);
@@ -285,7 +296,7 @@ namespace ippl {
     };
 #pragma endregion  // print_helpers
 
-} // namespace ippl
+}  // namespace ippl
 
 #include "OrthoTree.hpp"
 
