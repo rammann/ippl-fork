@@ -218,5 +218,11 @@ namespace ippl {
 } // namespace ippl
 
 #include "OrthoTree.hpp"
+#include "paralell_construction/algo1.hpp"
+#include "paralell_construction/algo2.hpp"
+#include "paralell_construction/algo3.hpp"
+#include "paralell_construction/algo4.hpp"
+#include "paralell_construction/algo5.hpp"
+#include "paralell_construction/algo8.hpp"
 
 #endif // ORTHOTREE_GUARD
