@@ -1,13 +1,13 @@
 #ifndef ORTHO_TREE_BOUNDS_GUARD
 #define ORTHO_TREE_BOUNDS_GUARD
 
-#include "OrthoTreeTypes.h"
+#include "OrthoTree/OrthoTreeTypes.h"
 
 namespace ippl {
 
     /**
-     * @brief This class manages bounds of our domain. As i understand it we only care about the root bounds.
-     * Most of this class is hence not used, but its nice to have.
+     * @brief This class manages bounds of our domain. As i understand it we only care about the
+     * root bounds. Most of this class is hence not used, but its nice to have.
      *
      * Can also be used to convert a grid coordinate back to a real valued BoundingBox.
      *
@@ -21,7 +21,6 @@ namespace ippl {
         const real_coordinate max_m;
 
     public:
-
         /**
          * @brief Construct a new BoundingBox with coordinates {0},{0} in R^Dim
          */
@@ -31,8 +30,8 @@ namespace ippl {
          * @brief Construct a new BoundingBox with fixed coordinates
          */
         BoundingBox(real_coordinate min, real_coordinate max)
-            : min_m(min), max_m(max)
-        { }
+            : min_m(min)
+            , max_m(max) {}
 
         real_coordinate get_min() const { return min_m; }
         real_coordinate get_max() const { return max_m; }
@@ -69,12 +68,13 @@ namespace ippl {
          * @param max_depth The max depth of our tree
          * @return BoundingBox
          */
-        static BoundingBox bounds_from_grid_coord(const BoundingBox& root_bounds, const grid_coordinate& grid_coord, const size_t depth, const size_t max_depth);
-
+        static BoundingBox bounds_from_grid_coord(const BoundingBox& root_bounds,
+                                                  const grid_coordinate& grid_coord,
+                                                  const size_t depth, const size_t max_depth);
     };
 
-} // namespace ippl
+}  // namespace ippl
 
 #include "BoundingBox.hpp"
 
-#endif // ORTHO_TREE_BOUNDS_GUARD
+#endif  // ORTHO_TREE_BOUNDS_GUARD

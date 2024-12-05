@@ -1,13 +1,12 @@
 //
 // unit test of morton_codes.h
 
-#include "gtest/gtest.h"
-
-#include "OrthoTree/MortonHelper.h"
-
 #include <algorithm>
-#include <cstdint>
 #include <bitset>
+#include <cstdint>
+
+#include "OrthoTree/helpers/MortonHelper.h"
+#include "gtest/gtest.h"
 
 using namespace ippl;
 

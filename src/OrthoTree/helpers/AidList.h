@@ -1,7 +1,7 @@
 #ifndef ORTHOTREE_GUARD
 #define ORTHOTREE_GUARD
 
-#include "MortonHelper.h"
+#include "OrthoTree/helpers/MortonHelper.h"
 
 namespace ippl {
 
