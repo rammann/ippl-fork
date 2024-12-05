@@ -1,13 +1,13 @@
 #include "Ippl.h"
-#include <Kokkos_Vector.hpp>
+
 #include <Kokkos_UnorderedMap.hpp>
-
+#include <Kokkos_Vector.hpp>
 #include <random>
+
 #include "Utility/ParameterList.h"
-#include "OrthoTree/OrthoTree.h"
-#include "OrthoTree/BoundingBox.h"
 
-#include <random>
+#include "OrthoTree/OrthoTree.h"
+#include "OrthoTree/helpers/BoundingBox.h"
 
 int main(int argc, char* argv[])
 {

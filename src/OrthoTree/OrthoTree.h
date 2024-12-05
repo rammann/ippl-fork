@@ -176,6 +176,38 @@ namespace ippl {
          */
         Kokkos::vector<Kokkos::pair<morton_code, Kokkos::vector<size_t>>> get_tree() const;
 
+        size_t getAidList_lowerBound(morton_code octant) {
+            if (this->aid_list.size() == 0) {
+                std::cerr << "AID LIST ON RANK " << Comm->rank() << " HAS NOT BEEN INITIALISED!";
+                throw std::runtime_error("AID LIST ON RANK " + std::to_string(Comm->rank())
+                                         + " HAS NOT BEEN INITIALISED!");
+            }
+
+            auto lower_bound_idx =
+                std::lower_bound(this->aid_list.begin(), this->aid_list.end(), octant,
+                                 [](const auto& pair, const morton_code& val) {
+                                     return pair.first < val;
+                                 });
+
+            return static_cast<size_t>(lower_bound_idx - this->aid_list.begin());
+        }
+
+        size_t getAidList_upperBound(morton_code octant) {
+            if (this->aid_list.size() == 0) {
+                std::cerr << "AID LIST ON RANK " << Comm->rank() << " HAS NOT BEEN INITIALISED!";
+                throw std::runtime_error("AID LIST ON RANK " + std::to_string(Comm->rank())
+                                         + " HAS NOT BEEN INITIALISED!");
+            }
+
+            auto upper_bound_idx =
+                std::upper_bound(this->aid_list.begin(), this->aid_list.end(), octant,
+                                 [](const morton_code& val, const auto& pair) {
+                                     return val < pair.first;
+                                 });
+
+            return static_cast<size_t>(upper_bound_idx - this->aid_list.begin());
+        }
+
 #pragma endregion  // helpers
 
         /*

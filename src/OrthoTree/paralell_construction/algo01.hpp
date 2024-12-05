@@ -211,31 +211,22 @@ namespace ippl {
 
                 LOG << "received min/max octant from " << rank << endl;
 
-                // get size of range in aid list
-                auto lower_bound_idx =
-                    std::lower_bound(aid_list.begin(), aid_list.end(), octant_buffer.front(),
-                                     [](const auto& pair, const morton_code& val) {
-                                         return pair.first < val;
-                                     });
+                const size_t lower_bound_idx = getAidList_lowerBound(
+                    morton_helper.get_deepest_first_descendant(octant_buffer.front()));
 
-                // apparently (gpt) using lower bound in both is better and more consistent
-                auto upper_bound_idx =
-                    std::lower_bound(aid_list.begin(), aid_list.end(), octant_buffer.back(),
-                                     [](const auto& pair, const morton_code& val) {
-                                         return pair.first < val;
-                                     });
-
-                size_t size_buff = static_cast<size_t>(upper_bound_idx - lower_bound_idx);
+                const size_t upper_bound_idx = getAidList_lowerBound(
+                    morton_helper.get_deepest_last_descendant(octant_buffer.back()));
 
                 // send size to rank
+                size_t size_buff = static_cast<size_t>(upper_bound_idx - lower_bound_idx);
                 Comm->send(size_buff, 1, rank, 0);
                 LOG << "sent size to " << rank << endl;
 
                 octant_buffer.clear();
                 id_buffer.clear();
-                for (auto it = lower_bound_idx; it != upper_bound_idx; ++it) {
-                    octant_buffer.push_back(it->first);
-                    id_buffer.push_back(it->second);
+                for (size_t i = lower_bound_idx; i < upper_bound_idx; ++i) {
+                    octant_buffer.push_back(this->aid_list[i].first);
+                    id_buffer.push_back(this->aid_list[i].second);
                 }
 
                 // send octantts
@@ -246,34 +237,25 @@ namespace ippl {
                 LOG << "sent buffers to " << rank << endl;
             }
 
-            // REDUCING OWN AID LIST (RANK 0) TODO: REMOVE THIS SHIT
+            // REDUCING OWN AID LIST (RANK 0) TODO: MAYBE REMOVE THIS?
+            const size_t lower_bound_idx =
+                getAidList_lowerBound(morton_helper.get_deepest_first_descendant(min_octant));
 
-            auto lower_bound_idx =
-                std::lower_bound(aid_list.begin(), aid_list.end(),
-                                 morton_helper.get_deepest_first_descendant(min_octant),
-                                 [](const auto& pair, const morton_code& val) {
-                                     return pair.first < val;
-                                 });
-
-            // apparently (gpt) using lower bound in both is better and more consistent
-            auto upper_bound_idx =
-                std::lower_bound(aid_list.begin(), aid_list.end(),
-                                 morton_helper.get_deepest_last_descendant(max_octant),
-                                 [](const auto& pair, const morton_code& val) {
-                                     return pair.first < val;
-                                 });
+            const size_t upper_bound_idx =
+                getAidList_lowerBound(morton_helper.get_deepest_last_descendant(max_octant));
 
             aid_list_t own_aid_list;
-            for (auto it = lower_bound_idx; it != upper_bound_idx; ++it) {
-                own_aid_list.push_back(*it);
+            for (size_t i = lower_bound_idx; i < upper_bound_idx; ++i) {
+                own_aid_list.push_back(this->aid_list[i]);
             }
+
             this->aid_list = own_aid_list;
 
         } else {
             // send own min/max octants
             octant_buffer.clear();
-            octant_buffer.push_back(morton_helper.get_deepest_first_descendant(min_octant));
-            octant_buffer.push_back(morton_helper.get_deepest_last_descendant(max_octant));
+            octant_buffer.push_back(min_octant);
+            octant_buffer.push_back(max_octant);
             Comm->send(*octant_buffer.data(), 2, 0, 0);
 
             LOG << "sent min/max octants" << endl;

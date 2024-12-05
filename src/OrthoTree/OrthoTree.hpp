@@ -152,20 +152,13 @@ namespace ippl {
         const morton_code lower_bound_target = octant;
         const morton_code upper_bound_target = octant + morton_helper.get_step_size(octant);
 
-        auto lower_bound_idx =
-            std::lower_bound(aid_list.begin(), aid_list.end(), lower_bound_target,
-                             [](const auto& pair, const morton_code& val) {
-                                 return pair.first < val;
-                             });
+        const size_t lower_bound_idx = getAidList_lowerBound(lower_bound_target);
+        const size_t upper_bound_idx = getAidList_upperBound(upper_bound_target);
 
-        // apparently (gpt) using lower bound in both is better and more consistent
-        auto upper_bound_idx =
-            std::lower_bound(aid_list.begin(), aid_list.end(), upper_bound_target,
-                             [](const auto& pair, const morton_code& val) {
-                                 return pair.first < val;
-                             });
+        assert(lower_bound_idx <= upper_bound_idx
+               && "lower_bound_idx cant be larger than upper_bound_idx");
 
-        return static_cast<size_t>(upper_bound_idx - lower_bound_idx);
+        return upper_bound_idx - lower_bound_idx;
     }
 
     template <size_t Dim>
@@ -222,4 +215,39 @@ namespace ippl {
         return num_particles;
     }
 
+#pragma region helpers
+    template <size_t Dim>
+    size_t OrthoTree<Dim>::getAidList_lowerBound(morton_code octant) {
+        if (this->aid_list.size() == 0) {
+            std::cerr << "AID LIST ON RANK " << Comm->rank() << " HAS NOT BEEN INITIALISED!";
+            throw std::runtime_error("AID LIST ON RANK " + std::to_string(Comm->rank())
+                                     + " HAS NOT BEEN INITIALISED!");
+        }
+
+        auto lower_bound_idx =
+            std::lower_bound(this->aid_list.begin(), this->aid_list.end(), octant,
+                             [](const auto& pair, const morton_code& val) {
+                                 return pair.first < val;
+                             });
+
+        return static_cast<size_t>(lower_bound_idx - this->aid_list.begin());
+    }
+
+    template <size_t Dim>
+    size_t OrthoTree<Dim>::getAidList_upperBound(morton_code octant) {
+        if (this->aid_list.size() == 0) {
+            std::cerr << "AID LIST ON RANK " << Comm->rank() << " HAS NOT BEEN INITIALISED!";
+            throw std::runtime_error("AID LIST ON RANK " + std::to_string(Comm->rank())
+                                     + " HAS NOT BEEN INITIALISED!");
+        }
+
+        auto upper_bound_idx =
+            std::upper_bound(this->aid_list.begin(), this->aid_list.end(), octant,
+                             [](const morton_code& val, const auto& pair) {
+                                 return val < pair.first;
+                             });
+
+        return static_cast<size_t>(upper_bound_idx - this->aid_list.begin());
+    }
+#pragma endregion  // helpers
 }  // namespace ippl
