@@ -74,12 +74,14 @@ namespace ippl {
     template <size_t Dim>
     inline vector_t<morton_code> Morton<Dim>::get_children(morton_code code) const
     {
+        /*
         std::string error = std::string("RANK: ") + std::to_string(Comm->rank()).c_str()
                             + std::string(" can't get the first child at the deepest level");
         if (get_depth(code) >= max_depth) {
             std::cerr << "ERROR HERE:    " << error << std::endl;
         }
         assert(get_depth(code) < max_depth && "can't get the first child at the deepest level");
+        */
 
         const morton_code first_child = get_first_child(code);
 
@@ -126,24 +128,28 @@ namespace ippl {
     template <size_t Dim>
     inline morton_code Morton<Dim>::get_first_child(morton_code code) const
     {
+        /*
         std::string error = std::string("RANK: ") + std::to_string(Comm->rank()).c_str()
                             + std::string(" can't get the first child at the deepest level");
         if (get_depth(code) >= max_depth) {
             std::cerr << "ERROR HERE:    " << error << std::endl;
         }
         assert(get_depth(code) < max_depth && "can't get the first child at the deepest level");
+        */
         return code + 1;
     }
 
     template <size_t Dim>
     inline morton_code Morton<Dim>::get_last_child(morton_code code) const
     {
+        /*
         std::string error = std::string("RANK: ") + std::to_string(Comm->rank()).c_str()
                             + std::string(" can't get the first child at the deepest level");
         if (get_depth(code) >= max_depth) {
             std::cerr << "ERROR HERE:    " << error << std::endl;
             assert(false);
         }
+        */
 
         const morton_code first_child = get_first_child(code);
         const morton_code step = get_step_size(first_child);
@@ -162,8 +168,10 @@ namespace ippl {
     inline morton_code Morton<Dim>::get_last_descendant(morton_code code, const size_t level) const
     {
         const morton_code current_depth = get_depth(code);
+        /*
         assert(level >= current_depth &&
             "can't get descendants at a coarser level than the current node!");
+        */
         const morton_code first_descendant = get_first_descendant(code, level);
         const morton_code step = get_step_size(first_descendant);
 
