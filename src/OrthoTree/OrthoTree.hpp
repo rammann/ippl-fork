@@ -26,13 +26,13 @@ namespace ippl {
 
 #define LOG logger << std::string(stack_depth * 2, ' ') << __func__ << ": "
 
-#define END_FUNC                   \
-    LOG << "FINISHED\n\n" << endl; \
+#define END_FUNC               \
+    LOG << "FINISHED" << endl; \
     --stack_depth
 
 #define START_FUNC \
     ++stack_depth; \
-    LOG << "STARTING\n\n" << endl
+    LOG << "STARTING" << endl
 
     template <size_t Dim>
     Kokkos::View<morton_code*> OrthoTree<Dim>::build_tree_naive(particle_t const& particles) {

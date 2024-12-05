@@ -40,7 +40,6 @@ namespace ippl {
         Kokkos::vector<size_t> weights(octants.size(), 1);
 
         octants = partition(octants, weights);
-        logger << "finished partition" << endl;
 
         if (octants.size() == 0) {
             throw std::runtime_error("SIZE IS ZERO HOW THE FUCK???");
@@ -51,24 +50,14 @@ namespace ippl {
             const morton_code dfd_root = morton_helper.get_deepest_first_descendant(morton_code(0));
             const morton_code A_finest =
                 morton_helper.get_nearest_common_ancestor(dfd_root, octants.front());
-            if (morton_helper.get_depth(A_finest) >= max_depth_m) {
-                std::cerr << "RANK: " << world_rank << " A_FINEST is already at depest level!"
-                          << std::endl;
-                assert(false);
-            }
             const morton_code first_child = morton_helper.get_first_child(A_finest);
+
             // this imitates push_front
             first_rank0 = first_child;
         } else if (world_rank == world_size - 1) {
             const morton_code dld_root = morton_helper.get_deepest_last_descendant(morton_code(0));
             const morton_code A_finest =
                 morton_helper.get_nearest_common_ancestor(dld_root, octants.back());
-
-            if (morton_helper.get_depth(A_finest) >= max_depth_m) {
-                std::cerr << "RANK: " << world_rank << " A_FINEST is already at depest level!"
-                          << std::endl;
-                assert(false);
-            }
             const morton_code last_child = morton_helper.get_last_child(A_finest);
 
             octants.push_back(last_child);
@@ -85,8 +74,10 @@ namespace ippl {
             // do we need a status check here or not?
             octants.push_back(buff);
         }
-
-        logger << "finished send/recv" << endl;
+        Comm->barrier();
+        if (world_rank == 0) {
+            LOG << "got here 1" << endl;
+        }
 
         Kokkos::vector<morton_code> R;
         // rank 0 works differently, as we need to 'simulate' push_front
@@ -97,12 +88,22 @@ namespace ippl {
             }
         }
 
+        Comm->barrier();
+        if (world_rank == 0) {
+            LOG << "got here 2" << endl;
+        }
+
         const size_t n = octants.size();
         for (size_t i = 0; i < n - 1; ++i) {
+            R.push_back(octants[i]);
             for (morton_code elem : complete_region(octants[i], octants[i + 1])) {
                 R.push_back(elem);
             }
-            R.push_back(octants[i]);
+        }
+
+        Comm->barrier();
+        if (world_rank == 0) {
+            LOG << "got here 3" << endl;
         }
 
         if (world_rank == world_size - 1) {
