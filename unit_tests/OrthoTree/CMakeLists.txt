@@ -1,77 +1,46 @@
-file (RELATIVE_PATH _relPath "${CMAKE_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}")
-message (STATUS "Adding unit tests found in ${_relPath}")
+# Get the relative path for better logging
+file(RELATIVE_PATH _relPath "${CMAKE_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}")
+message(STATUS "Adding unit tests found in ${_relPath}")
 
-include_directories (
+# Common include and link directories
+include_directories(
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/..
 )
 
-link_directories (
+link_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${Kokkos_DIR}/..
 )
 
-add_executable (morton_test morton_codes.cpp)
-gtest_discover_tests (morton_test PROPERTIES TEST_DISCOVERY_TIMEOUT 600)
-target_link_libraries (
-    morton_test
-    ippl
-    pthread
-    GTest::gtest_main
-    ${MPI_CXX_LIBRARIES}
-)
+# Helper function to add a test with GTest
+function(add_test_with_gtest target source_file)
+    add_executable(${target} ${source_file})
+    target_link_libraries(${target}
+        ippl
+        pthread
+        GTest::gtest_main
+        ${MPI_CXX_LIBRARIES}
+    )
+    gtest_discover_tests(${target} PROPERTIES TEST_DISCOVERY_TIMEOUT 600)
+endfunction()
 
-add_executable (tree_test ortho_tree.cpp)
-# gtest_discover_tests (tree_test PROPERTIES TEST_DISCOVERY_TIMEOUT 600)
-target_link_libraries (
-    tree_test
-    ippl
-    pthread
-    GTest::gtest_main
-)
+# general tests
+add_test_with_gtest(tree_test ortho_tree.cpp)
 
-add_executable (parallel_tree_test parallel_ortho_tree.cpp)
-target_link_libraries (
-    parallel_tree_test
-    ippl
-    pthread
-    GTest::gtest_main
-    ${MPI_CXX_LIBRARIES}
-)
+# helper tests
+add_test_with_gtest(bounds_test helpers/bounding_box.cpp)
+add_test_with_gtest(morton_test helpers/morton_codes.cpp)
 
-add_executable (bounds_test bounding_box.cpp)
-gtest_discover_tests (tree_test PROPERTIES TEST_DISCOVERY_TIMEOUT 600)
-target_link_libraries (
-    bounds_test
-    ippl
-    pthread
-    GTest::gtest_main
-    ${MPI_CXX_LIBRARIES}
-)
+# paralell construction tests
+add_test_with_gtest(parallel_tree_test paralell_construction/algo5.cpp)
+add_test_with_gtest(linearise_test paralell_construction/algo8.cpp)
+add_test_with_gtest(complete_region_test paralell_construction/algo2.cpp)
 
-add_executable (linearise_test linearise.cpp)
-gtest_discover_tests (linearise_test PROPERTIES TEST_DISCOVERY_TIMEOUT 600)
-target_link_libraries (linearise_test
-    ippl
-    pthread
-    GTest::gtest_main
-    ${MPI_CXX_LIBRARIES}
-)
-
-add_executable (complete_region_test complete_region.cpp)
-gtest_discover_tests (complete_region_test PROPERTIES TEST_DISCOVERY_TIMEOUT 600)
-target_link_libraries (complete_region_test
-    ippl
-    pthread
-    GTest::gtest_main
-    ${MPI_CXX_LIBRARIES}
-)
-
-
-
+# paralell balancing tests
+# TODO: 
 
 # vi: set et ts=4 sw=4 sts=4:
-
 # Local Variables:
 # mode: cmake
 # cmake-tab-width: 4

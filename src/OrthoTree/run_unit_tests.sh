@@ -29,11 +29,19 @@ fi
 # Execute all test executables in the unit test directory with mpiexec
 for test_executable in "$UNIT_TEST_DIR"/*; do
     if [[ -f "$test_executable" && -x "$test_executable" ]]; then
-        echo "Running test with $NUM_PROCESSORS processors: $test_executable"
-        mpiexec -n "$NUM_PROCESSORS" "$test_executable"
+        if [[ "$(basename "$test_executable")" == "parallel_tree_test" ]]; then
+            PROCS=4
+        else
+            PROCS=$NUM_PROCESSORS
+        fi
+
+        echo "Running test with $PROCS processors: $test_executable"
+        mpiexec -n "$PROCS" "$test_executable"
+
         if [[ $? -ne 0 ]]; then
             echo "Test $test_executable failed."
             exit 1
         fi
     fi
 done
+

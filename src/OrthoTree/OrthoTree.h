@@ -1,15 +1,17 @@
 #ifndef ORTHOTREE_GUARD
 #define ORTHOTREE_GUARD
 
-#include "OrthoTreeTypes.h"
-#include "OrthoTreeParticle.h"
-#include "MortonHelper.h"
-#include "BoundingBox.h"
-
-#include <Kokkos_Vector.hpp>
 #include <Kokkos_Pair.hpp>
-
+#include <Kokkos_Vector.hpp>
+#include <fstream>
 #include <vector>
+
+#include "OrthoTreeTypes.h"
+
+#include "OrthoTreeParticle.h"
+#include "helpers/BoundingBox.h"
+#include "helpers/MortonHelper.h"
+
 namespace ippl {
 
     // this is defined outside of Types.h on purpose, as this is likely to change in the finalised implementation
@@ -52,13 +54,20 @@ namespace ippl {
         // as of now the tree is stored only as morton codes, this needs to be discussed as a group
         Kokkos::vector<morton_code> tree_m;
 
+        // NEW TREE TYPE!
+        Kokkos::View<morton_code*> finished_tree;
+
         size_t n_particles;
 
         // this list should not be edited, we will probably need it if we implement the tree update as well
         aid_list_t aid_list;
 
-    public:
+        int world_rank;
+        int world_size;
 
+        Inform logger;
+
+    public:
         OrthoTree(size_t max_depth, size_t max_particles_per_node, const bounds_t& root_bounds);
 
         /**
@@ -67,52 +76,86 @@ namespace ippl {
          *
          * @param particles An 'object of arrays' of particles (google it)
          */
-        void build_tree_naive(particle_t const& particles);
+        Kokkos::View<morton_code*> build_tree_naive(particle_t const& particles);
+
+#pragma region paralell construction
+        /**
+         * ALGO 1
+         *
+         * @brief We take this as an entry function.
+         * Each proc will return its own part of the tree?
+         *
+         * @param particles
+         * @return Kokkos::vector<morton_code>
+         */
+        Kokkos::View<morton_code*> build_tree(particle_t const& particles);
 
         /**
+         * ALGO 2
+         *
+         * @brief sequential construction of a minimal linear octree between two octants
+         *
+         * @param morton codes code_a and code_b of the octants
+         *
+         * @return list of morton codes of minimal linear octree between the two octants
+         **/
+        Kokkos::vector<morton_code> complete_region(morton_code code_a, morton_code code_b);
+
+        /**
+         * ALGO 3
+         *
+         * @brief Implements the logic part of algorithm 3.
+         */
+        Kokkos::vector<morton_code> complete_tree(Kokkos::vector<morton_code>& tree);
+
+        /**
+         * ALGO 4
+         *
+         * @brief algorithm 4 parallel partitioning of octants into large contiguous blocks
+         *
+         * @param unpartitioned octree unpartitioned_tree
+         *
+         * @return block partitioned octree, and unpartitioned_tree is re-distributed
+         **/
+        Kokkos::vector<morton_code> block_partition(morton_code min_octant, morton_code max_octant);
+
+        /**
+         * ALGO 5
          *
          * @brief This function partitions the workload of building the tree across
          * the available mpi ranks.
+         */
+        Kokkos::vector<morton_code> partition(Kokkos::vector<morton_code>& octants,
+                                              Kokkos::vector<size_t>& weights);
+
+        /**
+         * ALGO 8
          *
-         */
-        Kokkos::vector<morton_code> partition(Kokkos::vector<morton_code>& octants, Kokkos::vector<size_t>& weights);
-
-        /**
-         * @brief Returns a vector with morton_codes and lists of particle ids inside this region
-         * This is also not meant to be permanent, but it should suffice for the beginning
-         * @return Kokkos::vector<Kokkos::pair<morton_code, Kokkos::vector<size_t>>>
-         */
-        Kokkos::vector<Kokkos::pair<morton_code, Kokkos::vector<size_t>>> get_tree() const;
-
-        /**
          * @brief Linearises octants by removing ancestors that would cause overlaps
          * @param list of octants - sorted
          * @return list of linearised octants - sorted
          * @warning THIS FUNCTION ASSUMES THAT THE OCTANTS ARE SORTED
          */
-        ippl::vector_t<morton_code> linearise_octants(ippl::vector_t<morton_code> const& octants);
+        Kokkos::vector<morton_code> linearise_octants(Kokkos::vector<morton_code> const& octants);
+#pragma endregion  // paralell construction
 
-        /**
-         * @brief Linearises octants comprising the tree by removing ancestors that would cause overlaps
-         * @return list of linearised octants - sorted
-         * @warning THIS FUNCTION ASSUMES THAT THE TREE IS SORTED
-         */
-        void linearise_tree();
+#pragma region balancing
 
-        /**
-         * @brief Implements the logic part of algorithm 3.
-         *
-         * @warning DOES NOT INCLUDE LINES 1-3 OF THE ALGORITHM
-         *
-         * @param tree sorted distributed list of octants with:
-         *  - removed duplicates (needs to be implemented)
-         *  - linearised (algo 8)
-         *  - workload distributed (algo 5)
-         *
-         * @return ippl::vector_t<morton_code>
-         */
-        Kokkos::vector<morton_code> complete_tree(Kokkos::vector<morton_code>& tree);
+        Kokkos::View<morton_code*> algo6(morton_code octant_N, morton_code descendant_L);
 
+        Kokkos::View<morton_code*> algo7(morton_code octant_N,
+                                         Kokkos::View<morton_code*> partial_descendants_L);
+
+        Kokkos::View<morton_code*> algo9(Kokkos::View<morton_code*> sorted_incomplete_tree_L);
+
+        Kokkos::View<morton_code*> algo10(morton_code octant_N,
+                                          Kokkos::View<morton_code*> partial_descendants_L);
+
+        Kokkos::View<morton_code*> algo11(Kokkos::View<morton_code*> distributed_complete_tree_L);
+
+#pragma endregion  // balancing
+
+#pragma region helpers
         /**
          * @brief Compares the following aspects of the trees:
          * - n_particles
@@ -128,13 +171,16 @@ namespace ippl {
         bool operator==(const OrthoTree& other);
 
         /**
-          * @brief algorithm 2 sequential construction of a minimal linear octree between two octants
-          *
-          * @param morton codes code_a and code_b of the octants
-          *
-          * @return list of morton codes of minimal linear octree between the two octants
-          **/
-        ippl::vector_t<morton_code> complete_region(morton_code code_a, morton_code code_b);
+         * @brief Returns a vector with morton_codes and lists of particle ids inside this region
+         * This is also not meant to be permanent, but it should suffice for the beginning
+         * @return Kokkos::vector<Kokkos::pair<morton_code, Kokkos::vector<size_t>>>
+         */
+        Kokkos::vector<Kokkos::pair<morton_code, Kokkos::vector<size_t>>> get_tree() const;
+
+        size_t getAidList_lowerBound(morton_code octant);
+        size_t getAidList_upperBound(morton_code octant);
+
+#pragma endregion  // helpers
 
         /*
          * @brief Returns the number of particles in the octants, asks rank 0 for the number of
@@ -149,34 +195,21 @@ namespace ippl {
         // setter for aid list also adapts n_particles
         void set_aid_list(const aid_list_t& aid_list) {this->aid_list = aid_list; n_particles = aid_list.size();}
 
+        Kokkos::View<morton_code*> build_tree_from_octants(
+            const Kokkos::vector<morton_code>& octants);
+
+        void init_aid_list_from_octants(morton_code min_octant, morton_code max_octant);
+
+        std::pair<morton_code, morton_code> get_relevant_aid_list(particle_t const& particles);
 
     private:
-
         /**
          * @brief initializes the aid list which has form vec{pair{morton_code, size_t}}
          * will sort the aidlist in ascending morton codes
          *
          * @param particles
          */
-        void initialize_aid_list(particle_t const& particles);
-
-        /**
-          * @brief algorithm 2 sequential construction of a minimal linear octree between two octants
-          *
-          * @param morton codes code_a and code_b of the octants
-          *
-          * @return list of morton codes of minimal linear octree between the two octants
-          **/
-        ippl::vector_t<morton_code> complete_region(morton_code code_a, morton_code code_b); 
-
-        /**
-          * @brief algorithm 4 parallel partitioning of octants into large contiguous blocks
-          *
-          * @param unpartitioned octree unpartitioned_tree
-          *
-          * @return block partitioned octree, and unpartitioned_tree is re-distributed
-          **/
-        Kokkos::vector<morton_code> block_partition(ippl::vector_t<morton_code>& unpartitioned_tree);
+        aid_list_t initialize_aid_list(particle_t const& particles);
 
         /**
          * @brief counts the number of particles covered by the cell decribed by the morton code
@@ -202,10 +235,73 @@ namespace ippl {
          **/
         Kokkos::vector<size_t> get_num_particles_in_octants_seqential(
             const Kokkos::vector<morton_code>& octants);
+
+#pragma region print_helpers
+        std::ostream& print_octant(std::ostream& os, morton_code octant) {
+            const grid_coordinate grid = morton_helper.decode(octant);
+            const auto bounds          = bounds_t::bounds_from_grid_coord(
+                root_bounds_m, grid, morton_helper.get_depth(octant), max_depth_m);
+
+            return os << octant << " " << bounds.get_min() << " " << bounds.get_max();
+        }
+
+        std::ostream& print_octant_list(std::ostream& os,
+                                        const Kokkos::vector<morton_code>& octant_list) {
+            for (morton_code octant : octant_list) {
+                print_octant(os, octant);
+                os << std::endl;
+            }
+
+            return os;
+        }
+
+        std::ostream& print_particles(std::ostream& os, particle_t const& particles) {
+            for (size_t i = 0; i < particles.getLocalNum(); ++i) {
+                os << i << " " << particles.R(i) << std::endl;
+            }
+
+            return os;
+        }
+
+        void particles_to_file(particle_t const& particles) {
+            std::string outputPath =
+                "../src/OrthoTree/output/particles" + std::to_string(Comm->rank()) + ".txt";
+
+            std::ofstream file(outputPath);
+            print_particles(file, particles);
+            file.flush();
+            file.close();
+        }
+
+        void octant_to_file(const Kokkos::vector<morton_code>& octants) {
+            std::string outputPath =
+                "../src/OrthoTree/output/octants" + std::to_string(Comm->rank()) + ".txt";
+
+            std::ofstream file(outputPath);
+            print_octant_list(file, octants);
+            file.flush();
+            file.close();
+        }
     };
+#pragma endregion  // print_helpers
 
 } // namespace ippl
 
 #include "OrthoTree.hpp"
+
+// implementations of construction algos
+#include "paralell_construction/algo01.hpp"
+#include "paralell_construction/algo02.hpp"
+#include "paralell_construction/algo03.hpp"
+#include "paralell_construction/algo04.hpp"
+#include "paralell_construction/algo05.hpp"
+#include "paralell_construction/algo08.hpp"
+
+// implementations of balancing algos
+// #include "balancing/algo06.hpp"
+// #include "balancing/algo07.hpp"
+// #include "balancing/algo09.hpp"
+// #include "balancing/algo10.hpp"
+// #include "balancing/algo11.hpp"
 
 #endif // ORTHOTREE_GUARD
