@@ -18,8 +18,10 @@ namespace ippl {
     Kokkos::vector<morton_code> OrthoTree<Dim>::complete_region(morton_code code_a,
                                                                 morton_code code_b) {
         START_FUNC;
-        std::vector<morton_code> stack =
-            morton_helper.get_children(morton_helper.get_nearest_common_ancestor(code_a, code_b));
+
+        morton_code neares_comm_ancestor =
+            morton_helper.get_nearest_common_ancestor(code_a, code_b);
+        std::vector<morton_code> stack = morton_helper.get_children(neares_comm_ancestor);
 
         Kokkos::vector<morton_code> min_lin_tree;
         while (stack.size() > 0) {
