@@ -1,5 +1,10 @@
 #include "../OrthoTree.h"
 
+/*
+TODO:
+- WRITE TESTS FOR THE FUNCTION
+*/
+
 namespace ippl {
     template <size_t Dim>
     Kokkos::View<morton_code*> OrthoTree<Dim>::build_tree(particle_t const& particles) {
