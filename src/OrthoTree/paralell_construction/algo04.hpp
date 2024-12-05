@@ -38,7 +38,6 @@ namespace ippl {
 
         logger << "C.size()=" << C.size() << endl;
         Kokkos::vector<morton_code> G = complete_tree(C);
-        octant_to_file(G);
         logger << "we now have n_octants = " << G.size() << endl;
 
         Kokkos::vector<size_t> weights = get_num_particles_in_octants_parallel(G);

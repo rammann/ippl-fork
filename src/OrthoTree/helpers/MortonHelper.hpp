@@ -74,6 +74,13 @@ namespace ippl {
     template <size_t Dim>
     inline vector_t<morton_code> Morton<Dim>::get_children(morton_code code) const
     {
+        std::string error = std::string("RANK: ") + std::to_string(Comm->rank()).c_str()
+                            + std::string(" can't get the first child at the deepest level");
+        if (get_depth(code) >= max_depth) {
+            std::cerr << "ERROR HERE:    " << error << std::endl;
+        }
+        assert(get_depth(code) < max_depth && "can't get the first child at the deepest level");
+
         const morton_code first_child = get_first_child(code);
 
         // each level has a distinctive step size between siblings, this can maybe be improved upon
@@ -123,7 +130,6 @@ namespace ippl {
                             + std::string(" can't get the first child at the deepest level");
         if (get_depth(code) >= max_depth) {
             std::cerr << "ERROR HERE:    " << error << std::endl;
-            assert(false);
         }
         assert(get_depth(code) < max_depth && "can't get the first child at the deepest level");
         return code + 1;

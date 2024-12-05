@@ -45,6 +45,8 @@ namespace ippl {
             const morton_code dfd_root = morton_helper.get_deepest_first_descendant(morton_code(0));
             const morton_code A_finest =
                 morton_helper.get_nearest_common_ancestor(dfd_root, octants.front());
+
+            assert(morton_helper.get_depth(A_finest) < max_depth_m);
             const morton_code first_child = morton_helper.get_first_child(A_finest);
 
             // this imitates push_front
@@ -54,7 +56,7 @@ namespace ippl {
             const morton_code A_finest =
                 morton_helper.get_nearest_common_ancestor(dld_root, octants.back());
             const morton_code last_child = morton_helper.get_last_child(A_finest);
-
+            assert(morton_helper.get_depth(A_finest) < max_depth_m);
             octants.push_back(last_child);
         }
 
