@@ -10,10 +10,12 @@ namespace ippl {
      * @brief Baisc idea of a better AidList
      *
      */
+    template <size_t Dim>
     class AidList {
         const size_t world_rank;
         const size_t world_size;
         const size_t max_depth;
+        const Morton<Dim> morton_helper;
 
         Inform logger;
 
@@ -60,7 +62,7 @@ What we need:
     public:
         AidList(size_t max_depth);
 
-        template <size_t Dim, typename PLayout>
+        template <typename PLayout>
         void initialize(const BoundingBox<Dim>& root_bounds, PLayout const& particles);
 
         size_t size() const { return octants.extent(0); }
@@ -123,7 +125,6 @@ What we need:
          * This funciton assumes that all particles have been gathered on the given rank, will throw
          * if they are not.
          */
-        template <size_t Dim>
         void initialize_from_rank(
             size_t max_depth, const BoundingBox<Dim>& root_bounds,
             OrthoTreeParticle<ippl::ParticleSpatialLayout<double, Dim>> const& particles);
@@ -131,7 +132,6 @@ What we need:
         /**
          * @brief Gathers the particles on the rank that calls this function.
          */
-        template <size_t Dim>
         void gatherOnRank(
             OrthoTreeParticle<ippl::ParticleSpatialLayout<double, Dim>> const& particles);
     };

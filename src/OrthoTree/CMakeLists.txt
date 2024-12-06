@@ -1,5 +1,4 @@
 set (_SRCS
-helpers/AidList.cpp
     )
 
 set (_HDRS
