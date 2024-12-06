@@ -262,7 +262,10 @@ TEST(AidListTest, GetReqOctantsTest) {
     const size_t n_particles_per_proc = 100;
 
     auto particles = getParticles<Dim>(n_particles_per_proc, min_bounds, max_bounds);
+
+    // DISABLED FOR NOW, NEED TO FIX LowerBoundTest FIRST
     return;
+
     if (Comm->rank() == 0) {
         for (int i = 0; i < Comm->size(); ++i) {
             ippl::Vector<double, Dim> pos;
@@ -308,6 +311,7 @@ TEST(AidListTest, GetReqOctantsTest) {
         ASSERT_EQ(octant_counter.size(), 4);
     }
 
+    // THIS BLOCK IS WRONG, NEEDS TO BE FIXED AFTER LowerBoundTest IS FIXED
     EXPECT_EQ(min_octant, max_octant);
     std::cerr << "RANK : " << Comm->rank() << " has(min: " << min_octant << ", max: " << max_octant
               << ")" << std::endl;
