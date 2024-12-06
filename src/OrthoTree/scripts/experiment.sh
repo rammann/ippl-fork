@@ -26,7 +26,7 @@ fi
 
 # Run the test executable
 echo "Running test with $NUM_PROCESSORS processors: $TEST_EXE"
-mpiexec -n "$NUM_PROCESSORS" "$TEST_EXE"
+mpiexec -n "$NUM_PROCESSORS" --use-hwthread-cpus "$TEST_EXE"
 
 # Check the test result
 if [[ $? -ne 0 ]]; then

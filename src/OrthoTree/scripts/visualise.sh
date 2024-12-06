@@ -10,6 +10,7 @@ fi
 NUM_PROCESSORS=$1
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+mkdir -p "$SCRIPT_DIR/output"
 
 # Step 2: Run the experiment script
 echo "Running the experiment with $NUM_PROCESSORS processors..."
