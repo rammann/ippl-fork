@@ -7,12 +7,8 @@ namespace ippl {
         const BoundingBox<Dim>& root_bounds,
         OrthoTreeParticle<ippl::ParticleSpatialLayout<double, Dim>> const& particles) {
         if (world_rank == 0) {
-            if (!is_gathered<Dim>(particles)) {
-                throw std::runtime_error("You have not gathered your particles on rank0 yet!");
-            } else {
-                initialize_from_rank<Dim>(max_depth, root_bounds, particles);
-                logger << "Aid list is initialized with size: " << size() << endl;
-            }
+            initialize_from_rank<Dim>(max_depth, root_bounds, particles);
+            logger << "Aid list is initialized with size: " << size() << endl;
         }
     }
 
@@ -26,13 +22,9 @@ namespace ippl {
     void AidList::initialize_from_rank(
         size_t max_depth, const BoundingBox<Dim>& root_bounds,
         OrthoTreeParticle<ippl::ParticleSpatialLayout<double, Dim>> const& particles) {
-        if (world_rank != 0) {
-            return;
-        }
-
-        if (particles.getLocalNum() != particles.getTotalNum()) {
+        if (!this->is_gathered(particles)) {
             throw std::runtime_error(
-                "can only initialize if all particles are gathered on rank 0!");
+                "can only initialize if all particles are gathered on one rank!");
         }
 
         const size_t n_particles               = particles.getLocalNum();
