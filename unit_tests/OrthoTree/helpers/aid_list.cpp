@@ -140,7 +140,67 @@ TEST(AidListTest, CorrectConstructionTest2D) {
     const double max_bounds           = 1.0;
     const size_t n_particles_per_proc = 100;
 
+    auto particles = getParticles<Dim>(n_particles_per_proc, min_bounds, max_bounds);
+
+    if (Comm->rank() == 0) {
+        for (int i = 0; i < Comm->size(); ++i) {
+            ippl::Vector<double, Dim> pos;
+            switch (i) {
+                case 0: {
+                    pos = {min_bounds, min_bounds};
+                } break;
+                case 1: {
+                    pos = {min_bounds, max_bounds};
+                } break;
+                case 2: {
+                    pos = {max_bounds, min_bounds};
+                } break;
+                case 3: {
+                    pos = {max_bounds, max_bounds};
+                } break;
+                default:
+                    break;  // no need to handle, we assert world_size in another test.
+            }
+
+            for (size_t j = 0; j < n_particles_per_proc; ++j) {
+                size_t start_idx           = ((size_t)i * n_particles_per_proc);
+                particles.R(start_idx + j) = pos;
+            }
+        }
+    }
+
+    AidList aid_list(max_depth);
     BoundingBox<Dim> root_bounds({min_bounds, min_bounds}, {max_bounds, max_bounds});
+
+    aid_list.initialize<Dim>(root_bounds, particles);
+
+    if (Comm->rank() == 0) {
+        std::map<morton_code, size_t> octant_counter;
+
+        for (size_t i = 0; i < (size_t)Comm->size() * n_particles_per_proc; ++i) {
+            octant_counter[aid_list.getOctant(i)]++;
+        }
+
+        ASSERT_EQ(octant_counter.size(), 4);
+
+        for (const auto& [octant, count] : octant_counter) {
+            EXPECT_EQ(count, n_particles_per_proc);
+            std::cerr << "OCTANT: " << octant << std::endl;
+        }
+
+        EXPECT_TRUE(octant_counter.contains(0b00001));
+        EXPECT_TRUE(octant_counter.contains(0b01001));
+        EXPECT_TRUE(octant_counter.contains(0b10001));
+        EXPECT_TRUE(octant_counter.contains(0b11001));
+    }
+}
+
+TEST(AidListTest, GetReqOctantsTest) {
+    static constexpr size_t Dim       = 2;
+    const size_t max_depth            = 1;
+    const double min_bounds           = 0.0;
+    const double max_bounds           = 1.0;
+    const size_t n_particles_per_proc = 100;
 
     auto particles = getParticles<Dim>(n_particles_per_proc, min_bounds, max_bounds);
 
@@ -172,18 +232,25 @@ TEST(AidListTest, CorrectConstructionTest2D) {
     }
 
     AidList aid_list(max_depth);
+    BoundingBox<Dim> root_bounds({min_bounds, min_bounds}, {max_bounds, max_bounds});
+
     aid_list.initialize<Dim>(root_bounds, particles);
 
+    auto [min_octant, max_octant] = aid_list.getMinReqOctants();
+
+    EXPECT_EQ(min_octant, max_octant);
+    std::cerr << "RANK : " << Comm->rank() << " has : " << min_octant << std::endl;
     if (Comm->rank() == 0) {
-        std::unordered_map<morton_code, size_t> octant_counter;
-
-        for (size_t i = 0; i < (size_t)Comm->size() * n_particles_per_proc; ++i) {
-            octant_counter[aid_list.getOctant(i)]++;
-            // std::cerr << "OCTANT: " << i << ": " << aid_list.getOctant(i) << std::endl;
-        }
-
-        ASSERT_EQ(octant_counter.size(), 4);
+        EXPECT_EQ(min_octant, 1);
+    } else if (Comm->rank() == 1) {
+        EXPECT_EQ(min_octant, 1);
+    } else if (Comm->rank() == 2) {
+        EXPECT_EQ(min_octant, 9);
+    } else if (Comm->rank() == 3) {
+        EXPECT_EQ(min_octant, 17);
     }
+
+    std::cerr << "PASSED TEST!!!" << std::endl;
 }
 
 int main(int argc, char** argv) {

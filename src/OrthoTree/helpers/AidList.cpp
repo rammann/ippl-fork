@@ -22,13 +22,13 @@ namespace ippl {
 
             Kokkos::parallel_for(
                 "Send min/max octants", world_size - 1, [=, this](const size_t target_rank) {
-                    const size_t start = ((target_rank - 1) * batch_size) + rank_0_size;
+                    const size_t start = ((target_rank + 1) * batch_size) + rank_0_size;
                     const size_t end   = start + batch_size - 1;
 
                     min_max_octants(0) = getOctant(start);
                     min_max_octants(1) = getOctant(end);
 
-                    Comm->send(*min_max_octants.data(), view_size, target_rank, 0);
+                    Comm->send(*min_max_octants.data(), view_size, target_rank + 1, 0);
                 });
 
             // assign min/max for rank 0
@@ -36,7 +36,11 @@ namespace ippl {
             min_max_octants(1) = getOctant(rank_0_size - 1);
         } else {
             mpi::Status status;
-            Comm->recv(min_max_octants.data(), view_size, 0, 0, status);
+            try {
+                Comm->recv(min_max_octants.data(), view_size, 0, 0, status);
+            } catch (IpplException& e) {
+                std::cerr << "ERROR in recv: " << e.what() << std::endl;
+            }
         }
 
         auto host_min_max = Kokkos::create_mirror_view(min_max_octants);

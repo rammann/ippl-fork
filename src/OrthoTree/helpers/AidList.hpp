@@ -19,6 +19,10 @@ namespace ippl {
     void AidList::initialize_from_rank(
         size_t max_depth, const BoundingBox<Dim>& root_bounds,
         OrthoTreeParticle<ippl::ParticleSpatialLayout<double, Dim>> const& particles) {
+        if (world_rank != 0) {
+            throw std::runtime_error("kys aogfbeuebgueigbewiugbwlgwegbewkjl");
+        }
+
         if (!this->is_gathered(particles)) {
             throw std::runtime_error(
                 "can only initialize if all particles are gathered on one rank!");
@@ -39,11 +43,7 @@ namespace ippl {
                 (particles.R(i) - root_bounds.get_min()) / root_bounds_size;
 
             const grid_coordinate grid_coord = static_cast<grid_coordinate>(normalized * grid_size);
-            temp_aid_list[i] = {morton_helper.encode(grid_coord, max_depth), i};
-
-            std::cerr << "Coordinate: " << particles.R(i)
-                      << " turns into: " << temp_aid_list[i].first
-                      << " (coming from: " << grid_coord << ")" << std::endl;
+            temp_aid_list[i]                 = {morton_helper.encode(grid_coord, max_depth), i};
         }
 
         // sort by morton codes: TODO: make this smarter
