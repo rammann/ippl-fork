@@ -26,13 +26,13 @@ namespace ippl {
 
 #define LOG logger << std::string(stack_depth * 2, ' ') << __func__ << ": "
 
-#define END_FUNC                   \
-    LOG << "FINISHED\n\n" << endl; \
+#define END_FUNC               \
+    LOG << "FINISHED" << endl; \
     --stack_depth
 
 #define START_FUNC \
     ++stack_depth; \
-    LOG << "STARTING\n\n" << endl
+    LOG << "STARTING" << endl
 
     template <size_t Dim>
     Kokkos::View<morton_code*> OrthoTree<Dim>::build_tree_naive(particle_t const& particles) {
@@ -213,11 +213,13 @@ namespace ippl {
     template <size_t Dim>
     Kokkos::vector<size_t> OrthoTree<Dim>::get_num_particles_in_octants_seqential(
         const Kokkos::vector<morton_code>& octants) {
+        START_FUNC;
         size_t num_octs = octants.size();
         Kokkos::vector<size_t> num_particles(num_octs);
         for (size_t i = 0; i < num_octs; ++i) {
             num_particles[i] = get_num_particles_in_octant(octants[i]);
         }
+        END_FUNC;
         return num_particles;
     }
 

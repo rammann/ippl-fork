@@ -167,8 +167,6 @@ namespace ippl {
             }
         }
 
-        // BARRIER_LOG << " finished the second loop\n";
-
         // add the received octants to octants and remove total_octants
         Kokkos::vector<morton_code> partitioned_octants;
         unsigned int l1 = 0;

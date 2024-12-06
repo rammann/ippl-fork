@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 
-data_folder = "output"
+# FUNCS
 
 def read_data_for_all_processors(data_folder):
     processor_data = []
@@ -222,5 +222,22 @@ def plot_combined_processors(data_folder):
     plt.tight_layout()
     plt.show()
 
+
+#########################################
+#               OUTPUT                  #
+#########################################
+# (uncomment the one you dont need)     #
+#########################################
+
+data_folder = "output"
+
+"""
+This will generate one plot, where each processor will be colored differently. (not that usefull)
+"""
 #plot_combined_processors(data_folder)
+
+"""
+This generates one plot per processor.
+"""
 plot_all_processors_in_subplots(data_folder)
+
