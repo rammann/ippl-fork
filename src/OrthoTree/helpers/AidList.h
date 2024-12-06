@@ -19,6 +19,39 @@ namespace ippl {
 
         Kokkos::View<size_t* [2]> aid_list_m;  // aid_list_m = [{morton_code, particle_id}]
 
+        /*
+        TODO:
+
+1.
+        Kokkok flattens views, so as of now we have: view={[morton_codes], [id's]}, this sucks for
+        cache locality...
+        -> use a 1d view where we alternate octants and ids.
+
+2.
+        Experiment around to see if this actually works.
+
+3.
+        If it works, start writing tests for this class
+
+3.5
+        Rewrite the AidList s.t. it works with arbitrary particle types, not just with the OrthoTree
+particles:)
+
+4.
+        Merge into dphpc octree and update the AidList type in the OrthoTree.h file.
+
+
+What we need:
+        1. efficient and safe AidList impl.
+        2. methods that are easy to use with:
+            - get num particles in octant (local on rank)
+            - get num particles in octant global (will call upon rank 0)
+            - get relevant min/max octants
+            - automatically gather particles on rank0 if its not done so already
+        3.
+
+        */
+
     public:
         AidList(size_t max_depth);
 
