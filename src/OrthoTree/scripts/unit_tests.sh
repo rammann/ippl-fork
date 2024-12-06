@@ -5,7 +5,7 @@ UNIT_TEST_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)/build/unit_tests/OrthoTree"
 
 # Simulate MULTI_RANK_TESTS_MAP using two arrays
 MULTI_RANK_TESTS_KEYS=("parallel_tree_test" "aid_list_test")
-MULTI_RANK_TESTS_VALUES=(4 2)
+MULTI_RANK_TESTS_VALUES=(4 4)
 
 # Helper function to get processor count
 get_processor_count() {

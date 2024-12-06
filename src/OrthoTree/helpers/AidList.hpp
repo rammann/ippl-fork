@@ -24,7 +24,7 @@ namespace ippl {
                 "can only initialize if all particles are gathered on one rank!");
         }
 
-        const size_t n_particles               = particles.getLocalNum();
+        const size_t n_particles               = particles.getTotalNum();
         const size_t grid_size                 = (size_t(1) << max_depth);
         const auto morton_helper               = Morton<Dim>(max_depth);
         using real_coordinate                  = real_coordinate_template<Dim>;
@@ -40,6 +40,10 @@ namespace ippl {
 
             const grid_coordinate grid_coord = static_cast<grid_coordinate>(normalized * grid_size);
             temp_aid_list[i] = {morton_helper.encode(grid_coord, max_depth), i};
+
+            std::cerr << "Coordinate: " << particles.R(i)
+                      << " turns into: " << temp_aid_list[i].first
+                      << " (coming from: " << grid_coord << ")" << std::endl;
         }
 
         // sort by morton codes: TODO: make this smarter

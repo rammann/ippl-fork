@@ -78,6 +78,10 @@ auto getUngatheredParticles(size_t num_particles_per_proc, const double min_boun
 //                          TESTS START
 // ================================================================
 
+TEST(AidListTest, AssertWorldSize) {
+    ASSERT_EQ(Comm->size(), 4);
+}
+
 TEST(AidListTest, ChecksIfGatheredCorrectly) {
     static constexpr size_t Dim = 3;
     const size_t max_depth      = 5;
@@ -126,6 +130,59 @@ TEST(AidListTest, ConstructionTest) {
     } else {
         EXPECT_NO_THROW(failing_aid_list.initialize<Dim>(root_bounds, ungathered_particles));
         EXPECT_EQ(failing_aid_list.size(), 0);
+    }
+}
+
+TEST(AidListTest, CorrectConstructionTest2D) {
+    static constexpr size_t Dim       = 2;
+    const size_t max_depth            = 1;
+    const double min_bounds           = 0.0;
+    const double max_bounds           = 1.0;
+    const size_t n_particles_per_proc = 100;
+
+    BoundingBox<Dim> root_bounds({min_bounds, min_bounds}, {max_bounds, max_bounds});
+
+    auto particles = getParticles<Dim>(n_particles_per_proc, min_bounds, max_bounds);
+
+    if (Comm->rank() == 0) {
+        for (int i = 0; i < Comm->size(); ++i) {
+            ippl::Vector<double, Dim> pos;
+            switch (i) {
+                case 0: {
+                    pos = {min_bounds, min_bounds};
+                } break;
+                case 1: {
+                    pos = {min_bounds, max_bounds};
+                } break;
+                case 2: {
+                    pos = {max_bounds, min_bounds};
+                } break;
+                case 3: {
+                    pos = {max_bounds, max_bounds};
+                } break;
+                default:
+                    break;  // no need to handle, we assert world_size in another test.
+            }
+
+            for (size_t j = 0; j < n_particles_per_proc; ++j) {
+                size_t start_idx           = ((size_t)i * n_particles_per_proc);
+                particles.R(start_idx + j) = pos;
+            }
+        }
+    }
+
+    AidList aid_list(max_depth);
+    aid_list.initialize<Dim>(root_bounds, particles);
+
+    if (Comm->rank() == 0) {
+        std::unordered_map<morton_code, size_t> octant_counter;
+
+        for (size_t i = 0; i < (size_t)Comm->size() * n_particles_per_proc; ++i) {
+            octant_counter[aid_list.getOctant(i)]++;
+            // std::cerr << "OCTANT: " << i << ": " << aid_list.getOctant(i) << std::endl;
+        }
+
+        ASSERT_EQ(octant_counter.size(), 4);
     }
 }
 
