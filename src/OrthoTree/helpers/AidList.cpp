@@ -12,56 +12,31 @@ namespace ippl {
         logger << "Initialized AidList" << endl;
     }
 
-    morton_code AidList::getOctant(size_t idx) const {
-        if (idx >= aid_list_m.extent(0)) {
-            throw std::runtime_error(
-                "On RANK: " + std::to_string(world_rank) + " index: " + std::to_string(idx)
-                + " is out of range for AidList of size: " + std::to_string(aid_list_m.extent(0)));
-        }
-
-        return aid_list_m(idx, 0);
-    }
-
-    morton_code AidList::getID(size_t idx) const {
-        if (idx >= aid_list_m.extent(0)) {
-            throw std::runtime_error(
-                "On RANK: " + std::to_string(world_rank) + " index: " + std::to_string(idx)
-                + " is out of range for AidList of size: " + std::to_string(aid_list_m.extent(0)));
-        }
-
-        return aid_list_m(idx, 1);
-    }
-
-    size_t AidList::size() const {
-        return aid_list_m.extent(0);
-    }
-
     std::pair<morton_code, morton_code> AidList::getMinReqOctants() {
-        Kokkos::View<morton_code[2]> min_max_octants("min_max_octants");
-
+        static constexpr size_t view_size = 2;
+        Kokkos::View<morton_code[view_size]> min_max_octants("min_max_octants");
         if (world_rank == 0) {
-            const size_t size        = aid_list_m.extent(0);
+            const size_t size        = this->size();
             const size_t batch_size  = size / world_size;
             const size_t rank_0_size = batch_size + (size % batch_size);
 
-            for (size_t target_rank = 1; target_rank < world_size; ++target_rank) {
-                const size_t start = ((target_rank - 1) * batch_size) + rank_0_size;
-                const size_t end   = start + batch_size - 1;
+            Kokkos::parallel_for(
+                "Send min/max octants", world_size - 1, [=, this](const size_t target_rank) {
+                    const size_t start = ((target_rank - 1) * batch_size) + rank_0_size;
+                    const size_t end   = start + batch_size - 1;
 
-                // Assign min and max to the view
-                min_max_octants(0) = getOctant(start);
-                min_max_octants(1) = getOctant(end);
+                    min_max_octants(0) = getOctant(start);
+                    min_max_octants(1) = getOctant(end);
 
-                // Send min and max directly from the view
-                Comm->send(*min_max_octants.data(), 2, target_rank, 0);
-            }
+                    Comm->send(*min_max_octants.data(), view_size, target_rank, 0);
+                });
 
-            // Assign min/max for rank 0
-            min_max_octants(0) = aid_list_m(0, 0);
-            min_max_octants(1) = aid_list_m(rank_0_size - 1, 0);
+            // assign min/max for rank 0
+            min_max_octants(0) = getOctant(0);
+            min_max_octants(1) = getOctant(rank_0_size - 1);
         } else {
             mpi::Status status;
-            Comm->recv(min_max_octants.data(), 2, 0, 0, status);
+            Comm->recv(min_max_octants.data(), view_size, 0, 0, status);
         }
 
         auto host_min_max = Kokkos::create_mirror_view(min_max_octants);
@@ -71,36 +46,69 @@ namespace ippl {
     }
 
     size_t AidList::getLowerBoundIndex(morton_code octant) const {
-        // Create a host mirror of the aid_list_m view
-        auto host_aid_list = Kokkos::create_mirror_view(aid_list_m);
-        Kokkos::deep_copy(host_aid_list, aid_list_m);
+        size_t lower_bound = 0;
+        size_t upper_bound = this->size();
 
-        // Find the first occurrence of the octant
-        for (size_t i = 0; i < aid_list_m.extent(0); ++i) {
-            if (host_aid_list(i, 0) >= octant) {
-                if (host_aid_list(i, 0) == octant) {
-                    return i;
+        // chatgpt magic
+        Kokkos::parallel_reduce(
+            "LowerBoundSearch", this->size(),
+            KOKKOS_LAMBDA(const size_t i, size_t& update) {
+                if (octants(i) >= octant) {
+                    update = (update < i) ? update : i;
                 }
-                break;
-            }
-        }
+            },
+            Kokkos::Min<size_t>(lower_bound));
 
-        throw std::runtime_error("Octant not found in AidList.");
+        if (lower_bound == this->size() || octants(lower_bound) != octant) {
+            throw std::runtime_error("Octant not found in AidList.");
+        }
+        return lower_bound;
     }
 
-    size_t AidList::getUpperBoundIndex(morton_code octant) const {
-        // Create a host mirror of the aid_list_m view
-        auto host_aid_list = Kokkos::create_mirror_view(aid_list_m);
-        Kokkos::deep_copy(host_aid_list, aid_list_m);
+    size_t AidList::getUpperBoundIndexExclusive(morton_code octant) const {
+        size_t lower_bound = 0;
+        size_t upper_bound = this->size();
 
-        // Find the position after the last occurrence of the octant
-        for (size_t i = 0; i < aid_list_m.extent(0); ++i) {
-            if (host_aid_list(i, 0) > octant) {
-                return i;
-            }
+        Kokkos::parallel_reduce(
+            "UpperBoundExclusiveSearch", this->size(),
+            KOKKOS_LAMBDA(const size_t i, size_t& update) {
+                if (octants(i) > octant) {
+                    update = (update < i) ? update : i;
+                }
+            },
+            Kokkos::Min<size_t>(upper_bound));
+
+        return upper_bound;
+    }
+
+    size_t AidList::getUpperBoundIndexInclusive(morton_code octant) const {
+        size_t lower_bound = 0;
+        size_t upper_bound = this->size();
+
+        Kokkos::parallel_reduce(
+            "UpperBoundInclusiveSearch", this->size(),
+            KOKKOS_LAMBDA(const size_t i, size_t& update) {
+                if (octants(i) >= octant) {
+                    update = (update < i) ? update : i;
+                }
+            },
+            Kokkos::Min<size_t>(upper_bound));
+
+        if (upper_bound == this->size() || octants(upper_bound) != octant) {
+            throw std::runtime_error("Octant not found in AidList.");
+        }
+        return upper_bound;
+    }
+
+    size_t AidList::getNumParticlesInOctant(morton_code octant) const {
+        const size_t lower_bound_idx = getLowerBoundIndex(octant);
+        const size_t upper_bound_idx = getUpperBoundIndex(octant);
+
+        if (lower_bound_idx > upper_bound_idx) {
+            throw std::runtime_error("loweridx > upper_idx in getNumParticlesInOctant...");
         }
 
-        return aid_list_m.extent(0);
+        return upper_bound_idx - lower_bound_idx;
     }
 
 }  // namespace ippl

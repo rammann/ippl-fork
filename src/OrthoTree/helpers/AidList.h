@@ -17,11 +17,16 @@ namespace ippl {
 
         Inform logger;
 
-        Kokkos::View<size_t* [2]> aid_list_m;  // aid_list_m = [{morton_code, particle_id}]
+        /**
+         * As of now we have two seperate views to store octants and particle ids.
+         * They will only be accessed through the helper functions below, so if we decide to change
+         * implementation we (should) only have to change those and everything sould still work.
+         */
+        Kokkos::View<morton_code*> octants;
+        Kokkos::View<size_t*> particle_ids;
 
         /*
         TODO:
-
 1.
         Kokkok flattens views, so as of now we have: view={[morton_codes], [id's]}, this sucks for
         cache locality...
@@ -58,20 +63,26 @@ What we need:
         template <size_t Dim>
         void initialize(
             const BoundingBox<Dim>& root_bounds,
-            OrthoTreeParticle<ippl::ParticleSpatialLayout<double, Dim>> const& particles) {
-            if (world_rank == 0) {
-                if (!is_gathered<Dim>(particles)) {
-                    throw std::runtime_error("You have not gathered your particles on rank0 yet!");
-                } else {
-                    initialize_from_rank_0<Dim>(max_depth, root_bounds, particles);
-                    logger << "Aid list is initialized with size: " << size() << endl;
-                }
-            }
-        }
+            OrthoTreeParticle<ippl::ParticleSpatialLayout<double, Dim>> const& particles);
 
-        morton_code getOctant(size_t idx) const;
-        morton_code getID(size_t idx) const;
-        size_t size() const;
+        size_t size() const { return octants.extent(0); }
+
+        morton_code getOctant(size_t idx) const { return octants(idx); }
+        size_t getID(size_t idx) const { return particle_ids(idx); }
+
+        void setOctant(morton_code octant, size_t idx) { octants(idx) = octant; }
+        void setID(size_t particle_id, size_t idx) { particle_ids(idx) = particle_id; }
+
+        auto getOctants() const { return Kokkos::subview(octants, Kokkos::ALL()); }
+        auto getParticleIDs() const { return Kokkos::subview(particle_ids, Kokkos::ALL()); }
+
+        auto& getOctants() { return octants; }
+        auto& getParticleIDs() { return particle_ids; }
+
+        void resize(size_t num_elements) {
+            Kokkos::resize(octants, num_elements);
+            Kokkos::resize(particle_ids, num_elements);
+        }
 
         /**
          * @brief This should send the min octants (so front/back) for each batch for each rank
@@ -80,44 +91,52 @@ What we need:
          */
         std::pair<morton_code, morton_code> getMinReqOctants();
 
-        void initializeForRank(Kokkos::View<morton_code*> octants_from_algo_4);
+        /**
+         * @brief Returns the number of particles in the given octant.
+         * This function assumes that the AidList is initialized.
+         */
+        size_t getNumParticlesInOctant(morton_code octant) const;
 
-        size_t getNumParticlesInOctant(morton_code octant);
-
-        size_t getNumOctantsInRange(morton_code min, morton_code max);
-
-        // inclusive
+        /**
+         * @brief Returns the lowest index s.t. octants(index-1) < octant <= octants(index)
+         * INCLUSIVE
+         */
         size_t getLowerBoundIndex(morton_code octant) const;
 
-        // exclusive
-        size_t getUpperBoundIndex(morton_code octant) const;
+        /**
+         * @brief Returns the highest index s.t. octants(index-1) <= octant < octants(index)
+         */
+        size_t getUpperBoundIndexExclusive(morton_code octant) const;
+
+        /**
+         * @brief Returns the highest index s.t. octants(index-1) <= octant <= octants(index)
+         */
+        size_t getUpperBoundIndexInclusive(morton_code octant) const;
 
     private:
+        /**
+         * @brief Checks if the particles have been gathered on the rank it is called on.
+         * Will throw if they are not gathered.
+         */
         template <size_t Dim>
         bool is_gathered(
             OrthoTreeParticle<ippl::ParticleSpatialLayout<double, Dim>> const& particles);
 
         /**
-         * @brief This function excpects all particles to be on rank 0 and generates the
-         * corresponding aid list.
-         *
-         * @tparam Dim
-         * @param particles
+         * @brief Initialises the AidList with {morton_code, particle_id} pairs.
+         * This funciton assumes that all particles have been gathered on the given rank, will throw
+         * if they are not.
          */
         template <size_t Dim>
-        void initialize_from_rank_0(
+        void initialize_from_rank(
             size_t max_depth, const BoundingBox<Dim>& root_bounds,
             OrthoTreeParticle<ippl::ParticleSpatialLayout<double, Dim>> const& particles);
 
         /**
-         * @brief If the AidList gets initialized with a scattered list of particles (each proc
-         * has certain number) we first call this function to collect all particles on rank0
-         *
-         * @tparam Dim
-         * @param particles
+         * @brief Gathers the particles on the rank that calls this function.
          */
         template <size_t Dim>
-        void gatherOnRank0(
+        void gatherOnRank(
             OrthoTreeParticle<ippl::ParticleSpatialLayout<double, Dim>> const& particles);
     };
 

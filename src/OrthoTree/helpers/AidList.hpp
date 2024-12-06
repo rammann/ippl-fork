@@ -3,6 +3,20 @@
 namespace ippl {
 
     template <size_t Dim>
+    void AidList::initialize(
+        const BoundingBox<Dim>& root_bounds,
+        OrthoTreeParticle<ippl::ParticleSpatialLayout<double, Dim>> const& particles) {
+        if (world_rank == 0) {
+            if (!is_gathered<Dim>(particles)) {
+                throw std::runtime_error("You have not gathered your particles on rank0 yet!");
+            } else {
+                initialize_from_rank<Dim>(max_depth, root_bounds, particles);
+                logger << "Aid list is initialized with size: " << size() << endl;
+            }
+        }
+    }
+
+    template <size_t Dim>
     bool AidList::is_gathered(
         OrthoTreeParticle<ippl::ParticleSpatialLayout<double, Dim>> const& particles) {
         if (world_rank != 0) {
@@ -13,7 +27,7 @@ namespace ippl {
     }
 
     template <size_t Dim>
-    void AidList::initialize_from_rank_0(
+    void AidList::initialize_from_rank(
         size_t max_depth, const BoundingBox<Dim>& root_bounds,
         OrthoTreeParticle<ippl::ParticleSpatialLayout<double, Dim>> const& particles) {
         if (world_rank != 0) {
@@ -25,41 +39,42 @@ namespace ippl {
                 "can only initialize if all particles are gathered on rank 0!");
         }
 
-        const size_t n_particles = particles.getLocalNum();
-        const size_t grid_size   = (size_t(1) << max_depth);
-
+        const size_t n_particles               = particles.getLocalNum();
+        const size_t grid_size                 = (size_t(1) << max_depth);
+        const auto morton_helper               = Morton<Dim>(max_depth);
         using real_coordinate                  = real_coordinate_template<Dim>;
         using grid_coordinate                  = grid_coordinate_template<Dim>;
-        const auto morton_helper               = Morton<Dim>(max_depth);
         const real_coordinate root_bounds_size = root_bounds.get_max() - root_bounds.get_min();
 
-        // Temporary structure to hold pairs of Morton code and particle index for sorting
-        std::vector<std::pair<size_t, size_t>> temp_aid_list(n_particles);
+        // temporary structure to hold the data... TODO: make this smarter
+        std::vector<std::pair<morton_code, size_t>> temp_aid_list(n_particles);
 
-        // Populate the temporary vector
         for (size_t i = 0; i < n_particles; ++i) {
             const real_coordinate normalized =
                 (particles.R(i) - root_bounds.get_min()) / root_bounds_size;
 
             const grid_coordinate grid_coord = static_cast<grid_coordinate>(normalized * grid_size);
-
             temp_aid_list[i] = {morton_helper.encode(grid_coord, max_depth), i};
         }
 
-        // Sort the temporary vector by Morton codes
-        std::sort(temp_aid_list.begin(), temp_aid_list.end());
+        // sort by morton codes: TODO: make this smarter
+        std::sort(temp_aid_list.begin(), temp_aid_list.end(), [](const auto& a, const auto& b) {
+            return a.first < b.first;
+        });
 
-        // Allocate Kokkos View and copy sorted data back
-        this->aid_list_m   = Kokkos::View<size_t* [2]>("aid_list_m", n_particles);
-        auto host_aid_list = Kokkos::create_mirror_view(aid_list_m);
+        this->resize(n_particles);
+
+        // ARE MIRRORS/DEEP COPIES REALLY NEEDED??
+        auto host_octants      = Kokkos::create_mirror_view(this->getOctants());
+        auto host_particle_ids = Kokkos::create_mirror_view(this->getParticleIDs());
 
         for (size_t i = 0; i < n_particles; ++i) {
-            host_aid_list(i, 0) = temp_aid_list[i].first;   // Morton code
-            host_aid_list(i, 1) = temp_aid_list[i].second;  // Particle index
+            host_octants(i)      = temp_aid_list[i].first;
+            host_particle_ids(i) = temp_aid_list[i].second;
         }
 
-        // Copy the sorted data back to the device
-        Kokkos::deep_copy(aid_list_m, host_aid_list);
+        Kokkos::deep_copy(this->getOctants(), host_octants);
+        Kokkos::deep_copy(this->getParticleIDs(), host_particle_ids);
     }
 
 }  // namespace ippl
