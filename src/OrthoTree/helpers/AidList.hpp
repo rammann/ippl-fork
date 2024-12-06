@@ -19,10 +19,6 @@ namespace ippl {
     template <size_t Dim>
     bool AidList::is_gathered(
         OrthoTreeParticle<ippl::ParticleSpatialLayout<double, Dim>> const& particles) {
-        if (world_rank != 0) {
-            throw std::runtime_error("only call AidList::is_gathered from rank 0!");
-        }
-
         return particles.getLocalNum() == particles.getTotalNum();
     }
 
