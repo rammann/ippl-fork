@@ -9,6 +9,7 @@
 #include "OrthoTreeTypes.h"
 
 #include "OrthoTreeParticle.h"
+#include "helpers/AidList.h"
 #include "helpers/BoundingBox.h"
 #include "helpers/MortonHelper.h"
 
