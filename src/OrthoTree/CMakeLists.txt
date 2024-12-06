@@ -1,5 +1,5 @@
 set (_SRCS
-
+helpers/AidList.cpp
     )
 
 set (_HDRS
@@ -11,6 +11,8 @@ set (_HDRS
     MortonHelper.h
     BoundingBox.h
     BoundingBox.hpp
+helpers/AidList.h
+helpers/AidList.hpp
     )
 
 include_directories (
