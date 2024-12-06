@@ -60,10 +60,8 @@ What we need:
     public:
         AidList(size_t max_depth);
 
-        template <size_t Dim>
-        void initialize(
-            const BoundingBox<Dim>& root_bounds,
-            OrthoTreeParticle<ippl::ParticleSpatialLayout<double, Dim>> const& particles);
+        template <size_t Dim, typename PLayout>
+        void initialize(const BoundingBox<Dim>& root_bounds, PLayout const& particles);
 
         size_t size() const { return octants.extent(0); }
 
@@ -113,14 +111,12 @@ What we need:
          */
         size_t getUpperBoundIndexInclusive(morton_code octant) const;
 
-    private:
         /**
          * @brief Checks if the particles have been gathered on the rank it is called on.
          * Will throw if they are not gathered.
          */
-        template <size_t Dim>
-        bool is_gathered(
-            OrthoTreeParticle<ippl::ParticleSpatialLayout<double, Dim>> const& particles);
+        template <typename PLayout>
+        bool is_gathered(ippl::ParticleBase<PLayout> const& particles);
 
         /**
          * @brief Initialises the AidList with {morton_code, particle_id} pairs.

@@ -287,7 +287,7 @@ namespace ippl {
                                      + "/src/OrthoTree/scripts/output/octants"
                                      + std::to_string(Comm->rank()) + ".txt";
 
-            std::ofstream file(outputPath, , std::ofstream::out);
+            std::ofstream file(outputPath, std::ofstream::out);
             print_octant_list(file, octants);
             file.flush();
             file.close();

@@ -102,7 +102,7 @@ namespace ippl {
 
     size_t AidList::getNumParticlesInOctant(morton_code octant) const {
         const size_t lower_bound_idx = getLowerBoundIndex(octant);
-        const size_t upper_bound_idx = getUpperBoundIndex(octant);
+        const size_t upper_bound_idx = getUpperBoundIndexExclusive(octant);
 
         if (lower_bound_idx > upper_bound_idx) {
             throw std::runtime_error("loweridx > upper_idx in getNumParticlesInOctant...");

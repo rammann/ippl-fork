@@ -2,19 +2,16 @@
 
 namespace ippl {
 
-    template <size_t Dim>
-    void AidList::initialize(
-        const BoundingBox<Dim>& root_bounds,
-        OrthoTreeParticle<ippl::ParticleSpatialLayout<double, Dim>> const& particles) {
+    template <size_t Dim, typename PLayout>
+    void AidList::initialize(const BoundingBox<Dim>& root_bounds, PLayout const& particles) {
         if (world_rank == 0) {
             initialize_from_rank<Dim>(max_depth, root_bounds, particles);
             logger << "Aid list is initialized with size: " << size() << endl;
         }
     }
 
-    template <size_t Dim>
-    bool AidList::is_gathered(
-        OrthoTreeParticle<ippl::ParticleSpatialLayout<double, Dim>> const& particles) {
+    template <typename PLayout>
+    bool AidList::is_gathered(ippl::ParticleBase<PLayout> const& particles) {
         return particles.getLocalNum() == particles.getTotalNum();
     }
 
