@@ -21,7 +21,7 @@ namespace ippl {
         logger << "called with min: " << min_octant << ", max: " << max_octant << endl;
 
         Kokkos::vector<morton_code> T = complete_region(min_octant, max_octant);
-
+        octants_to_file(T);
         logger << "T.size() = " << T.size() << endl;
 
         Kokkos::vector<morton_code> C;
@@ -56,7 +56,6 @@ namespace ippl {
         */
 
         auto partitioned_tree = partition(G, weights);
-
         // TODO: THIS MIGHT BE WRONG? this is not needed, we sync the aid list outside of this
         /*
         Kokkos::vector<morton_code> global_unpartitioned_tree;

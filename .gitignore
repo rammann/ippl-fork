@@ -1,4 +1,5 @@
 build/
+src/OrthoTree/scripts/output/*
 build_octree/
 build_gh/
 build_master/

@@ -38,28 +38,25 @@ namespace ippl {
         octants = linearise_octants(octants);
 
         Kokkos::vector<size_t> weights(octants.size(), 1);
-
         octants = partition(octants, weights);
-        logger << "finished partition" << endl;
-
-        if (octants.size() == 0) {
-            throw std::runtime_error("SIZE IS ZERO HOW THE FUCK???");
-        }
 
         morton_code first_rank0;
         if (world_rank == 0) {
             const morton_code dfd_root = morton_helper.get_deepest_first_descendant(morton_code(0));
             const morton_code A_finest =
-                morton_helper.get_nearest_common_ancestor(dfd_root, octants[0]);
+                morton_helper.get_nearest_common_ancestor(dfd_root, octants.front());
+
+            assert(morton_helper.get_depth(A_finest) < max_depth_m);
             const morton_code first_child = morton_helper.get_first_child(A_finest);
+
             // this imitates push_front
             first_rank0 = first_child;
         } else if (world_rank == world_size - 1) {
             const morton_code dld_root = morton_helper.get_deepest_last_descendant(morton_code(0));
             const morton_code A_finest =
-                morton_helper.get_nearest_common_ancestor(dld_root, octants[0]);
+                morton_helper.get_nearest_common_ancestor(dld_root, octants.back());
             const morton_code last_child = morton_helper.get_last_child(A_finest);
-
+            assert(morton_helper.get_depth(A_finest) < max_depth_m);
             octants.push_back(last_child);
         }
 
@@ -75,9 +72,8 @@ namespace ippl {
             octants.push_back(buff);
         }
 
-        logger << "finished send/recv" << endl;
-
         Kokkos::vector<morton_code> R;
+
         // rank 0 works differently, as we need to 'simulate' push_front
         if (world_rank == 0) {
             R.push_back(first_rank0);
@@ -86,19 +82,29 @@ namespace ippl {
             }
         }
 
+        Comm->barrier();
+        if (world_rank == 0) {
+            LOG << "GOT HERE" << endl;
+        }
+
+        // currently a crash somewhere in this call stack
         const size_t n = octants.size();
         for (size_t i = 0; i < n - 1; ++i) {
+            R.push_back(octants[i]);
             for (morton_code elem : complete_region(octants[i], octants[i + 1])) {
                 R.push_back(elem);
             }
-            R.push_back(octants[i]);
+        }
+
+        Comm->barrier();
+        if (world_rank == 0) {
+            LOG << "DIDNT GET HERE" << endl;
         }
 
         if (world_rank == world_size - 1) {
             R.push_back(octants[n - 1]);
         }
 
-        logger << "finished" << endl;
         END_FUNC;
         return R;
     }

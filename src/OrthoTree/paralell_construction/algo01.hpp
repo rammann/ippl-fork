@@ -25,7 +25,6 @@ namespace ippl {
 
         auto octants = block_partition(min_octant, max_octant);
 
-        octant_to_file(octants);
         particles_to_file(particles);
 
         init_aid_list_from_octants(octants.front(), octants.back());
@@ -361,7 +360,6 @@ namespace ippl {
 
         // if we sort the tree after construction we can compare two trees
         std::sort(result_tree.begin(), result_tree.end());
-
         Kokkos::View<morton_code*> return_tree(result_tree.data());
         END_FUNC;
         return return_tree;
