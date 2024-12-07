@@ -165,4 +165,44 @@ namespace ippl {
 
         return upper_bound_idx - lower_bound_idx;
     }
+
+    template <size_t Dim>
+    void AidList<Dim>::innitFromOctants(morton_code min_octant, morton_code max_octant) {
+        size_t size_buff;
+        morton_code min_max_buff[2];
+        if (world_rank == 0) {
+            for (size_t rank = 1; rank < world_size; ++rank) {
+                mpi::Status status;
+                Comm->recv(*min_max_buff, 2, rank, 0, status);
+
+                const size_t start = getLowerBoundIndex(min_max_buff[0]);
+                const size_t end   = getUpperBoundIndexExclusive(min_max_buff[1]);
+                size_buff          = end - start;
+
+                Comm->send(size_buff, 1, rank, 0);
+
+                Comm->send(*(octants.data() + start), size_buff, rank, 0);
+                Comm->send(*(particle_ids.data() + start), size_buff, rank, 0);
+
+                logger << "sent " << size_buff << " octants to rank " << rank << " range: ("
+                       << getOctant(start) << ", " << getOctant(end) << ")" << endl;
+            }
+        } else {
+            min_max_buff[0] = min_octant;
+            min_max_buff[1] = morton_helper.get_deepest_last_descendant(max_octant);
+
+            Comm->send(*min_max_buff, 2, 0, 0);
+
+            mpi::Status size_status;
+            Comm->recv(&size_buff, 1, 0, 0, size_status);
+
+            this->octants      = Kokkos::View<morton_code*>("aid_list_octants", size_buff);
+            this->particle_ids = Kokkos::View<size_t*>("aid_list_particle_ids", size_buff);
+
+            mpi::Status octants_status, particle_id_status;
+            Comm->recv(octants.data(), size_buff, 0, 0, octants_status);
+            Comm->recv(particle_ids.data(), size_buff, 0, 0, particle_id_status);
+        }
+    }
+
 }  // namespace ippl

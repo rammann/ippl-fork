@@ -5,11 +5,6 @@
 #include "OrthoTree/helpers/MortonHelper.h"
 
 namespace ippl {
-
-    /**
-     * @brief Baisc idea of a better AidList
-     *
-     */
     template <size_t Dim>
     class AidList {
         const size_t world_rank;
@@ -51,19 +46,6 @@ namespace ippl {
             Kokkos::resize(octants, num_elements);
             Kokkos::resize(particle_ids, num_elements);
         }
-
-        /**
-         * @brief This should send the min octants (so front/back) for each batch for each rank.
-         * The distribution is as follows:
-         *
-         * rank > 0:
-         *      rank_N = [(N-1) * batch_size, N * batch_size]
-         * rank == 0:
-         *      rank_0 = [(#ranks - 1) * batch_size, #octants]
-         *
-         * @return std::pair<morton_code, morton_code>
-         */
-        std::pair<morton_code, morton_code> getMinReqOctants();
 
         /**
          * @brief Returns the number of particles in the given octant.
@@ -108,6 +90,26 @@ namespace ippl {
          */
         void gatherOnRank(
             OrthoTreeParticle<ippl::ParticleSpatialLayout<double, Dim>> const& particles);
+
+        /**
+         * @brief This should send the min octants (so front/back) for each batch for each rank.
+         * The distribution is as follows:
+         *
+         * rank > 0:
+         *      rank_N = [(N-1) * batch_size, N * batch_size]
+         * rank == 0:
+         *      rank_0 = [(#ranks - 1) * batch_size, #octants]
+         *
+         * @return std::pair<morton_code, morton_code>
+         */
+        std::pair<morton_code, morton_code> getMinReqOctants();
+
+        /**
+         * @brief This function takes all elements between min_octant and max_octant in the AidList
+         * and sends it to the requesting rank.
+         * Rank 0 keeps the complete AidList to itself.
+         */
+        void innitFromOctants(morton_code min_octant, morton_code max_octant);
     };
 
 }  // namespace ippl
