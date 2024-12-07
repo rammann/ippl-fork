@@ -62,9 +62,7 @@ namespace ippl {
 
         size_t n_particles;
 
-        // this list should not be edited, we will probably need it if we implement the tree update
-        // as well
-        aid_list_t aid_list;
+        AidList<Dim> aid_list_m;
 
         int world_rank;
         int world_size;
@@ -174,33 +172,7 @@ namespace ippl {
          */
         bool operator==(const OrthoTree& other);
 
-        /**
-         * @brief Returns a vector with morton_codes and lists of particle ids inside this region
-         * This is also not meant to be permanent, but it should suffice for the beginning
-         * @return Kokkos::vector<Kokkos::pair<morton_code, Kokkos::vector<size_t>>>
-         */
-        Kokkos::vector<Kokkos::pair<morton_code, Kokkos::vector<size_t>>> get_tree() const;
-
-        size_t getAidList_lowerBound(morton_code octant);
-        size_t getAidList_upperBound(morton_code octant);
-
 #pragma endregion  // helpers
-
-        /*
-         * @brief Returns the number of particles in the octants, asks rank 0 for the number of
-         * particles in the octants
-         *
-         * @param octant vector
-         * @return size_t vector - number of particles in the octants
-         */
-        Kokkos::vector<size_t> get_num_particles_in_octants_parallel(
-            const Kokkos::vector<morton_code>& octants);
-
-        // setter for aid list also adapts n_particles
-        void set_aid_list(const aid_list_t& aid_list) {
-            this->aid_list = aid_list;
-            n_particles    = aid_list.size();
-        }
 
         Kokkos::View<morton_code*> build_tree_from_octants(
             const Kokkos::vector<morton_code>& octants);
@@ -209,40 +181,7 @@ namespace ippl {
 
         std::pair<morton_code, morton_code> get_relevant_aid_list(particle_t const& particles);
 
-    private:
-        /**
-         * @brief initializes the aid list which has form vec{pair{morton_code, size_t}}
-         * will sort the aidlist in ascending morton codes
-         *
-         * @param particles
-         */
-        aid_list_t initialize_aid_list(particle_t const& particles);
-
-        /**
-         * @brief counts the number of particles covered by the cell decribed by the morton code
-         *        initialize_aid_list needs to be called first
-         *
-         * @param morton_code
-         * @return number of particles in the cell specified by the morton code
-         **/
-        size_t get_num_particles_in_octant(morton_code octant);
-
     public:
-        // SIMONS FUNCTIONS DONT EDIT, TOUCH OR USE THIS IN YOUR CODE:
-
-        /**
-         * @brief algorithm 1' topdown sequential construction of octree
-         * @brief counts the number of particles covered by the cell decribed by the morton codes
-         *        initialize_aid_list needs to be called first
-         *
-         * @param vector of morton codes
-         * @return number of particles in the cells specified by the morton code vector
-         * @warning THIS FUNCTION ASSUMES THAT THE OCTANTS ARE SORTED
-         * @TODO parallelize this with Kokkos
-         **/
-        Kokkos::vector<size_t> get_num_particles_in_octants_seqential(
-            const Kokkos::vector<morton_code>& octants);
-
 #pragma region print_helpers
 
         std::ostream& print_octant(std::ostream& os, morton_code octant) {

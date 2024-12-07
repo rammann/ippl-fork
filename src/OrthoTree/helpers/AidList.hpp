@@ -199,4 +199,43 @@ namespace ippl {
         }
     }
 
+    template <size_t Dim>
+    template <typename Iterator>
+    Kokkos::vector<size_t> AidList<Dim>::getNumParticlesInOctantsParalell(Iterator begin,
+                                                                          Iterator end) {
+        size_t size_buff;
+
+        Kokkos::vector<size_t> weights;
+        if (world_rank == 0) {
+            for (size_t rank = 1; rank < world_size; ++rank) {
+                weights.clear();
+                mpi::Status size_status;
+                Comm->recv(&size_buff, 1, rank, 0, size_status);
+                std::vector<morton_code> octants_buff(size_buff);
+                mpi::Status octants_status;
+                Comm->recv(octants.data(), size_buff, rank, 0, octants_status);
+
+                for (auto octant : octants_buff) {
+                    weights.push_back(getNumParticlesInOctant(octant));
+                }
+
+                Comm->send(*weights.data(), size_buff, rank, 0);
+            }
+
+            weights.clear();
+            for (auto it = begin; it != end; ++it) {
+                weights.push_back(getNumParticlesInOctant(*it));
+            }
+
+        } else {
+            size_buff = static_cast<size_t>(end - begin);
+            Comm->send(size_buff, 1, 0, 0);
+            Comm->send(*begin, size_buff, 0, 0);
+            weights.resize(size_buff);
+            mpi::Status weights_status;
+            Comm->recv(weights.data(), size_buff, 0, 0, weights_status);
+        }
+
+        return weights;
+    }
 }  // namespace ippl
