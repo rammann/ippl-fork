@@ -97,6 +97,9 @@ namespace ippl {
                     start = i;
                     break;
                 }
+                if (i == octants.size() - 1) {
+                    start = octants.size();
+                }
             }
 
             for (size_t i = start; i < octants.size(); ++i) {
