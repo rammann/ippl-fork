@@ -198,9 +198,9 @@ namespace ippl {
     }
 
     template <size_t Dim>
-    template <typename Iterator>
-    Kokkos::vector<size_t> AidList<Dim>::getNumParticlesInOctantsParalell(Iterator begin,
-                                                                          Iterator end) {
+    template <typename Container>
+    Kokkos::vector<size_t> AidList<Dim>::getNumParticlesInOctantsParalell(
+        const Container& container) {
         size_t size_buff;
 
         Kokkos::vector<size_t> weights;
@@ -221,14 +221,14 @@ namespace ippl {
             }
 
             weights.clear();
-            for (auto it = begin; it != end; ++it) {
+            for (auto it = container.data(); it != container.data() + container.size(); ++it) {
                 weights.push_back(getNumParticlesInOctant(*it));
             }
 
         } else {
-            size_buff = static_cast<size_t>(end - begin);
+            size_buff = container.size();
             Comm->send(size_buff, 1, 0, 0);
-            Comm->send(*begin, size_buff, 0, 0);
+            Comm->send(*container.data(), size_buff, 0, 0);
             weights.resize(size_buff);
             mpi::Status weights_status;
             Comm->recv(weights.data(), size_buff, 0, 0, weights_status);

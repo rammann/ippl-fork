@@ -31,8 +31,6 @@ namespace ippl {
         for (size_t i = 0; i < tree_view.size(); ++i) {
             auto num_particles = this->aid_list_m.getNumParticlesInOctant(tree_view[i]);
             total_particles += num_particles;
-
-            logger << "Adding: " << num_particles << " particles" << endl;
         }
 
         size_t global_total_particles = 0;
