@@ -13,13 +13,6 @@ namespace ippl {
         world_rank = Comm->rank();  // TODO: move this to constructor, but then all tests need a
                                     // main to init ippl
 
-        AidList test_aid_list(max_depth_m);
-        test_aid_list.initialize<Dim>(root_bounds_m, particles);
-
-        std::cerr << "Particles size: " << particles.getTotalNum()
-                  << ", aidlist size: " << test_aid_list.size() << std::endl;
-        return {};
-
         auto [min_octant, max_octant] = get_relevant_aid_list(particles);
         /**
          * The relevant morton_codes to start the algorithm have been sent to the other ranks.
