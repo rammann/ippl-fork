@@ -17,7 +17,6 @@ namespace ippl {
         auto [min_octant, max_octant] = this->aid_list_m.getMinReqOctants();
 
         auto octants = block_partition(min_octant, max_octant);
-        this->aid_list_m.innitFromOctants(octants.front(), octants.back());
 
         particles_to_file(particles);
 
