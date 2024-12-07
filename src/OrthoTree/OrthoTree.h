@@ -253,10 +253,10 @@ namespace ippl {
             return os << octant << " " << bounds.get_min() << " " << bounds.get_max();
         }
 
-        std::ostream& print_octant_list(std::ostream& os,
-                                        const Kokkos::vector<morton_code>& octant_list) {
-            for (morton_code octant : octant_list) {
-                print_octant(os, octant);
+        template <typename Iterator>
+        std::ostream& print_octant_list(std::ostream& os, Iterator begin, Iterator end) {
+            for (Iterator it = begin; it != end; ++it) {
+                print_octant(os, *it);
                 os << std::endl;
             }
 
@@ -282,13 +282,20 @@ namespace ippl {
             file.close();
         }
 
-        void octants_to_file(const Kokkos::vector<morton_code>& octants) {
+        /**
+         * @brief prints the octants to a file
+         *
+         * @param octants
+         * @template T a container of morton codes that supports data() and size()
+         */
+        template <typename T>
+        void octants_to_file(const T& octants) {
             std::string outputPath = std::string(IPPL_SOURCE_DIR)
                                      + "/src/OrthoTree/scripts/output/octants"
                                      + std::to_string(Comm->rank()) + ".txt";
 
             std::ofstream file(outputPath, std::ofstream::out);
-            print_octant_list(file, octants);
+            print_octant_list(file, octants.data(), octants.data() + octants.size());
             file.flush();
             file.close();
         }
@@ -314,4 +321,4 @@ namespace ippl {
 // #include "balancing/algo10.hpp"
 // #include "balancing/algo11.hpp"
 
-#endif // ORTHOTREE_GUARD
+#endif  // ORTHOTREE_GUARD
