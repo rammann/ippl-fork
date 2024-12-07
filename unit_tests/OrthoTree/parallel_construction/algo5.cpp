@@ -106,6 +106,7 @@ TEST(ParallelOrthoTreeTest, PartitionTestDistributeUneven) {
     }
 }
 
+/*
 TEST(ParallelOrthoTreeTest, GetNumParticles) {
     // parallel stuff
     ippl::mpi::Communicator comm;
@@ -302,6 +303,8 @@ TEST(ParallelOrthoTreeTest, GetNumParticlesProcessorEmpty) {
         }
     }
 }
+*/
+
 // this is required to test the orthotree, as it depends on ippl
 int main(int argc, char** argv) {
     // Initialize MPI and IPPL

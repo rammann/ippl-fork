@@ -1,6 +1,8 @@
 #ifndef AID_LIST_GUARD
 #define AID_LIST_GUARD
 
+#include <Kokkos_Vector.hpp>
+
 #include "OrthoTree/helpers/BoundingBox.h"
 #include "OrthoTree/helpers/MortonHelper.h"
 
@@ -63,6 +65,9 @@ namespace ippl {
          * @brief Returns the highest index s.t. octants(index-1) <= octant < octants(index)
          */
         size_t getUpperBoundIndexExclusive(morton_code octant) const;
+
+        template <typename Iterator>
+        Kokkos::vector<size_t> getNumParticlesInOctantsParalell(Iterator begin, Iterator end);
 
         /**
          * @brief Returns the highest index s.t. octants(index-1) <= octant <= octants(index)

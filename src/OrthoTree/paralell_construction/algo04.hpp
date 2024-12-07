@@ -21,7 +21,7 @@ namespace ippl {
         logger << "called with min: " << min_octant << ", max: " << max_octant << endl;
 
         Kokkos::vector<morton_code> T = complete_region(min_octant, max_octant);
-        octants_to_file(T);
+
         logger << "T.size() = " << T.size() << endl;
 
         Kokkos::vector<morton_code> C;
@@ -40,7 +40,8 @@ namespace ippl {
         Kokkos::vector<morton_code> G = complete_tree(C);
         logger << "we now have n_octants = " << G.size() << endl;
 
-        Kokkos::vector<size_t> weights = get_num_particles_in_octants_parallel(G);
+        Kokkos::vector<size_t> weights =
+            this->aid_list_m.getNumParticlesInOctantsParalell(G.begin(), G.end());
         logger << "weights have size: " << weights.size() << endl;
         /*
         for (size_t i = 0; i < G.size(); ++i) {

@@ -19,6 +19,7 @@ namespace ippl {
                                                                 morton_code code_b) {
         START_FUNC;
         assert(code_a < code_b);
+
         morton_code neares_comm_ancestor =
             morton_helper.get_nearest_common_ancestor(code_a, code_b);
         std::vector<morton_code> stack = morton_helper.get_children(neares_comm_ancestor);
