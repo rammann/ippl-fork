@@ -338,13 +338,13 @@ TEST(AidListTest, GetReqOctantsTest) {
                                       << ": " << min_octant << " != " << max_octant;
 
     if (Comm->rank() == 0) {
-        EXPECT_EQ(min_octant, 0b111);
-    } else if (Comm->rank() == 1) {
         EXPECT_EQ(min_octant, 0b001);
-    } else if (Comm->rank() == 2) {
+    } else if (Comm->rank() == 1) {
         EXPECT_EQ(min_octant, 0b011);
-    } else if (Comm->rank() == 3) {
+    } else if (Comm->rank() == 2) {
         EXPECT_EQ(min_octant, 0b101);
+    } else if (Comm->rank() == 3) {
+        EXPECT_EQ(min_octant, 0b111);
     }
 }
 

@@ -81,51 +81,6 @@ namespace ippl {
     }
 
     template <size_t Dim>
-    std::pair<morton_code, morton_code> AidList<Dim>::getMinReqOctants() {
-        static constexpr size_t view_size = 2;
-        Kokkos::View<morton_code[view_size]> min_max_octants("min_max_octants");
-        if (world_rank == 0) {
-            const size_t size        = this->size();
-            const size_t batch_size  = size / world_size;
-
-            // rank_{i+1} = [ i * batch_size, (i+1) * batch_size ]
-            Kokkos::parallel_for("Send min/max octants", world_size - 1, [=, this](const size_t i) {
-                const size_t start = i * batch_size;
-                const size_t end   = start + batch_size;
-
-                min_max_octants(0) = getOctant(start);
-                min_max_octants(1) = getOctant(end - 1);
-
-                // send to rank + 1, as parallel_for starts at index=0
-                const size_t target_rank = i + 1;
-                Comm->send(*min_max_octants.data(), view_size, target_rank, 0);
-            });
-
-            // assign min/max for rank 0
-            // rank_0 = [ (#ranks - 1) * batch_size, #octants ]
-
-            const size_t remainder = batch_size + (size % batch_size);
-            const size_t start     = (world_size - 1) * batch_size;
-            const size_t end       = start + remainder;
-
-            min_max_octants(0) = getOctant(start);
-            min_max_octants(1) = getOctant(end - 1);
-        } else {
-            mpi::Status status;
-            try {
-                Comm->recv(min_max_octants.data(), view_size, 0, 0, status);
-            } catch (IpplException& e) {
-                std::cerr << "ERROR in recv: " << e.what() << std::endl;
-            }
-        }
-
-        auto host_min_max = Kokkos::create_mirror_view(min_max_octants);
-        Kokkos::deep_copy(host_min_max, min_max_octants);
-
-        return std::make_pair(host_min_max(0), host_min_max(1));
-    }
-
-    template <size_t Dim>
     size_t AidList<Dim>::getLowerBoundIndex(morton_code target_octant) const {
         const auto lower_bound_it =
             std::lower_bound(octants.data(), octants.data() + octants.extent(0), target_octant,
@@ -164,6 +119,45 @@ namespace ippl {
         }
 
         return upper_bound_idx - lower_bound_idx;
+    }
+
+    template <size_t Dim>
+    std::pair<morton_code, morton_code> AidList<Dim>::getMinReqOctants() {
+        morton_code min_max_octants[2];
+        if (world_rank == 0) {
+            const size_t size       = this->size();
+            const size_t batch_size = size / world_size;
+            const size_t remainder  = (size % batch_size) + batch_size;
+
+            // rank_{i+1} = [ (i * batch_size) + remainder, (i+1) * batch_size ]
+            Kokkos::parallel_for("Send min/max octants", world_size - 1, [=, this](const size_t i) {
+                morton_code
+                    local_min_max_octants[2];  // inside the parallel for because of read-only
+                const size_t start = (i * batch_size) + remainder;
+                const size_t end   = start + batch_size;
+
+                local_min_max_octants[0] = getOctant(start);
+                local_min_max_octants[1] = getOctant(end - 1);
+
+                // send to rank + 1, as parallel_for starts at index=0
+                const size_t target_rank = i + 1;
+                Comm->send(*local_min_max_octants, 2, target_rank, 0);
+            });
+
+            // assign min/max for rank 0
+            // rank_0 = [ (#ranks - 1) * batch_size, #octants ]
+
+            const size_t start = 0;
+            const size_t end   = start + remainder;
+
+            min_max_octants[0] = getOctant(start);
+            min_max_octants[1] = getOctant(end - 1);
+        } else {
+            mpi::Status status;
+            Comm->recv(min_max_octants, 2, 0, 0, status);
+        }
+
+        return std::make_pair(min_max_octants[0], min_max_octants[1]);
     }
 
     template <size_t Dim>
