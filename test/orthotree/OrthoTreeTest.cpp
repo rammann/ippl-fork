@@ -82,8 +82,8 @@ int main(int argc, char* argv[])
         // Kokkos::deep_copy(bunch.rho.getView(), RHO_host);
 
         bunch.update();
-        // tree.build_tree(bunch);
-        tree.build_tree_naive(bunch);
+        tree.build_tree(bunch);
+        // tree.build_tree_naive(bunch);
 
         // stuff 1
         // tree.build_tree_naive(particles);
