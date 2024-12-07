@@ -146,7 +146,7 @@ namespace ippl {
             });
 
             const size_t start = 0;
-            const size_t end   = batch_size + 1;  // one extra octant
+            const size_t end   = batch_size + (0 < remainder ? 1 : 0);  // one extra octant
 
             min_max_octants[0] = getOctant(start);
             min_max_octants[1] = getOctant(end - 1);
