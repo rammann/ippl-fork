@@ -185,14 +185,13 @@ TEST(AidListTest, CorrectConstructionTest2D) {
             EXPECT_EQ(count, n_particles_per_proc);
         }
 
-        EXPECT_TRUE(octant_counter.contains(0b00001));
-        EXPECT_TRUE(octant_counter.contains(0b01001));
-        EXPECT_TRUE(octant_counter.contains(0b10001));
-        EXPECT_TRUE(octant_counter.contains(0b11001));
+        for (morton_code code : {0b001, 0b011, 0b101, 0b111}) {
+            EXPECT_TRUE(octant_counter.contains(code));
+        }
     }
 }
 
-TEST(AidListTest, LowerBoundTest) {
+TEST(AidListTest, NumParticlesInOctantTest) {
     static constexpr size_t Dim       = 2;
     const size_t max_depth            = 1;
     const double min_bounds           = 0.0;
@@ -236,25 +235,71 @@ TEST(AidListTest, LowerBoundTest) {
 
     if (Comm->rank() == 0) {
         // we should only have 4 different octants
-        ASSERT_EQ(aid_list.size(), n_particles_per_proc * Comm->size());
-        ASSERT_EQ(aid_list.size(), 400);  // double checking
+        const size_t total_num_particles = n_particles_per_proc * Comm->size();
+        ASSERT_EQ(aid_list.size(), total_num_particles);
 
-        morton_code root_node = 0;
-        EXPECT_EQ(aid_list.getLowerBoundIndex(root_node), 0);  // this is correct
+        struct TestStruct {
+            morton_code octant;
+            size_t expected_lower_bound;
+            size_t expected_upper_bound_excl;
+            size_t expected_upper_bound_incl;
+            size_t expected_total_particles;
+        };
 
-        EXPECT_EQ(
-            aid_list.getLowerBoundIndex(morton_helper.get_deepest_first_descendant(root_node)), 0);
+        auto run_test = [&](TestStruct& test) {
+            EXPECT_EQ(aid_list.getLowerBoundIndex(test.octant), test.expected_lower_bound)
+                << "Failed lower bound test for octant: " << test.octant;
 
-        EXPECT_EQ(aid_list.getUpperBoundIndexExclusive(
-                      morton_helper.get_deepest_last_descendant(root_node)),
-                  aid_list.size());  // returns 100, should be 400
+            EXPECT_EQ(aid_list.getUpperBoundIndexExclusive(test.octant),
+                      test.expected_upper_bound_excl)
+                << "Failed exclusive upper bound test for octant: " << test.octant;
 
-        EXPECT_EQ(aid_list.getUpperBoundIndexInclusive(
-                      morton_helper.get_deepest_last_descendant(root_node)),
-                  0);  // returns 100, should be 399?
+            EXPECT_EQ(aid_list.getUpperBoundIndexInclusive(test.octant),
+                      test.expected_upper_bound_incl)
+                << "Failed inclusive upper bound test for octant: " << test.octant;
 
-        // returns 100, should be 400 (all particles are in root node)
-        EXPECT_EQ(aid_list.getNumParticlesInOctant(root_node), n_particles_per_proc * Comm->size());
+            EXPECT_EQ(aid_list.getNumParticlesInOctant(test.octant), test.expected_total_particles)
+                << "Failed particle count test for octant: " << test.octant;
+        };
+
+        std::vector<TestStruct> tests_to_run = {// root node
+                                                {.octant                    = 0b000,
+                                                 .expected_lower_bound      = 0,
+                                                 .expected_upper_bound_excl = 0,
+                                                 .expected_upper_bound_incl = 0,
+                                                 .expected_total_particles  = total_num_particles},
+
+                                                // top-left octant
+                                                {.octant                    = 0b001,
+                                                 .expected_lower_bound      = 0,
+                                                 .expected_upper_bound_excl = 100,
+                                                 .expected_upper_bound_incl = 99,
+                                                 .expected_total_particles  = n_particles_per_proc},
+
+                                                // top-middle octant
+                                                {.octant                    = 0b011,
+                                                 .expected_lower_bound      = 100,
+                                                 .expected_upper_bound_excl = 200,
+                                                 .expected_upper_bound_incl = 199,
+                                                 .expected_total_particles  = n_particles_per_proc},
+
+                                                // left-middle octant
+                                                {.octant                    = 0b101,
+                                                 .expected_lower_bound      = 200,
+                                                 .expected_upper_bound_excl = 300,
+                                                 .expected_upper_bound_incl = 299,
+                                                 .expected_total_particles  = n_particles_per_proc},
+
+                                                // middle-middle octant
+                                                {.octant                    = 0b111,
+                                                 .expected_lower_bound      = 300,
+                                                 .expected_upper_bound_excl = 400,
+                                                 .expected_upper_bound_incl = 399,
+                                                 .expected_total_particles = n_particles_per_proc}};
+
+        for (auto test_data : tests_to_run) {
+            run_test(test_data);
+        }
     }
 }
 
@@ -266,9 +311,6 @@ TEST(AidListTest, GetReqOctantsTest) {
     const size_t n_particles_per_proc = 100;
 
     auto particles = getParticles<Dim>(n_particles_per_proc, min_bounds, max_bounds);
-
-    // DISABLED FOR NOW, NEED TO FIX LowerBoundTest FIRST
-    return;
 
     if (Comm->rank() == 0) {
         for (int i = 0; i < Comm->size(); ++i) {
@@ -302,8 +344,6 @@ TEST(AidListTest, GetReqOctantsTest) {
 
     aid_list.initialize(root_bounds, particles);
 
-    auto [min_octant, max_octant] = aid_list.getMinReqOctants();
-
     if (Comm->rank() == 0) {
         std::map<morton_code, size_t> octant_counter;
 
@@ -315,21 +355,22 @@ TEST(AidListTest, GetReqOctantsTest) {
         ASSERT_EQ(octant_counter.size(), 4);
     }
 
-    // THIS BLOCK IS WRONG, NEEDS TO BE FIXED AFTER LowerBoundTest IS FIXED
-    EXPECT_EQ(min_octant, max_octant);
-    std::cerr << "RANK : " << Comm->rank() << " has(min: " << min_octant << ", max: " << max_octant
-              << ")" << std::endl;
-    if (Comm->rank() == 0) {
-        EXPECT_EQ(min_octant, 1);
-    } else if (Comm->rank() == 1) {
-        EXPECT_EQ(min_octant, 1);
-    } else if (Comm->rank() == 2) {
-        EXPECT_EQ(min_octant, 9);
-    } else if (Comm->rank() == 3) {
-        EXPECT_EQ(min_octant, 17);
-    }
+    auto [min_octant, max_octant] = aid_list.getMinReqOctants();
 
-    std::cerr << "PASSED TEST!!!" << std::endl;
+    // expected to be equivalent, as the list is initialised with 4 different octants
+    // n_particles_per_proc times
+    EXPECT_EQ(min_octant, max_octant) << "Failed min_octant == max_octant on Rank" << Comm->rank()
+                                      << ": " << min_octant << " != " << max_octant;
+
+    if (Comm->rank() == 0) {
+        EXPECT_EQ(min_octant, 0b111);
+    } else if (Comm->rank() == 1) {
+        EXPECT_EQ(min_octant, 0b001);
+    } else if (Comm->rank() == 2) {
+        EXPECT_EQ(min_octant, 0b011);
+    } else if (Comm->rank() == 3) {
+        EXPECT_EQ(min_octant, 0b101);
+    }
 }
 
 int main(int argc, char** argv) {

@@ -87,22 +87,29 @@ namespace ippl {
         if (world_rank == 0) {
             const size_t size        = this->size();
             const size_t batch_size  = size / world_size;
-            const size_t rank_0_size = batch_size + (size % batch_size);
 
-            Kokkos::parallel_for(
-                "Send min/max octants", world_size - 1, [=, this](const size_t target_rank) {
-                    const size_t start = ((target_rank + 1) * batch_size) + rank_0_size;
-                    const size_t end   = start + batch_size - 1;
+            // rank_{i+1} = [ i * batch_size, (i+1) * batch_size ]
+            Kokkos::parallel_for("Send min/max octants", world_size - 1, [=, this](const size_t i) {
+                const size_t start = i * batch_size;
+                const size_t end   = start + batch_size;
 
-                    min_max_octants(0) = getOctant(start);
-                    min_max_octants(1) = getOctant(end);
+                min_max_octants(0) = getOctant(start);
+                min_max_octants(1) = getOctant(end - 1);
 
-                    Comm->send(*min_max_octants.data(), view_size, target_rank + 1, 0);
-                });
+                // send to rank + 1, as parallel_for starts at index=0
+                const size_t target_rank = i + 1;
+                Comm->send(*min_max_octants.data(), view_size, target_rank, 0);
+            });
 
             // assign min/max for rank 0
-            min_max_octants(0) = getOctant(0);
-            min_max_octants(1) = getOctant(rank_0_size - 1);
+            // rank_0 = [ (#ranks - 1) * batch_size, #octants ]
+
+            const size_t remainder = batch_size + (size % batch_size);
+            const size_t start     = (world_size - 1) * batch_size;
+            const size_t end       = start + remainder;
+
+            min_max_octants(0) = getOctant(start);
+            min_max_octants(1) = getOctant(end - 1);
         } else {
             mpi::Status status;
             try {
@@ -120,9 +127,9 @@ namespace ippl {
 
     template <size_t Dim>
     size_t AidList<Dim>::getLowerBoundIndex(morton_code target_octant) const {
-        auto lower_bound_it =
+        const auto lower_bound_it =
             std::lower_bound(octants.data(), octants.data() + octants.extent(0), target_octant,
-                             [](const morton_code octants_entry, const morton_code& target) {
+                             [](const morton_code& octants_entry, const morton_code& target) {
                                  return octants_entry < target;
                              });
 
@@ -131,9 +138,9 @@ namespace ippl {
 
     template <size_t Dim>
     size_t AidList<Dim>::getUpperBoundIndexExclusive(morton_code target_octant) const {
-        auto upper_bound_it =
+        const auto upper_bound_it =
             std::upper_bound(octants.data(), octants.data() + octants.extent(0), target_octant,
-                             [](const morton_code& target, const morton_code octants_entry) {
+                             [](const morton_code& target, const morton_code& octants_entry) {
                                  return target < octants_entry;
                              });
 
@@ -142,17 +149,8 @@ namespace ippl {
 
     template <size_t Dim>
     size_t AidList<Dim>::getUpperBoundIndexInclusive(morton_code target_octant) const {
-        auto upper_bound_it =
-            std::upper_bound(octants.data(), octants.data() + octants.extent(0), target_octant,
-                             [](const morton_code& target, const morton_code octants_entry) {
-                                 return target < octants_entry;
-                             });
-
-        if (upper_bound_it != octants.data()) {
-            --upper_bound_it;
-        }
-
-        return static_cast<size_t>(upper_bound_it - octants.data());
+        const size_t upper_bound_idx = getUpperBoundIndexExclusive(target_octant);
+        return upper_bound_idx != 0 ? upper_bound_idx - 1 : upper_bound_idx;
     }
 
     template <size_t Dim>
