@@ -136,7 +136,7 @@ TEST(AidListTest, ChecksIfGatheredCorrectly) {
     }
 }
 
-TEST(AidListTest, ConstructionTest) {
+TEST(AidListTest, ConstructorTest) {
     // #### SETUP ####
     static constexpr size_t Dim       = 3;
     const size_t max_depth            = 5;
@@ -207,6 +207,10 @@ TEST(AidListTest, CorrectConstructionTest2D) {
             EXPECT_TRUE(octant_counter.contains(code));
         }
     }
+
+    EXPECT_TRUE(std::is_sorted(aid_list.getOctants().data(),
+                               aid_list.getOctants().data() + aid_list.size()))
+        << "AidList is not sorted on rank " << Comm->rank();
 }
 
 TEST(AidListTest, NumParticlesInOctantTest) {
@@ -342,6 +346,52 @@ TEST(AidListTest, GetReqOctantsTest) {
     } else if (Comm->rank() == 3) {
         EXPECT_EQ(min_octant, 0b101);
     }
+}
+
+/**
+ * @brief If this test fails, but only once then it was random chance, everything is ok.
+ * You could just turn up the tolerance though:)
+ */
+TEST(AidListTest, InitialiseForRank) {
+    // #### SETUP ####
+    static constexpr size_t Dim       = 2;
+    const size_t max_depth            = 4;
+    const double min_bounds           = 0.0;
+    const double max_bounds           = 1.0;
+    const size_t n_particles_per_proc = 100;
+    const size_t total_particles      = Comm->size() * n_particles_per_proc;
+
+    const size_t tolerance = 15;
+
+    auto particles = getParticles<Dim>(n_particles_per_proc, min_bounds, max_bounds);
+
+    AidList<Dim> aid_list(max_depth);
+    BoundingBox<Dim> root_bounds({min_bounds, min_bounds}, {max_bounds, max_bounds});
+
+    aid_list.initialize(root_bounds, particles);
+    // #### SETUP DONE ####
+
+    auto [min_octant, max_octant] = aid_list.getMinReqOctants();
+
+    aid_list.innitFromOctants(min_octant, max_octant);
+
+    if (Comm->rank() == 0) {
+        EXPECT_NEAR(aid_list.size(), total_particles, tolerance)
+            << "Rank 0 has wrong aid_list_size! Expected roughly: " << total_particles
+            << ", got: " << aid_list.size();
+        EXPECT_TRUE(std::is_sorted(aid_list.getOctants().data(),
+                                   aid_list.getOctants().data() + aid_list.size()))
+            << "Octants are not sorted on rank " << Comm->rank();
+    } else {
+        EXPECT_NEAR(aid_list.size(), n_particles_per_proc, tolerance)
+            << "Rank " << Comm->rank()
+            << " has wrong aid_list_size! Expected roughly: " << n_particles_per_proc
+            << ", got: " << aid_list.size();
+    }
+
+    EXPECT_TRUE(std::is_sorted(aid_list.getOctants().data(),
+                               aid_list.getOctants().data() + aid_list.size()))
+        << "Octants are not sorted on rank " << Comm->rank();
 }
 
 int main(int argc, char** argv) {
