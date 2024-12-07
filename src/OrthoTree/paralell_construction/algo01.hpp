@@ -120,6 +120,19 @@ namespace ippl {
             }
         }
 
+        //these following lines are for testing purposes
+        //they check that the resulting tree is sorted and doesn't leave gaps 
+        //in the domain
+        // The lambda checks that two morton codes are sorted and that there are 
+        // no other morton codes between them that overlaps neither
+        auto is_sorted_and_contiguous = [this](const morton_code& a, const morton_code& b) {
+            if (b <= a || morton_helper.is_descendant(b, a)) {
+                return false;
+            }
+            return b <= morton_helper.get_deepest_first_descendant(a + morton_helper.get_step_size(a));
+        };
+        assert(std::is_sorted(tree_view.data(), tree_view.data() + tree_view.size(), is_sorted_and_contiguous)
+               && "partitioned_tree is not sorted");
         return tree_view;
     }
 
