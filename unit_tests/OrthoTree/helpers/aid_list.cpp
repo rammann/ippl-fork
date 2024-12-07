@@ -237,13 +237,17 @@ TEST(AidListTest, LowerBoundTest) {
     if (Comm->rank() == 0) {
         // we should only have 4 different octants
         ASSERT_EQ(aid_list.size(), n_particles_per_proc * Comm->size());
+        ASSERT_EQ(aid_list.size(), 400);  // double checking
 
         morton_code root_node = 0;
         EXPECT_EQ(aid_list.getLowerBoundIndex(root_node), 0);  // this is correct
 
+        EXPECT_EQ(
+            aid_list.getLowerBoundIndex(morton_helper.get_deepest_first_descendant(root_node)), 0);
+
         EXPECT_EQ(aid_list.getUpperBoundIndexExclusive(
                       morton_helper.get_deepest_last_descendant(root_node)),
-                  400);  // returns 100, should be 400
+                  aid_list.size());  // returns 100, should be 400
 
         EXPECT_EQ(aid_list.getUpperBoundIndexInclusive(
                       morton_helper.get_deepest_last_descendant(root_node)),

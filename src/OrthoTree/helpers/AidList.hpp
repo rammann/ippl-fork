@@ -118,66 +118,48 @@ namespace ippl {
     }
 
     template <size_t Dim>
-    size_t AidList<Dim>::getLowerBoundIndex(morton_code octant) const {
-        size_t lower_bound = 0;
+    size_t AidList<Dim>::getLowerBoundIndex(morton_code target_octant) const {
+        auto lower_bound_it =
+            std::lower_bound(octants.data(), octants.data() + octants.extent(0), target_octant,
+                             [](const morton_code octants_entry, const morton_code& target) {
+                                 return octants_entry < target;
+                             });
 
-        // chatgpt magic
-        Kokkos::parallel_reduce(
-            "LowerBoundSearch", this->size(),
-            [=, this](const size_t i, size_t& update) {
-                if (octants(i) >= octant) {
-                    update = (update < i) ? update : i;
-                }
-            },
-            Kokkos::Min<size_t>(lower_bound));
-
-        if (lower_bound == this->size()) {
-            throw std::runtime_error("Octant not found in AidList.");
-        }
-        return lower_bound;
+        return static_cast<size_t>(lower_bound_it - this->octants.data());
     }
     template <size_t Dim>
-    size_t AidList<Dim>::getUpperBoundIndexExclusive(morton_code octant) const {
-        size_t upper_bound = this->size();
+    size_t AidList<Dim>::getUpperBoundIndexExclusive(morton_code target_octant) const {
+        auto upper_bound_it =
+            std::upper_bound(octants.data(), octants.data() + octants.extent(0), target_octant,
+                             [](const morton_code& target, const morton_code octants_entry) {
+                                 return target < octants_entry;
+                             });
 
-        Kokkos::parallel_reduce(
-            "UpperBoundExclusiveSearch", this->size(),
-            [=, this](const size_t i, size_t& update) {
-                if (octants(i) > octant) {
-                    update = (update < i) ? update : i;
-                }
-            },
-            Kokkos::Min<size_t>(upper_bound));
-
-        return upper_bound;
+        return static_cast<size_t>(upper_bound_it - this->octants.data());
     }
 
     template <size_t Dim>
-    size_t AidList<Dim>::getUpperBoundIndexInclusive(morton_code octant) const {
-        size_t upper_bound = this->size();
+    size_t AidList<Dim>::getUpperBoundIndexInclusive(morton_code target_octant) const {
+        auto upper_bound_it =
+            std::upper_bound(octants.data(), octants.data() + octants.extent(0), target_octant,
+                             [](const morton_code& target, const morton_code octants_entry) {
+                                 return target < octants_entry;
+                             });
 
-        Kokkos::parallel_reduce(
-            "UpperBoundInclusiveSearch", this->size(),
-            [=, this](const size_t i, size_t& update) {
-                if (octants(i) >= octant) {
-                    update = (update < i) ? update : i;
-                }
-            },
-            Kokkos::Min<size_t>(upper_bound));
-
-        if (upper_bound == this->size()) {
-            return upper_bound - 1;
+        if (upper_bound_it != octants.data()) {
+            while (upper_bound_it > octants.data() && *upper_bound_it != target_octant) {
+                --upper_bound_it;
+            }
         }
 
-        return upper_bound;
+        return static_cast<size_t>(upper_bound_it - octants.data());
     }
 
     template <size_t Dim>
     size_t AidList<Dim>::getNumParticlesInOctant(morton_code octant) const {
-        const size_t lower_bound_idx =
-            getLowerBoundIndex(morton_helper.get_deepest_first_descendant(octant));
+        const size_t lower_bound_idx = getLowerBoundIndex(octant);
         const size_t upper_bound_idx =
-            getUpperBoundIndexInclusive(morton_helper.get_deepest_last_descendant(octant));
+            getUpperBoundIndexExclusive(morton_helper.get_deepest_last_descendant(octant));
 
         if (lower_bound_idx > upper_bound_idx) {
             throw std::runtime_error("loweridx > upper_idx in getNumParticlesInOctant...");
