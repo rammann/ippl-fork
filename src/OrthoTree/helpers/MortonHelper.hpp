@@ -108,6 +108,9 @@ namespace ippl {
     inline bool Morton<Dim>::is_descendant(morton_code child, morton_code parent) const
     {
 
+        // child has to be finer than parent
+        if ( get_depth(child) <= get_depth(parent) ) return false;
+
         // descendants are always larger than their parents
         if ( child <= parent ) return false;
 
