@@ -72,18 +72,57 @@ auto getUngatheredParticles(size_t num_particles_per_proc, const double min_boun
     return bunch;
 }
 
+/**
+ * @brief This distributes the particles to the 4 corners of our 2d domain
+ */
+template <typename Particles>
+Particles distributeToCorners2D(Particles& particles, double min_bounds, double max_bounds) {
+    static constexpr size_t Dim = 2;
+    if (Comm->rank() == 0) {
+        for (int i = 0; i < Comm->size(); ++i) {
+            ippl::Vector<double, Dim> pos;
+            switch (i) {
+                case 0: {
+                    pos = {min_bounds, min_bounds};
+                } break;
+                case 1: {
+                    pos = {min_bounds, max_bounds};
+                } break;
+                case 2: {
+                    pos = {max_bounds, min_bounds};
+                } break;
+                case 3: {
+                    pos = {max_bounds, max_bounds};
+                } break;
+                default:
+                    break;  // no need to handle, we assert world_size in another test.
+            }
+            const size_t n_particles_per_proc = particles.getTotalNum() / Comm->size();
+            for (size_t j = 0; j < n_particles_per_proc; ++j) {
+                size_t start_idx           = ((size_t)i * n_particles_per_proc);
+                particles.R(start_idx + j) = pos;
+            }
+        }
+    }
+
+    return particles;
+}
+
 // ================================================================
 //                          TESTS START
 // ================================================================
 
+// sanity check, tests are designed to run (and pass) with 4 ranks
 TEST(AidListTest, AssertWorldSize) {
     ASSERT_EQ(Comm->size(), 4);
 }
 
 TEST(AidListTest, ChecksIfGatheredCorrectly) {
+    // #### SETUP ####
     static constexpr size_t Dim = 3;
     const size_t max_depth      = 5;
     AidList<Dim> aid_list(max_depth);
+    // #### SETUP DONE ####
 
     auto gathered_particles   = getParticles<Dim>(100, 0.0, 1.0);
     auto ungathered_particles = getUngatheredParticles<Dim>(100, 0.0, 1.0);
@@ -98,6 +137,7 @@ TEST(AidListTest, ChecksIfGatheredCorrectly) {
 }
 
 TEST(AidListTest, ConstructionTest) {
+    // #### SETUP ####
     static constexpr size_t Dim       = 3;
     const size_t max_depth            = 5;
     const double min_bounds           = 0.0;
@@ -110,6 +150,8 @@ TEST(AidListTest, ConstructionTest) {
     auto gathered_particles = getParticles<Dim>(n_particles_per_proc, min_bounds, max_bounds);
 
     AidList<Dim> working_aid_list(max_depth);
+    // #### SETUP DONE ####
+
     working_aid_list.initialize(root_bounds, gathered_particles);
 
     if (Comm->rank() == 0) {
@@ -132,6 +174,7 @@ TEST(AidListTest, ConstructionTest) {
 }
 
 TEST(AidListTest, CorrectConstructionTest2D) {
+    // #### SETUP ####
     static constexpr size_t Dim       = 2;
     const size_t max_depth            = 1;
     const double min_bounds           = 0.0;
@@ -139,38 +182,13 @@ TEST(AidListTest, CorrectConstructionTest2D) {
     const size_t n_particles_per_proc = 100;
 
     auto particles = getParticles<Dim>(n_particles_per_proc, min_bounds, max_bounds);
-
-    if (Comm->rank() == 0) {
-        for (int i = 0; i < Comm->size(); ++i) {
-            ippl::Vector<double, Dim> pos;
-            switch (i) {
-                case 0: {
-                    pos = {min_bounds, min_bounds};
-                } break;
-                case 1: {
-                    pos = {min_bounds, max_bounds};
-                } break;
-                case 2: {
-                    pos = {max_bounds, min_bounds};
-                } break;
-                case 3: {
-                    pos = {max_bounds, max_bounds};
-                } break;
-                default:
-                    break;  // no need to handle, we assert world_size in another test.
-            }
-
-            for (size_t j = 0; j < n_particles_per_proc; ++j) {
-                size_t start_idx           = ((size_t)i * n_particles_per_proc);
-                particles.R(start_idx + j) = pos;
-            }
-        }
-    }
+    particles      = distributeToCorners2D(particles, min_bounds, max_bounds);
 
     AidList<Dim> aid_list(max_depth);
     BoundingBox<Dim> root_bounds({min_bounds, min_bounds}, {max_bounds, max_bounds});
 
     aid_list.initialize(root_bounds, particles);
+    // #### SETUP DONE ####
 
     if (Comm->rank() == 0) {
         std::map<morton_code, size_t> octant_counter;
@@ -192,6 +210,7 @@ TEST(AidListTest, CorrectConstructionTest2D) {
 }
 
 TEST(AidListTest, NumParticlesInOctantTest) {
+    // #### SETUP ####
     static constexpr size_t Dim       = 2;
     const size_t max_depth            = 1;
     const double min_bounds           = 0.0;
@@ -199,39 +218,14 @@ TEST(AidListTest, NumParticlesInOctantTest) {
     const size_t n_particles_per_proc = 100;
 
     auto particles = getParticles<Dim>(n_particles_per_proc, min_bounds, max_bounds);
-
-    if (Comm->rank() == 0) {
-        for (int i = 0; i < Comm->size(); ++i) {
-            ippl::Vector<double, Dim> pos;
-            switch (i) {
-                case 0: {
-                    pos = {min_bounds, min_bounds};
-                } break;
-                case 1: {
-                    pos = {min_bounds, max_bounds};
-                } break;
-                case 2: {
-                    pos = {max_bounds, min_bounds};
-                } break;
-                case 3: {
-                    pos = {max_bounds, max_bounds};
-                } break;
-                default:
-                    break;  // no need to handle, we assert world_size in another test.
-            }
-
-            for (size_t j = 0; j < n_particles_per_proc; ++j) {
-                size_t start_idx           = ((size_t)i * n_particles_per_proc);
-                particles.R(start_idx + j) = pos;
-            }
-        }
-    }
+    particles      = distributeToCorners2D(particles, min_bounds, max_bounds);
 
     AidList<Dim> aid_list(max_depth);
     BoundingBox<Dim> root_bounds({min_bounds, min_bounds}, {max_bounds, max_bounds});
     Morton<Dim> morton_helper(max_depth);
 
     aid_list.initialize(root_bounds, particles);
+    // #### SETUP DONE ####
 
     if (Comm->rank() == 0) {
         // we should only have 4 different octants
@@ -304,6 +298,7 @@ TEST(AidListTest, NumParticlesInOctantTest) {
 }
 
 TEST(AidListTest, GetReqOctantsTest) {
+    // #### SETUP ####
     static constexpr size_t Dim       = 2;
     const size_t max_depth            = 1;
     const double min_bounds           = 0.0;
@@ -311,39 +306,15 @@ TEST(AidListTest, GetReqOctantsTest) {
     const size_t n_particles_per_proc = 100;
 
     auto particles = getParticles<Dim>(n_particles_per_proc, min_bounds, max_bounds);
-
-    if (Comm->rank() == 0) {
-        for (int i = 0; i < Comm->size(); ++i) {
-            ippl::Vector<double, Dim> pos;
-            switch (i) {
-                case 0: {
-                    pos = {min_bounds, min_bounds};
-                } break;
-                case 1: {
-                    pos = {min_bounds, max_bounds};
-                } break;
-                case 2: {
-                    pos = {max_bounds, min_bounds};
-                } break;
-                case 3: {
-                    pos = {max_bounds, max_bounds};
-                } break;
-                default:
-                    break;  // no need to handle, we assert world_size in another test.
-            }
-
-            for (size_t j = 0; j < n_particles_per_proc; ++j) {
-                size_t start_idx           = ((size_t)i * n_particles_per_proc);
-                particles.R(start_idx + j) = pos;
-            }
-        }
-    }
+    particles      = distributeToCorners2D(particles, min_bounds, max_bounds);
 
     AidList<Dim> aid_list(max_depth);
     BoundingBox<Dim> root_bounds({min_bounds, min_bounds}, {max_bounds, max_bounds});
 
     aid_list.initialize(root_bounds, particles);
+    // #### SETUP DONE ####
 
+    // sanity check
     if (Comm->rank() == 0) {
         std::map<morton_code, size_t> octant_counter;
 
