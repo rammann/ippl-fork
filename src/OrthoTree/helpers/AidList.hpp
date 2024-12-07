@@ -52,11 +52,12 @@ namespace ippl {
         std::vector<std::pair<morton_code, size_t>> temp_aid_list(n_particles);
 
         for (size_t i = 0; i < n_particles; ++i) {
-            const real_coordinate normalized =
-                (particles.R(i) - root_bounds.get_min()) / root_bounds_size;
+            // this gets rid of cancellation, thank you @NumCSE script
+            const grid_coordinate grid_coord = static_cast<grid_coordinate>(
+                (particles.R(i) - root_bounds.get_min()) * (grid_size - 1) / root_bounds_size);
 
-            const grid_coordinate grid_coord = static_cast<grid_coordinate>(normalized * grid_size);
-            temp_aid_list[i]                 = {morton_helper.encode(grid_coord, max_depth), i};
+            // encode the grid coordinate and store it
+            temp_aid_list[i] = {morton_helper.encode(grid_coord, max_depth), i};
         }
 
         // sort by morton codes: TODO: make this smarter
@@ -127,6 +128,7 @@ namespace ippl {
 
         return static_cast<size_t>(lower_bound_it - this->octants.data());
     }
+
     template <size_t Dim>
     size_t AidList<Dim>::getUpperBoundIndexExclusive(morton_code target_octant) const {
         auto upper_bound_it =
@@ -147,9 +149,7 @@ namespace ippl {
                              });
 
         if (upper_bound_it != octants.data()) {
-            while (upper_bound_it > octants.data() && *upper_bound_it != target_octant) {
-                --upper_bound_it;
-            }
+            --upper_bound_it;
         }
 
         return static_cast<size_t>(upper_bound_it - octants.data());
