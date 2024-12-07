@@ -332,20 +332,16 @@ TEST(AidListTest, GetReqOctantsTest) {
 
     auto [min_octant, max_octant] = aid_list.getMinReqOctants();
 
-    // expected to be equivalent, as the list is initialised with 4 different octants
-    // n_particles_per_proc times
-    EXPECT_EQ(min_octant, max_octant) << "Failed min_octant == max_octant on Rank" << Comm->rank()
-                                      << ": " << min_octant << " != " << max_octant;
+    ASSERT_EQ(min_octant, max_octant)
+        << "Rank: " << Comm->rank() << " got min: " << min_octant << ", max: " << max_octant;
 
-    if (Comm->rank() == 0) {
-        EXPECT_EQ(min_octant, 0b001) << "Rank 0 expected: " << 0b001 << ", but got: " << min_octant;
-    } else if (Comm->rank() == 1) {
-        EXPECT_EQ(min_octant, 0b011) << "Rank 1 expected: " << 0b011 << ", but got: " << min_octant;
-    } else if (Comm->rank() == 2) {
-        EXPECT_EQ(min_octant, 0b101) << "Rank 2 expected: " << 0b101 << ", but got: " << min_octant;
-    } else if (Comm->rank() == 3) {
-        EXPECT_EQ(min_octant, 0b111) << "Rank 3 expected: " << 0b111 << ", but got: " << min_octant;
-    }
+    morton_code base_octant = 1;
+    morton_code step_size   = 2;
+
+    morton_code expected_octant = base_octant + (Comm->rank() * step_size);
+    EXPECT_EQ(min_octant, expected_octant)
+        << "Rank " << Comm->rank() << " expected: " << expected_octant
+        << ", but got: " << min_octant;
 }
 
 /**
