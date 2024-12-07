@@ -118,7 +118,8 @@ namespace ippl {
 
         // if we sort the tree after construction we can compare two trees
         std::sort(result_tree.begin(), result_tree.end());
-        Kokkos::View<morton_code*> return_tree(result_tree.data());
+        Kokkos::View<morton_code*> return_tree("result_tree", result_tree.size());
+        return_tree.assign_data(result_tree.data());
         END_FUNC;
         return return_tree;
     }
