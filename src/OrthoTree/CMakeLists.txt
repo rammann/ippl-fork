@@ -1,6 +1,5 @@
 set (_SRCS
-    # Add source files here
-)
+    )
 
 set (_HDRS
     Types.h
@@ -11,6 +10,8 @@ set (_HDRS
     helpers/MortonHelper.hpp
     helpers/BoundingBox.h
     helpers/BoundingBox.hpp
+    helpers/AidList.h
+    helpers/AidList.hpp
 )
 
 include_directories (

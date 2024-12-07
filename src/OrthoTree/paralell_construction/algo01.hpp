@@ -1,5 +1,4 @@
 #include "../OrthoTree.h"
-
 /*
 TODO:
 - WRITE TESTS FOR THE FUNCTION

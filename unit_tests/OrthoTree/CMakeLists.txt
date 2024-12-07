@@ -31,11 +31,12 @@ add_test_with_gtest(tree_test ortho_tree.cpp)
 # helper tests
 add_test_with_gtest(bounds_test helpers/bounding_box.cpp)
 add_test_with_gtest(morton_test helpers/morton_codes.cpp)
+add_test_with_gtest(aid_list_test helpers/aid_list.cpp)
 
 # paralell construction tests
-add_test_with_gtest(parallel_tree_test paralell_construction/algo5.cpp)
-add_test_with_gtest(linearise_test paralell_construction/algo8.cpp)
-add_test_with_gtest(complete_region_test paralell_construction/algo2.cpp)
+add_test_with_gtest(parallel_tree_test parallel_construction/algo5.cpp)
+add_test_with_gtest(linearise_test parallel_construction/algo8.cpp)
+add_test_with_gtest(complete_region_test parallel_construction/algo2.cpp)
 
 # paralell balancing tests
 # TODO: 

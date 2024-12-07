@@ -231,7 +231,7 @@ namespace ippl {
     inline morton_code Morton<Dim>::spread_coords(grid_t coord) const
     {
         morton_code res = 0;
-        for ( size_t i = 0; i < max_depth; ++i ) {
+        for (size_t i = 0; i < max_depth + 1; ++i) {
             // should be right, idk if this is possible without a loop, to guarantee unroll: replace max_depth with sizeof(morton_code)
             const auto current_bit = (coord >> i) & 1ULL;
             const auto shift = (i * Dim);

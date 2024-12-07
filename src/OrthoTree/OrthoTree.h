@@ -9,6 +9,7 @@
 #include "OrthoTreeTypes.h"
 
 #include "OrthoTreeParticle.h"
+#include "helpers/AidList.h"
 #include "helpers/BoundingBox.h"
 #include "helpers/Config.h"
 #include "helpers/MortonHelper.h"
@@ -252,7 +253,7 @@ namespace ippl {
             return os << octant << " " << bounds.get_min() << " " << bounds.get_max();
         }
 
-        template<typename Iterator>
+        template <typename Iterator>
         std::ostream& print_octant_list(std::ostream& os, Iterator begin, Iterator end) {
             for (Iterator it = begin; it != end; ++it) {
                 print_octant(os, *it);
@@ -287,7 +288,7 @@ namespace ippl {
          * @param octants
          * @template T a container of morton codes that supports data() and size()
          */
-        template<typename T>
+        template <typename T>
         void octants_to_file(const T& octants) {
             std::string outputPath = std::string(IPPL_SOURCE_DIR)
                                      + "/src/OrthoTree/scripts/output/octants"
@@ -298,7 +299,6 @@ namespace ippl {
             file.flush();
             file.close();
         }
-
     };
 #pragma endregion  // print_helpers
 
@@ -321,4 +321,4 @@ namespace ippl {
 // #include "balancing/algo10.hpp"
 // #include "balancing/algo11.hpp"
 
-#endif // ORTHOTREE_GUARD
+#endif  // ORTHOTREE_GUARD

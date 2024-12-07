@@ -22,6 +22,32 @@ TEST(MortonCodesTest, Encode3D)
   EXPECT_EQ(code, expected);
 }
 
+TEST(MortonCodesTest, Encode2D) {
+    static constexpr size_t Dim = 2;
+    const size_t max_depth      = 1;
+    Morton<Dim> morton(max_depth);
+
+    grid_coordinate_template<Dim> coord1 = {0, 0};  // top-left corner
+    grid_coordinate_template<Dim> coord2 = {1, 0};  // top-middle corner
+    grid_coordinate_template<Dim> coord3 = {0, 1};  // middle-left corner
+    grid_coordinate_template<Dim> coord4 = {1, 1};  // middle-middle corner
+
+    morton_code code1 = morton.encode(coord1, max_depth);
+    morton_code code2 = morton.encode(coord2, max_depth);
+    morton_code code3 = morton.encode(coord3, max_depth);
+    morton_code code4 = morton.encode(coord4, max_depth);
+
+    const morton_code expected1 = 0b001;
+    const morton_code expected2 = 0b011;
+    const morton_code expected3 = 0b101;
+    const morton_code expected4 = 0b111;
+
+    EXPECT_EQ(code1, expected1);
+    EXPECT_EQ(code2, expected2);
+    EXPECT_EQ(code3, expected3);
+    EXPECT_EQ(code4, expected4);
+}
+
 TEST(MortonCodesTest, Decode3D) {
   static constexpr size_t Dim = 3;
   const size_t max_depth = 8;

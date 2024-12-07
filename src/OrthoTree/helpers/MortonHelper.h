@@ -41,10 +41,10 @@ namespace ippl {
             , n_children((1 << (Dim))) {}
 
         // deleted to enforce singleton
-        Morton(const Morton&)            = delete;
-        Morton& operator=(const Morton&) = delete;
-        Morton(Morton&&)                 = delete;
-        Morton& operator=(Morton&&)      = delete;
+        Morton(const Morton&)            = default;
+        Morton& operator=(const Morton&) = default;
+        Morton(Morton&&)                 = default;
+        Morton& operator=(Morton&&)      = default;
 
         /**
          * @brief Encodes the given coordinate based on the rasterizer. As of now, the rasterizer is
