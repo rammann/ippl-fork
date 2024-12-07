@@ -38,7 +38,7 @@ namespace ippl {
     template <size_t Dim>
     Kokkos::View<morton_code*> OrthoTree<Dim>::build_tree_naive(particle_t const& particles) {
         // this needs to be initialized before constructing the tree
-        this->aid_list_m.initialize(particles, root_bounds_m);
+        this->aid_list_m.initialize(root_bounds_m, particles);
 
         Kokkos::vector<morton_code> result_tree;
 
@@ -54,7 +54,7 @@ namespace ippl {
             }
 
             for ( const auto& child_octant : morton_helper.get_children(octant) ) {
-                const size_t count = get_num_particles_in_octant(child_octant);
+                const size_t count = aid_list_m.getNumParticlesInOctant(child_octant);
 
                 // no need to push in this case
                 if ( count > 0 ) {
@@ -68,6 +68,8 @@ namespace ippl {
 
         Kokkos::View<morton_code*> tree_view("tree_view_naive", result_tree.size());
         tree_view.assign_data(result_tree.data());
+
+        octants_to_file(tree_view);
 
         return tree_view;
     }

@@ -14,7 +14,7 @@ int main(int argc, char* argv[])
     ippl::initialize(argc, argv);
     {
         static constexpr size_t Dim = 2;
-        const size_t max_particles  = 100;
+        const size_t max_particles  = 10;
         const size_t max_depth      = 5;
         const size_t num_particles  = 1000;  // per processor
 

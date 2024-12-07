@@ -21,7 +21,7 @@ namespace ippl {
         logger << "called with min: " << min_octant << ", max: " << max_octant << endl;
 
         Kokkos::vector<morton_code> T = complete_region(min_octant, max_octant);
-        octants_to_file(T);
+
         logger << "T.size() = " << T.size() << endl;
 
         Kokkos::vector<morton_code> C;

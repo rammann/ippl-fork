@@ -17,19 +17,23 @@ namespace ippl {
         auto [min_octant, max_octant] = this->aid_list_m.getMinReqOctants();
 
         auto octants = block_partition(min_octant, max_octant);
+        this->aid_list_m.innitFromOctants(octants.front(), octants.back());
 
         particles_to_file(particles);
 
         // Each proc has now as much of the aid_list as he needs and can start building the
         // tree.
         Kokkos::View<morton_code*> tree_view = build_tree_from_octants(octants);
-
+        octants_to_file(tree_view);
         Comm->barrier();
         logger.flush();
 
         size_t total_particles = 0;
         for (size_t i = 0; i < tree_view.size(); ++i) {
-            total_particles += this->aid_list_m.getNumParticlesInOctant(tree_view[i]);
+            auto num_particles = this->aid_list_m.getNumParticlesInOctant(tree_view[i]);
+            total_particles += num_particles;
+
+            logger << "Adding: " << num_particles << " particles" << endl;
         }
 
         size_t global_total_particles = 0;
@@ -119,7 +123,9 @@ namespace ippl {
         // if we sort the tree after construction we can compare two trees
         std::sort(result_tree.begin(), result_tree.end());
         Kokkos::View<morton_code*> return_tree("result_tree", result_tree.size());
-        return_tree.assign_data(result_tree.data());
+        for (size_t i = 0; i < result_tree.size(); ++i) {
+            return_tree(i) = result_tree[i];
+        }
         END_FUNC;
         return return_tree;
     }
