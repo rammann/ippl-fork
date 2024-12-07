@@ -126,10 +126,7 @@ namespace ippl {
             for (const auto& child_octant : morton_helper.get_children(octant)) {
                 const size_t count = this->aid_list_m.getNumParticlesInOctant(child_octant);
 
-                // no need to push in this case
-                if (count > 0) {
-                    s.push({child_octant, count});
-                }
+                s.push({child_octant, count});
             }
         }
 
