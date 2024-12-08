@@ -46,38 +46,38 @@ int main(int argc, char* argv[])
         // RANDOM INITIALISATION
         // typename bunch_type::rho_container_type::HostMirror RHO_host   =
         // bunch.rho.getHostMirror();
+        /*
+                for (unsigned int i = 0; i < num_particles; ++i) {
+                    // R_host(i) = ippl::Vector<double, Dim>{unif(eng), unif(eng), unif(eng)};
+                    R_host(i) = ippl::Vector<double, Dim>{unif(eng), unif(eng)};
+                    //  RHO_host(i) = 0;
+                }
+        */
 
-        for (unsigned int i = 0; i < num_particles; ++i) {
-            // R_host(i) = ippl::Vector<double, Dim>{unif(eng), unif(eng), unif(eng)};
-            R_host(i) = ippl::Vector<double, Dim>{unif(eng), unif(eng)};
-            //  RHO_host(i) = 0;
+        // THIS GENERATES A SPIRAL DISTRIBUTION
+        double armCount     = 2.0;   // Number of spiral arms
+        double armTightness = -0.1;  // Tightness of the spiral arms
+        double center_x     = (MAX_BOUND - MIN_BOUND) / 2;
+        double center_y     = (MAX_BOUND - MIN_BOUND) / 2;
+        double max_distance = 0.9 * (MAX_BOUND - MIN_BOUND) / 2;
+        for (unsigned i = 0; i < num_particles; ++i) {
+            double angle    = static_cast<double>(rand()) / RAND_MAX * 2.0 * M_PI;
+            double distance = (static_cast<double>(rand()) / RAND_MAX) * max_distance;
+
+            double totalArmAngle = 5.0;
+
+            for (int j = 0; j < armCount; ++j) {
+                // add spiral arm effect to the angle
+                double armAngle =
+                    armTightness * angle + (j + 1) * distance / max_distance * 2.0 * M_PI;
+                double x = center_x + distance * cos(armAngle + totalArmAngle);
+                double y = center_y + distance * sin(armAngle + totalArmAngle);
+
+                R_host(i) = {x, y};
+                totalArmAngle += armAngle;
+            }
         }
 
-        /*
-                // THIS GENERATES A SPIRAL DISTRIBUTION
-                double armCount     = 2.0;   // Number of spiral arms
-                double armTightness = -0.1;  // Tightness of the spiral arms
-                double center_x     = (MAX_BOUND - MIN_BOUND) / 2;
-                double center_y     = (MAX_BOUND - MIN_BOUND) / 2;
-                double max_distance = 0.9 * (MAX_BOUND - MIN_BOUND) / 2;
-                for (unsigned i = 0; i < num_particles; ++i) {
-                    double angle    = static_cast<double>(rand()) / RAND_MAX * 2.0 * M_PI;
-                    double distance = (static_cast<double>(rand()) / RAND_MAX) * max_distance;
-
-                    double totalArmAngle = 5.0;
-
-                    for (int j = 0; j < armCount; ++j) {
-                        // add spiral arm effect to the angle
-                        double armAngle =
-                            armTightness * angle + (j + 1) * distance / max_distance * 2.0 * M_PI;
-                        double x = center_x + distance * cos(armAngle + totalArmAngle);
-                        double y = center_y + distance * sin(armAngle + totalArmAngle);
-
-                        R_host(i) = {x, y};
-                        totalArmAngle += armAngle;
-                    }
-                }
-*/
         Kokkos::deep_copy(bunch.R.getView(), R_host);
         // Kokkos::deep_copy(bunch.rho.getView(), RHO_host);
 
