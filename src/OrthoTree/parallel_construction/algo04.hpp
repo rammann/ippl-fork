@@ -38,7 +38,7 @@ namespace ippl {
 
         Kokkos::vector<morton_code> G = complete_tree(C);
 
-        Kokkos::vector<size_t> weights = this->aid_list_m.getNumParticlesInOctantsParalell(G);
+        Kokkos::vector<size_t> weights = this->aid_list_m.getNumParticlesInOctantsParallel(G);
 
         auto octants = partition(G, weights);
 

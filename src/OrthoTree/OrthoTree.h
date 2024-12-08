@@ -246,12 +246,12 @@ namespace ippl {
 #include "OrthoTree.hpp"
 
 // implementations of construction algos
-#include "paralell_construction/algo01.hpp"
-#include "paralell_construction/algo02.hpp"
-#include "paralell_construction/algo03.hpp"
-#include "paralell_construction/algo04.hpp"
-#include "paralell_construction/algo05.hpp"
-#include "paralell_construction/algo08.hpp"
+#include "parallel_construction/algo01.hpp"
+#include "parallel_construction/algo02.hpp"
+#include "parallel_construction/algo03.hpp"
+#include "parallel_construction/algo04.hpp"
+#include "parallel_construction/algo05.hpp"
+#include "parallel_construction/algo08.hpp"
 
 // implementations of balancing algos
 // #include "balancing/algo06.hpp"
