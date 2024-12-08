@@ -36,32 +36,41 @@ namespace ippl {
     BoundingBox<Dim> BoundingBox<Dim>::bounds_from_grid_coord(
         const BoundingBox<Dim>& root_bounds, const BoundingBox<Dim>::grid_coordinate& grid_coord,
         const size_t depth, const size_t max_depth) {
-        // Calculate the number of nodes per edge at the current depth
-        const size_t scale            = 1 << max_depth;
-        real_coordinate bounds_size   = root_bounds.max_m - root_bounds.min_m;
-        real_coordinate unit_sq_size  = bounds_size / scale;  // Use max depth scale
-        real_coordinate depth_sq_size = unit_sq_size * (1 << (max_depth - depth));
+        // Integer arithmetic for nodes per edge
+        const size_t nodes_per_edge_cur_depth = 1u << depth;      // 2^depth
+        const size_t nodes_per_edge_max_depth = 1u << max_depth;  // 2^max_depth
 
-        // Clamp to ensure no negative sizes
+        // Calculate bounds size only once
+        real_coordinate bounds_size = root_bounds.max_m - root_bounds.min_m;
+
+        // Compute depth square size and unit square size directly
+        real_coordinate depth_sq_size, unit_sq_size;
         for (size_t i = 0; i < Dim; ++i) {
             bounds_size[i]   = std::abs(bounds_size[i]);
-            unit_sq_size[i]  = std::abs(unit_sq_size[i]);
-            depth_sq_size[i] = std::abs(depth_sq_size[i]);
+            depth_sq_size[i] = bounds_size[i] / static_cast<double>(nodes_per_edge_cur_depth);
+            unit_sq_size[i]  = bounds_size[i] / static_cast<double>(nodes_per_edge_max_depth);
         }
 
-        real_coordinate min_coord = root_bounds.min_m + (unit_sq_size * grid_coord);
-        real_coordinate max_coord = min_coord + depth_sq_size;
-
-        // Adjust the tolerance based on depth to account for increased precision issues
-        const double tolerance = 1e-6 * depth;
-        auto test              = max_coord - min_coord;
+        // Compute min and max coordinates
+        real_coordinate min_coord = root_bounds.min_m;
         for (size_t i = 0; i < Dim; ++i) {
-            assert(std::abs(test[i] - depth_sq_size[i]) < tolerance);
+            min_coord[i] += unit_sq_size[i] * static_cast<double>(grid_coord[i]);
+        }
+
+        real_coordinate max_coord = min_coord;
+        for (size_t i = 0; i < Dim; ++i) {
+            max_coord[i] += depth_sq_size[i];
+        }
+
+        // Validate the computed size
+        real_coordinate computed_size = max_coord - min_coord;
+        for (size_t i = 0; i < Dim; ++i) {
+            assert(std::abs(computed_size[i] - depth_sq_size[i])
+                   < 1e-6);  // Adjust tolerance as needed
         }
 
         // Return the bounding box for the node at this depth
-        BoundingBox result(min_coord, max_coord);
-        return result;
+        return BoundingBox(min_coord, max_coord);
     }
 
 }  // namespace ippl

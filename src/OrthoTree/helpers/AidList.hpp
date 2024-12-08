@@ -127,28 +127,26 @@ namespace ippl {
         if (world_rank == 0) {
             const size_t size       = this->size();
             const size_t batch_size = size / world_size;
-            const size_t remainder  = (size % batch_size) + batch_size;
+            const size_t remainder  = size % world_size;
 
             // rank_{i+1} = [ (i * batch_size) + remainder, (i+1) * batch_size ]
             Kokkos::parallel_for("Send min/max octants", world_size - 1, [=, this](const size_t i) {
-                morton_code
-                    local_min_max_octants[2];  // inside the parallel for because of read-only
-                const size_t start = (i * batch_size) + remainder;
+                morton_code local_min_max_octants[2] = {0};  // inside the parallel for because of
+                                                             // read-only
+                const size_t target_rank = i + 1;
+
+                // distribute the remainders for a more balanced load
+                const size_t start = (target_rank * batch_size) + (target_rank < remainder ? 1 : 0);
                 const size_t end   = start + batch_size;
 
                 local_min_max_octants[0] = getOctant(start);
                 local_min_max_octants[1] = getOctant(end - 1);
 
-                // send to rank + 1, as parallel_for starts at index=0
-                const size_t target_rank = i + 1;
                 Comm->send(*local_min_max_octants, 2, target_rank, 0);
             });
 
-            // assign min/max for rank 0
-            // rank_0 = [ (#ranks - 1) * batch_size, #octants ]
-
             const size_t start = 0;
-            const size_t end   = start + remainder;
+            const size_t end   = batch_size + (0 < remainder ? 1 : 0);  // one extra octant
 
             min_max_octants[0] = getOctant(start);
             min_max_octants[1] = getOctant(end - 1);
@@ -200,9 +198,9 @@ namespace ippl {
     }
 
     template <size_t Dim>
-    template <typename Iterator>
-    Kokkos::vector<size_t> AidList<Dim>::getNumParticlesInOctantsParalell(Iterator begin,
-                                                                          Iterator end) {
+    template <typename Container>
+    Kokkos::vector<size_t> AidList<Dim>::getNumParticlesInOctantsParalell(
+        const Container& container) {
         size_t size_buff;
 
         Kokkos::vector<size_t> weights;
@@ -223,14 +221,14 @@ namespace ippl {
             }
 
             weights.clear();
-            for (auto it = begin; it != end; ++it) {
+            for (auto it = container.data(); it != container.data() + container.size(); ++it) {
                 weights.push_back(getNumParticlesInOctant(*it));
             }
 
         } else {
-            size_buff = static_cast<size_t>(end - begin);
+            size_buff = container.size();
             Comm->send(size_buff, 1, 0, 0);
-            Comm->send(*begin, size_buff, 0, 0);
+            Comm->send(*container.data(), size_buff, 0, 0);
             weights.resize(size_buff);
             mpi::Status weights_status;
             Comm->recv(weights.data(), size_buff, 0, 0, weights_status);

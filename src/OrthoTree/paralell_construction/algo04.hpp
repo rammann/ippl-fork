@@ -36,44 +36,15 @@ namespace ippl {
             }
         }
 
-        logger << "C.size()=" << C.size() << endl;
         Kokkos::vector<morton_code> G = complete_tree(C);
-        logger << "we now have n_octants = " << G.size() << endl;
 
-        Kokkos::vector<size_t> weights =
-            this->aid_list_m.getNumParticlesInOctantsParalell(G.begin(), G.end());
-        logger << "weights have size: " << weights.size() << endl;
-        /*
-        for (size_t i = 0; i < G.size(); ++i) {
-            morton_code base_tree_octant = G[i];
-            weights[i]                   = std::count_if(
-                starting_octants.begin(), starting_octants.end(),
-                [&base_tree_octant, this](const morton_code& unpartitioned_tree_octant) {
-                    return (unpartitioned_tree_octant == base_tree_octant)
-                           || (morton_helper.is_descendant(unpartitioned_tree_octant,
-                                                                             base_tree_octant));
-                });
-        }
-        */
+        Kokkos::vector<size_t> weights = this->aid_list_m.getNumParticlesInOctantsParalell(G);
 
-        auto partitioned_tree = partition(G, weights);
-        // TODO: THIS MIGHT BE WRONG? this is not needed, we sync the aid list outside of this
-        /*
-        Kokkos::vector<morton_code> global_unpartitioned_tree;
-        global_unpartitioned_tree.push_back(min_octant);
-        global_unpartitioned_tree.push_back(max_octant);
-        starting_octants.clear();
-        for (morton_code gup_octant : global_unpartitioned_tree) {
-            for (const morton_code& p_octant : partitioned_tree) {
-                if (gup_octant == p_octant || morton_helper.is_descendant(gup_octant, p_octant)) {
-                    starting_octants.push_back(gup_octant);
-                    break;
-                }
-            }
-        }
-*/
-        logger << "finished, partitioned_tree.size() = " << partitioned_tree.size() << endl;
+        auto octants = partition(G, weights);
+
+        this->aid_list_m.innitFromOctants(octants.front(), octants.back());
+
         END_FUNC;
-        return partitioned_tree;
+        return octants;
     }
 }  // namespace ippl

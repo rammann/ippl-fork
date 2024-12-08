@@ -17,7 +17,6 @@ namespace ippl {
         auto [min_octant, max_octant] = this->aid_list_m.getMinReqOctants();
 
         auto octants = block_partition(min_octant, max_octant);
-        this->aid_list_m.innitFromOctants(octants.front(), octants.back());
 
         particles_to_file(particles);
 
@@ -32,8 +31,6 @@ namespace ippl {
         for (size_t i = 0; i < tree_view.size(); ++i) {
             auto num_particles = this->aid_list_m.getNumParticlesInOctant(tree_view[i]);
             total_particles += num_particles;
-
-            logger << "Adding: " << num_particles << " particles" << endl;
         }
 
         size_t global_total_particles = 0;
@@ -126,10 +123,7 @@ namespace ippl {
             for (const auto& child_octant : morton_helper.get_children(octant)) {
                 const size_t count = this->aid_list_m.getNumParticlesInOctant(child_octant);
 
-                // no need to push in this case
-                if (count > 0) {
-                    s.push({child_octant, count});
-                }
+                s.push({child_octant, count});
             }
         }
 

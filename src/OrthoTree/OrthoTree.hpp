@@ -69,8 +69,6 @@ namespace ippl {
         Kokkos::View<morton_code*> tree_view("tree_view_naive", result_tree.size());
         tree_view.assign_data(result_tree.data());
 
-        octants_to_file(tree_view);
-
         return tree_view;
     }
 
