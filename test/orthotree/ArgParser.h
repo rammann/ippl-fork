@@ -11,15 +11,12 @@
 namespace ippl {
 
     /**
-     * @brief Simple argument parser to make our runs simpler
+     * @brief simple argument parser to make our runs simpler to repeat etc etc
      */
     class ArgParser {
         static const std::string prefix;  // prefix for the arguments
 
     public:
-        /**
-         * @brief Add a value to the arg_parser at compiletime
-         */
         template <typename T>
         static void add_argument(const std::string& name, const T& default_value,
                                  const std::string& description) {
@@ -53,7 +50,8 @@ namespace ippl {
         }
 
         /**
-         * @brief Get the value passed in as argument, or its default value if none was passed.
+         * @brief Get the value of an argument. If none was given we use the default.
+         * @tparam the type of the value we want to get
          */
         template <typename T>
         static T get(const std::string& name) {
