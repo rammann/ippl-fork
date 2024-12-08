@@ -219,20 +219,21 @@ namespace ippl {
                     weights.resize(size_buff);
                 }
 
-                Kokkos::parallel_for(size_buff, [=, this, &weights](const size_t i) {
+                weights.resize(size_buff);
+                for (size_t i = 0; i < size_buff; ++i) {
                     weights[i] = getNumParticlesInOctant(octants_buff[i]);
-                });
+                }
 
                 // send back the weights
                 Comm->send(*weights.data(), size_buff, rank, 0);
             }
 
-            weights.clear();  // clearing in case rank0 has less data than other ranks
             // calculate own weights
+            size_buff = octant_container.size();
             weights.resize(size_buff);
-            Kokkos::parallel_for(octant_container.size(), [=, this, &weights](const size_t i) {
+            for (size_t i = 0; i < size_buff; ++i) {
                 weights[i] = getNumParticlesInOctant(octant_container[i]);
-            });
+            }
 
         } else {
             // send size of octants we are requesting to rank 0
