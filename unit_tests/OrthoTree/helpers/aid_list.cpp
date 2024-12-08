@@ -220,6 +220,7 @@ TEST(AidListTest, NumParticlesInOctantTest) {
     const double min_bounds           = 0.0;
     const double max_bounds           = 1.0;
     const size_t n_particles_per_proc = 100;
+    const size_t total_num_particles  = n_particles_per_proc * Comm->size();
 
     auto particles = getParticles<Dim>(n_particles_per_proc, min_bounds, max_bounds);
     particles      = distributeToCorners2D(particles, min_bounds, max_bounds);
@@ -231,73 +232,83 @@ TEST(AidListTest, NumParticlesInOctantTest) {
     aid_list.initialize(root_bounds, particles);
     // #### SETUP DONE ####
 
+    // #### TEST HELPERS ####
+    struct TestStruct {
+        morton_code octant;
+        size_t expected_lower_bound;
+        size_t expected_upper_bound_excl;
+        size_t expected_upper_bound_incl;
+        size_t expected_total_particles;
+    };
+
+    auto run_test = [&](TestStruct& test) {
+        EXPECT_EQ(aid_list.getLowerBoundIndex(test.octant), test.expected_lower_bound)
+            << "Failed lower bound test for octant: " << test.octant;
+
+        EXPECT_EQ(aid_list.getUpperBoundIndexExclusive(test.octant), test.expected_upper_bound_excl)
+            << "Failed exclusive upper bound test for octant: " << test.octant;
+
+        EXPECT_EQ(aid_list.getUpperBoundIndexInclusive(test.octant), test.expected_upper_bound_incl)
+            << "Failed inclusive upper bound test for octant: " << test.octant;
+
+        EXPECT_EQ(aid_list.getNumParticlesInOctant(test.octant), test.expected_total_particles)
+            << "Failed particle count test for octant: " << test.octant;
+    };
+
+    std::vector<TestStruct> tests_to_run = {// root node
+                                            {.octant                    = 0b000,
+                                             .expected_lower_bound      = 0,
+                                             .expected_upper_bound_excl = 0,
+                                             .expected_upper_bound_incl = 0,
+                                             .expected_total_particles  = total_num_particles},
+
+                                            // top-left octant
+                                            {.octant                    = 0b001,
+                                             .expected_lower_bound      = 0,
+                                             .expected_upper_bound_excl = 100,
+                                             .expected_upper_bound_incl = 99,
+                                             .expected_total_particles  = n_particles_per_proc},
+
+                                            // top-middle octant
+                                            {.octant                    = 0b011,
+                                             .expected_lower_bound      = 100,
+                                             .expected_upper_bound_excl = 200,
+                                             .expected_upper_bound_incl = 199,
+                                             .expected_total_particles  = n_particles_per_proc},
+
+                                            // left-middle octant
+                                            {.octant                    = 0b101,
+                                             .expected_lower_bound      = 200,
+                                             .expected_upper_bound_excl = 300,
+                                             .expected_upper_bound_incl = 299,
+                                             .expected_total_particles  = n_particles_per_proc},
+
+                                            // middle-middle octant
+                                            {.octant                    = 0b111,
+                                             .expected_lower_bound      = 300,
+                                             .expected_upper_bound_excl = 400,
+                                             .expected_upper_bound_incl = 399,
+                                             .expected_total_particles  = n_particles_per_proc}};
+
+    // #### TEST HELPERS DONE ####
+
     if (Comm->rank() == 0) {
         // we should only have 4 different octants
-        const size_t total_num_particles = n_particles_per_proc * Comm->size();
         ASSERT_EQ(aid_list.size(), total_num_particles);
-
-        struct TestStruct {
-            morton_code octant;
-            size_t expected_lower_bound;
-            size_t expected_upper_bound_excl;
-            size_t expected_upper_bound_incl;
-            size_t expected_total_particles;
-        };
-
-        auto run_test = [&](TestStruct& test) {
-            EXPECT_EQ(aid_list.getLowerBoundIndex(test.octant), test.expected_lower_bound)
-                << "Failed lower bound test for octant: " << test.octant;
-
-            EXPECT_EQ(aid_list.getUpperBoundIndexExclusive(test.octant),
-                      test.expected_upper_bound_excl)
-                << "Failed exclusive upper bound test for octant: " << test.octant;
-
-            EXPECT_EQ(aid_list.getUpperBoundIndexInclusive(test.octant),
-                      test.expected_upper_bound_incl)
-                << "Failed inclusive upper bound test for octant: " << test.octant;
-
-            EXPECT_EQ(aid_list.getNumParticlesInOctant(test.octant), test.expected_total_particles)
-                << "Failed particle count test for octant: " << test.octant;
-        };
-
-        std::vector<TestStruct> tests_to_run = {// root node
-                                                {.octant                    = 0b000,
-                                                 .expected_lower_bound      = 0,
-                                                 .expected_upper_bound_excl = 0,
-                                                 .expected_upper_bound_incl = 0,
-                                                 .expected_total_particles  = total_num_particles},
-
-                                                // top-left octant
-                                                {.octant                    = 0b001,
-                                                 .expected_lower_bound      = 0,
-                                                 .expected_upper_bound_excl = 100,
-                                                 .expected_upper_bound_incl = 99,
-                                                 .expected_total_particles  = n_particles_per_proc},
-
-                                                // top-middle octant
-                                                {.octant                    = 0b011,
-                                                 .expected_lower_bound      = 100,
-                                                 .expected_upper_bound_excl = 200,
-                                                 .expected_upper_bound_incl = 199,
-                                                 .expected_total_particles  = n_particles_per_proc},
-
-                                                // left-middle octant
-                                                {.octant                    = 0b101,
-                                                 .expected_lower_bound      = 200,
-                                                 .expected_upper_bound_excl = 300,
-                                                 .expected_upper_bound_incl = 299,
-                                                 .expected_total_particles  = n_particles_per_proc},
-
-                                                // middle-middle octant
-                                                {.octant                    = 0b111,
-                                                 .expected_lower_bound      = 300,
-                                                 .expected_upper_bound_excl = 400,
-                                                 .expected_upper_bound_incl = 399,
-                                                 .expected_total_particles = n_particles_per_proc}};
 
         for (auto test_data : tests_to_run) {
             run_test(test_data);
         }
+    }
+
+    for (auto test_data : tests_to_run) {
+        std::vector<morton_code> octants = {test_data.octant};
+
+        // this has always size one, so we can just take the first element in the returning vector
+        const size_t calc_result = aid_list.getNumParticlesInOctantsParallel(octants).front();
+        EXPECT_EQ(test_data.expected_total_particles, calc_result)
+            << "Rank " << Comm->rank() << " expected: " << test_data.expected_total_particles
+            << ", but got: " << calc_result;
     }
 }
 

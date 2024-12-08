@@ -66,8 +66,16 @@ namespace ippl {
          */
         size_t getUpperBoundIndexExclusive(morton_code octant) const;
 
+        /**
+         * @brief Calculates the number of particles for each octant.
+         * @warning This function assumes, that the AidList is on rank0, and that it is called from
+         * all ranks simultaneously! It will freeze if the later is not fullfilled.
+         *
+         * @tparam Container Some container with: random_access iterators and functions '.data()'
+         * and '.size()'
+         */
         template <typename Container>
-        Kokkos::vector<size_t> getNumParticlesInOctantsParalell(const Container& container);
+        Kokkos::vector<size_t> getNumParticlesInOctantsParallel(const Container& container);
 
         /**
          * @brief Returns the highest index s.t. octants(index-1) <= octant <= octants(index)
@@ -92,6 +100,7 @@ namespace ippl {
 
         /**
          * @brief Gathers the particles on the rank that calls this function.
+         * TODO: this is nice, but not needed at the moment
          */
         void gatherOnRank(
             OrthoTreeParticle<ippl::ParticleSpatialLayout<double, Dim>> const& particles);

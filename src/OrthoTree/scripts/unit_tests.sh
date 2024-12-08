@@ -3,9 +3,20 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 UNIT_TEST_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)/build/unit_tests/OrthoTree"
 
-# Simulate MULTI_RANK_TESTS_MAP using two arrays
+
+
+# ================================ 
+# ADD YOUR TEST HERE IF IT REQUIRES MORE THAN ONE RANK TO PASS
+
+# test name
 MULTI_RANK_TESTS_KEYS=("parallel_tree_test" "aid_list_test")
+
+# number of ranks needed to pass
 MULTI_RANK_TESTS_VALUES=(4 4)
+
+# ================================
+
+
 
 # Helper function to get processor count
 get_processor_count() {

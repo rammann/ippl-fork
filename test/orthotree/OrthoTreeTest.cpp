@@ -47,11 +47,11 @@ int main(int argc, char* argv[])
         // typename bunch_type::rho_container_type::HostMirror RHO_host   =
         // bunch.rho.getHostMirror();
         /*
-        for (unsigned int i = 0; i < num_particles; ++i) {
-            // R_host(i) = ippl::Vector<double, Dim>{unif(eng), unif(eng), unif(eng)};
-            R_host(i) = ippl::Vector<double, Dim>{unif(eng), unif(eng)};
-            //  RHO_host(i) = 0;
-        }
+                for (unsigned int i = 0; i < num_particles; ++i) {
+                    // R_host(i) = ippl::Vector<double, Dim>{unif(eng), unif(eng), unif(eng)};
+                    R_host(i) = ippl::Vector<double, Dim>{unif(eng), unif(eng)};
+                    //  RHO_host(i) = 0;
+                }
         */
 
         // THIS GENERATES A SPIRAL DISTRIBUTION
