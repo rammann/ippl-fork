@@ -19,11 +19,11 @@
 
 using namespace ippl;
 
-template <size_t Dim, typename PLayout>
-PLayout initializeSpiral(PLayout& particles);
+template <size_t Dim, typename ParticlePositioins>
+void initializeSpiral(ParticlePositioins& particle_positions);
 
-template <size_t Dim, typename PLayout>
-PLayout initializeRandom(PLayout& particles);
+template <size_t Dim, typename ParticlePositioins>
+void initializeRandom(ParticlePositioins& particle_positions);
 
 template <size_t Dim>
 auto initializeParticles();
@@ -123,7 +123,7 @@ auto initializeParticles() {
 }
 
 template <size_t Dim, typename PLayout>
-PLayout initializeRandom(PLayout& particles) {
+void initializeRandom(PLayout& particle_positions) {
     static_assert((Dim == 2 || Dim == 3) && "We only specialise for 2D and 3D!");
 
     const size_t num_particles = ArgParser::get<size_t>("num_particles");
@@ -136,20 +136,18 @@ PLayout initializeRandom(PLayout& particles) {
 
     for (unsigned int i = 0; i < num_particles; ++i) {
         if constexpr (Dim == 2) {
-            particles(i) = ippl::Vector<double, Dim>{unif(eng), unif(eng)};
+            particle_positions(i) = ippl::Vector<double, Dim>{unif(eng), unif(eng)};
         } else if constexpr (Dim == 3) {
-            particles(i) = ippl::Vector<double, Dim>{unif(eng), unif(eng), unif(eng)};
+            particle_positions(i) = ippl::Vector<double, Dim>{unif(eng), unif(eng), unif(eng)};
         } else {
             std::cerr << "We only specialise for 2D and 3D!" << std::endl;
             exit(1);
         }
     }
-
-    return particles;
 }
 
-template <size_t Dim, typename PLayout>
-PLayout initializeSpiral(PLayout& particles) {
+template <size_t Dim, typename ParticlePositioins>
+void initializeSpiral(ParticlePositioins& particle_positions) {
     static_assert((Dim == 2 || Dim == 3) && "Spirals are only possible in 2D or 3D!");
 
     const size_t num_particles = ArgParser::get<size_t>("num_particles");
@@ -185,14 +183,12 @@ PLayout initializeSpiral(PLayout& particles) {
             double z        = (Dim == 3) ? center_z + distance * sin(angle) : 0.0;
 
             if constexpr (Dim == 2) {
-                particles(i) = {x, y};
+                particle_positions(i) = {x, y};
             } else if constexpr (Dim == 3) {
-                particles(i) = {x, y, z};
+                particle_positions(i) = {x, y, z};
             }
 
             totalArmAngle += armAngle;
         }
     }
-
-    return particles;
 }
