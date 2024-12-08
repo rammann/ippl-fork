@@ -67,7 +67,7 @@ namespace ippl {
         size_t getUpperBoundIndexExclusive(morton_code octant) const;
 
         template <typename Container>
-        Kokkos::vector<size_t> getNumParticlesInOctantsParalell(const Container& container);
+        Kokkos::vector<size_t> getNumParticlesInOctantsParallel(const Container& container);
 
         /**
          * @brief Returns the highest index s.t. octants(index-1) <= octant <= octants(index)
