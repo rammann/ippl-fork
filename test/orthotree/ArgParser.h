@@ -32,7 +32,8 @@ namespace ippl {
                     if (Comm->rank() == 0) {
                         print_help();
                     }
-                    exit(0);
+                    exit(1);  // aborting because the visualise.sh script would open an empty
+                              // window, which is annoying
                 }
 
                 auto pos = arg.find('=');
