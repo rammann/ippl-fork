@@ -129,8 +129,9 @@ PLayout initializeRandom(PLayout& particles) {
     const size_t num_particles = ArgParser::get<size_t>("num_particles");
     const double min_bounds    = ArgParser::get<double>("min_bounds");
     const double max_bounds    = ArgParser::get<double>("max_bounds");
+    const size_t seed          = ArgParser::get<size_t>("seed");
 
-    std::mt19937_64 eng;
+    std::mt19937_64 eng(seed);
     std::uniform_real_distribution<double> unif(min_bounds, max_bounds);
 
     for (unsigned int i = 0; i < num_particles; ++i) {
@@ -156,6 +157,10 @@ PLayout initializeSpiral(PLayout& particles) {
     const double max_bounds    = ArgParser::get<double>("max_bounds");
     const double bounds_size   = max_bounds - min_bounds;
 
+    const size_t seed = ArgParser::get<size_t>("seed");
+    std::mt19937_64 eng(seed);
+    std::uniform_real_distribution<double> unif(min_bounds, max_bounds);
+
     // center of the bounding box
     const double center_x = bounds_size / 2;
     const double center_y = bounds_size / 2;
@@ -168,8 +173,8 @@ PLayout initializeSpiral(PLayout& particles) {
     double max_distance = 0.9 * bounds_size / 2;
 
     for (unsigned i = 0; i < num_particles; ++i) {
-        double angle    = static_cast<double>(rand()) / RAND_MAX * 2.0 * M_PI;
-        double distance = (static_cast<double>(rand()) / RAND_MAX) * max_distance;
+        double angle    = unif(eng) * 2.0 * M_PI;
+        double distance = unif(eng) * max_distance;
 
         double totalArmAngle = 5.0;
 
