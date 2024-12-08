@@ -215,11 +215,10 @@ namespace ippl {
                 Comm->recv(octants_buff.data(), size_buff, rank, 0, octants_status);
 
                 // no need to shrink, we only send what we need
-                if (weights.size() > size_buff) {
+                if (weights.size() < size_buff) {
                     weights.resize(size_buff);
                 }
 
-                weights.resize(size_buff);
                 for (size_t i = 0; i < size_buff; ++i) {
                     weights[i] = getNumParticlesInOctant(octants_buff[i]);
                 }
@@ -230,7 +229,7 @@ namespace ippl {
 
             // calculate own weights
             size_buff = octant_container.size();
-            weights.resize(size_buff);
+            weights.resize(size_buff);  // we must shrink here, as we return wrong values if we dont
             for (size_t i = 0; i < size_buff; ++i) {
                 weights[i] = getNumParticlesInOctant(octant_container[i]);
             }
