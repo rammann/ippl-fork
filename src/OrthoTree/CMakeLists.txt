@@ -12,6 +12,7 @@ set (_HDRS
     helpers/BoundingBox.hpp
     helpers/AidList.h
     helpers/AidList.hpp
+    helpers/ArgParser.h
 )
 
 include_directories (
