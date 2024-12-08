@@ -100,6 +100,7 @@ namespace ippl {
 
         /**
          * @brief Gathers the particles on the rank that calls this function.
+         * TODO: this is nice, but not needed at the moment
          */
         void gatherOnRank(
             OrthoTreeParticle<ippl::ParticleSpatialLayout<double, Dim>> const& particles);
