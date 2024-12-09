@@ -16,23 +16,13 @@ namespace ippl {
     class ArgParser {
     public:
         static const std::string prefix;  // prefix for the arguments
-        static const std::string random_command;
         static const std::string help_command;
 
         template <typename T>
         static void add_argument(const std::string& name, const T& default_value,
                                  const std::string& description) {
             // min and max are not enabled for this
-            arguments()[name] = {to_string(default_value), "", "", description};
-        }
-
-        template <typename T>
-        static void add_argument(const std::string& name, const T& default_value,
-                                 const T& min_value, const T& max_value,
-                                 const std::string& description) {
-            // min and max are enabled for this
-            arguments()[name] = {to_string(default_value), to_string(min_value),
-                                 to_string(max_value), description};
+            arguments()[name] = {to_string(default_value), description};
         }
 
         static void parse(int argc, char* argv[]) {
@@ -80,34 +70,12 @@ namespace ippl {
                 throw std::runtime_error("Argument not found: " + key);
             }
 
-            // generate a random value for this key if (enabled and min/max is given)
-            if constexpr (std::is_integral_v<T> || std::is_floating_point_v<T>) {
-                if (get<bool>(ArgParser::random_command) && !def_it->second.min_value.empty()
-                    && !def_it->second.max_value.empty()) {
-                    T min_val = convert<T>(def_it->second.min_value);
-                    T max_val = convert<T>(def_it->second.max_value);
-
-                    if (min_val > max_val) {
-                        throw std::runtime_error("Invalid range for argument: " + key);
-                    }
-
-                    T random_val = generate_random<T>(min_val, max_val);
-                    // store the random value in case there is a second call
-                    parsed_args()[key] = to_string(random_val);
-                    return random_val;
-                }
-            }
-
             // return the default value
             return convert<T>(def_it->second.default_value);
         }
 
         static void print_help() {
             std::cout << "Usage: program [options]\nOptions:\n";
-            std::cout << "  " << prefix << std::setw(20) << std::left << ArgParser::random_command
-                      << "Enables random arguments for arguments that provide min/max values and "
-                         "are not defined by the user\n";
-
             for (const auto& [name, info] : arguments()) {
                 std::cout << "  " << prefix << std::setw(20) << std::left << name
                           << info.description << " (default: " << info.default_value << ")\n";
@@ -123,26 +91,9 @@ namespace ippl {
             return oss.str();
         }
 
-        template <typename T>
-        static T generate_random(T min_val, T max_val) {
-            static std::random_device rd;
-            static std::mt19937 gen(rd());
-            if constexpr (std::is_integral_v<T>) {
-                std::uniform_int_distribution<T> dis(min_val, max_val);
-                return dis(gen);
-            } else if constexpr (std::is_floating_point_v<T>) {
-                std::uniform_real_distribution<T> dis(min_val, max_val);
-                return dis(gen);
-            } else {
-                throw std::runtime_error("Unsupported type for random generation");
-            }
-        }
-
     private:
         struct ArgumentInfo {
             std::string default_value;
-            std::string min_value;
-            std::string max_value;
             std::string description;
         };
 
@@ -168,8 +119,7 @@ namespace ippl {
         static std::string to_string(const T& value);
     };
 
-    inline const std::string ArgParser::prefix = "-";
-    const std::string ArgParser::random_command = "rand";
+    inline const std::string ArgParser::prefix  = "-";
     const std::string ArgParser::help_command   = "help";
 
     // ================
