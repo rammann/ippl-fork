@@ -65,11 +65,15 @@ void testRun(double min_bounds, double max_bounds, size_t max_particles_per_octa
     BoundingBox<Dim> root_bounds({min_bounds, min_bounds}, {max_bounds, max_bounds});
     OrthoTree<Dim> tree(max_depth, max_particles_per_octant, root_bounds);
 
+    tree.setVisualisation(false);
+    tree.setPrintStats(false);
+    tree.setLogLevel(0);
+
     Kokkos::View<ippl::morton_code*> parallel_tree;
     Kokkos::View<ippl::morton_code*> sequential_tree;
 
     parallel_tree = tree.build_tree(particles);
-    // sequential_tree = tree.build_tree_naive(particles);
+    sequential_tree = tree.build_tree_naive(particles);
 
     const size_t world_rank = static_cast<size_t>(Comm->rank());
     const size_t world_size = static_cast<size_t>(Comm->size());
