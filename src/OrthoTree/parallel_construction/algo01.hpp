@@ -27,71 +27,76 @@ namespace ippl {
         Comm->barrier();
         logger.flush();
 
-        size_t total_particles = 0;
-        for (size_t i = 0; i < tree_view.size(); ++i) {
-            auto num_particles = this->aid_list_m.getNumParticlesInOctant(tree_view[i]);
-            total_particles += num_particles;
-        }
+        if (enable_print_stats) {
+            size_t total_particles = 0;
+            for (size_t i = 0; i < tree_view.size(); ++i) {
+                auto num_particles = this->aid_list_m.getNumParticlesInOctant(tree_view[i]);
+                total_particles += num_particles;
+            }
 
-        size_t global_total_particles = 0;
-        Comm->allreduce(&total_particles, &global_total_particles, 1, std::plus<size_t>());
+            size_t global_total_particles = 0;
+            Comm->allreduce(&total_particles, &global_total_particles, 1, std::plus<size_t>());
 
-        Comm->barrier();
-
-        {
-            const size_t col_width = 15;
-
-            auto printer = [col_width](const auto& rank, const auto& tree_size,
-                                       const auto& num_octants_from_algo_4,
-                                       const auto& num_particles) {
-                std::cerr << std::left << std::setw(col_width) << rank << std::left
-                          << std::setw(col_width) << tree_size << std::left << std::setw(col_width)
-                          << num_octants_from_algo_4 << std::left << std::setw(col_width)
-                          << num_particles << std::endl;
-            };
+            Comm->barrier();
 
             {
-                int ring_buf;
-                if (world_rank + 1 < world_size) {
-                    mpi::Status status;
-                    Comm->recv(&ring_buf, 1, world_rank + 1, 0, status);
-                } else {
-                    std::cerr << std::string(col_width * 3, '=') << std::endl;
-                    printer("rank", "octs_now", "octs_4", "particles");
-                    std::cerr << std::string(col_width * 3, '-') << std::endl;
+                const size_t col_width = 15;
+
+                auto printer = [col_width](const auto& rank, const auto& tree_size,
+                                           const auto& num_octants_from_algo_4,
+                                           const auto& num_particles) {
+                    std::cerr << std::left << std::setw(col_width) << rank << std::left
+                              << std::setw(col_width) << tree_size << std::left
+                              << std::setw(col_width) << num_octants_from_algo_4 << std::left
+                              << std::setw(col_width) << num_particles << std::endl;
+                };
+
+                {
+                    int ring_buf;
+                    if (world_rank + 1 < world_size) {
+                        mpi::Status status;
+                        Comm->recv(&ring_buf, 1, world_rank + 1, 0, status);
+                    } else {
+                        std::cerr << std::string(col_width * 3, '=') << std::endl;
+                        printer("rank", "octs_now", "octs_4", "particles");
+                        std::cerr << std::string(col_width * 3, '-') << std::endl;
+                    }
+
+                    printer(world_rank, tree_view.size(), octants.size(), total_particles);
+
+                    if (world_rank > 0) {
+                        Comm->send(ring_buf, 1, world_rank - 1, 0);
+                    }
                 }
 
-                printer(world_rank, tree_view.size(), octants.size(), total_particles);
-
-                if (world_rank > 0) {
-                    Comm->send(ring_buf, 1, world_rank - 1, 0);
+                if (world_rank == 0) {
+                    std::cerr << std::string(col_width * 3, '-') << std::endl
+                              << "We now have " << global_total_particles << " particles"
+                              << std::endl
+                              << "("
+                              << (100.0 * (double)global_total_particles
+                                  / (double)particles.getTotalNum())
+                              << "% of starting value lol)" << std::endl
+                              << std::string(col_width * 3, '-') << std::endl;
                 }
-            }
-
-            if (world_rank == 0) {
-                std::cerr << std::string(col_width * 3, '-') << std::endl
-                          << "We now have " << global_total_particles << " particles" << std::endl
-                          << "("
-                          << (100.0 * (double)global_total_particles
-                              / (double)particles.getTotalNum())
-                          << "% of starting value lol)" << std::endl
-                          << std::string(col_width * 3, '-') << std::endl;
             }
         }
-
-        //these following lines are for testing purposes
-        //they check that the resulting tree is sorted and doesn't leave gaps 
-        //in the domain
-        // The lambda checks that two morton codes are sorted and that there are 
-        // no other morton codes between them that overlaps neither
+        // these following lines are for testing purposes
+        // they check that the resulting tree is sorted and doesn't leave gaps
+        // in the domain
+        //  The lambda checks that two morton codes are sorted and that there are
+        //  no other morton codes between them that overlaps neither
         auto is_sorted_and_contiguous = [this](const morton_code& a, const morton_code& b) {
             if (b <= a || morton_helper.is_descendant(b, a)) {
                 return false;
             }
-            return b <= morton_helper.get_deepest_first_descendant(a + morton_helper.get_step_size(a));
+            return b <= morton_helper.get_deepest_first_descendant(
+                       a + morton_helper.get_step_size(a));
         };
-        assert(std::is_sorted(tree_view.data(), tree_view.data() + tree_view.size(), is_sorted_and_contiguous)
+        assert(std::is_sorted(tree_view.data(), tree_view.data() + tree_view.size(),
+                              is_sorted_and_contiguous)
                && "partitioned_tree is not sorted");
+
         return tree_view;
     }
 
