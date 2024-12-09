@@ -64,8 +64,8 @@ namespace ippl {
 
         AidList<Dim> aid_list_m;
 
-        int world_rank;
-        int world_size;
+        size_t world_rank;
+        size_t world_size;
 
         Inform logger;
 
@@ -129,6 +129,8 @@ namespace ippl {
          */
         Kokkos::vector<morton_code> partition(Kokkos::vector<morton_code>& octants,
                                               Kokkos::vector<size_t>& weights);
+        Kokkos::View<morton_code*> partition(Kokkos::View<morton_code*> octants,
+                                             Kokkos::View<size_t*> weights);
 
         /**
          * ALGO 8
@@ -158,6 +160,8 @@ namespace ippl {
 #pragma endregion  // balancing
 
 #pragma region helpers
+
+        
         /**
          * @brief Compares the following aspects of the trees:
          * - n_particles
