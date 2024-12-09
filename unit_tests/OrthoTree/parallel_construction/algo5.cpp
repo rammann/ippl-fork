@@ -28,7 +28,9 @@ TEST(ParallelOrthoTreeTest, PartitionTestDistribute) {
     }
     Kokkos::View<ippl::morton_code*> result;
     if (rank == 0) {
-        Kokkos::View<ippl::morton_code*> data = weights;
+        Kokkos::View<ippl::morton_code*> data(reinterpret_cast<ippl::morton_code*>(weights.data()),
+                                              weights.size());
+
         result = tree_3d.partition(data, weights);
     } else {
         Kokkos::View<ippl::morton_code*> data;
