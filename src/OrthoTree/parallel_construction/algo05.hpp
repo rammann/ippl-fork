@@ -111,7 +111,6 @@ namespace ippl {
             
             // if there are any blocks to be sent do so
             if (end != start && sizes(rank_iter) > 0){
-                assert(start_idx >= 0);
                 assert(start_idx + sizes(rank_iter) <= octants.size());
                 request.push_back(mpi::Request());
                 Comm->isend(octants(start_idx), sizes(rank_iter), rank_iter, 0, request.back());

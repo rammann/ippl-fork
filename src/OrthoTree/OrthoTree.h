@@ -64,8 +64,8 @@ namespace ippl {
 
         AidList<Dim> aid_list_m;
 
-        int world_rank;
-        int world_size;
+        size_t world_rank;
+        size_t world_size;
 
         Inform logger;
 
