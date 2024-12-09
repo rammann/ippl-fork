@@ -44,6 +44,10 @@ static void define_arguments() {
                                          "Type of particle distribution, one of: {random, spiral}");
     ArgParser::add_argument<std::string>("enable_visualisation", "true",
                                          "Enables or disables the output of visualisation data");
+
+    ArgParser::add_argument<std::string>(
+        "rand", "true",
+        "Generates random values for the arguments that are not defined by the user");
 }
 
 int main(int argc, char* argv[]) {

@@ -16,9 +16,8 @@ namespace ippl {
     class ArgParser {
     public:
         static const std::string prefix;  // prefix for the arguments
-        static const std::string random_argument;
-        static const std::string help_argument;
-        static bool enable_random_vals;
+        static const std::string random_command;
+        static const std::string help_command;
 
         template <typename T>
         static void add_argument(const std::string& name, const T& default_value,
@@ -41,17 +40,12 @@ namespace ippl {
             parsed_args().clear();
             for (const auto& arg : args()) {
                 // if help is found we print it and abort
-                if (arg == prefix + help_argument) {
+                if (arg == prefix + ArgParser::help_command) {
                     if (Comm->rank() == 0) {
                         print_help();
                     }
                     exit(1);  // aborting because the visualise.sh script would open an empty
                               // window, which is annoying
-                }
-
-                if (arg == prefix + random_argument) {
-                    enable_random_vals = true;
-                    continue;
                 }
 
                 auto pos = arg.find('=');
@@ -87,19 +81,21 @@ namespace ippl {
             }
 
             // generate a random value for this key if (enabled and min/max is given)
-            if (enable_random_vals && !def_it->second.min_value.empty()
-                && !def_it->second.max_value.empty()) {
-                T min_val = convert<T>(def_it->second.min_value);
-                T max_val = convert<T>(def_it->second.max_value);
+            if constexpr (std::is_integral_v<T> || std::is_floating_point_v<T>) {
+                if (get<bool>(ArgParser::random_command) && !def_it->second.min_value.empty()
+                    && !def_it->second.max_value.empty()) {
+                    T min_val = convert<T>(def_it->second.min_value);
+                    T max_val = convert<T>(def_it->second.max_value);
 
-                if (min_val > max_val) {
-                    throw std::runtime_error("Invalid range for argument: " + key);
+                    if (min_val > max_val) {
+                        throw std::runtime_error("Invalid range for argument: " + key);
+                    }
+
+                    T random_val = generate_random<T>(min_val, max_val);
+                    // store the random value in case there is a second call
+                    parsed_args()[key] = to_string(random_val);
+                    return random_val;
                 }
-
-                T random_val = generate_random<T>(min_val, max_val);
-                // store the random value in case there is a second call
-                parsed_args()[key] = to_string(random_val);
-                return random_val;
             }
 
             // return the default value
@@ -108,7 +104,7 @@ namespace ippl {
 
         static void print_help() {
             std::cout << "Usage: program [options]\nOptions:\n";
-            std::cout << "  " << prefix << std::setw(20) << std::left << ArgParser::random_argument
+            std::cout << "  " << prefix << std::setw(20) << std::left << ArgParser::random_command
                       << "Enables random arguments for arguments that provide min/max values and "
                          "are not defined by the user\n";
 
@@ -173,9 +169,8 @@ namespace ippl {
     };
 
     inline const std::string ArgParser::prefix = "-";
-    const std::string ArgParser::random_argument = "rand";
-    const std::string ArgParser::help_argument   = "help";
-    bool ArgParser::enable_random_vals           = false;
+    const std::string ArgParser::random_command = "rand";
+    const std::string ArgParser::help_command   = "help";
 
     // ================
     // SPECIALISATIONS
