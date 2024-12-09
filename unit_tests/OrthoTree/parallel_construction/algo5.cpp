@@ -18,16 +18,22 @@ TEST(ParallelOrthoTreeTest, PartitionTestDistribute) {
     }
 
     ippl::OrthoTree<3> tree_3d(5, 1, ippl::BoundingBox<3>({0.0, 0.0, 0.0}, {1.0, 1.0, 1.0}));
-    Kokkos::vector<size_t> weights(8, 1);
-    Kokkos::vector<ippl::morton_code> expected(2, 1);
-    Kokkos::vector<ippl::morton_code> result;
+    Kokkos::View<size_t*> weights("weights", 8);
+    for (size_t i = 0; i < 8; i++) {
+        weights(i) = 1;
+    }
+    Kokkos::View<ippl::morton_code*> expected("expected", 2);
+    for (size_t i = 0; i < 2; i++) {
+        expected(i) = 1;
+    }
+    Kokkos::View<ippl::morton_code*> result;
     if (rank == 0) {
-        Kokkos::vector<ippl::morton_code> data(8, 1);
+        Kokkos::View<ippl::morton_code*> data = weights;
         result = tree_3d.partition(data, weights);
     } else {
-        Kokkos::vector<ippl::morton_code> data;
-        weights.clear();
-        result = tree_3d.partition(data, weights);
+        Kokkos::View<ippl::morton_code*> data;
+        Kokkos::View<size_t*> empty;
+        result = tree_3d.partition(data, empty);
     }
     ASSERT_EQ(result.size(), expected.size());
     for (size_t i = 0; i < expected.size(); i++) {
@@ -41,32 +47,39 @@ TEST(ParallelOrthoTreeTest, PartitionTestWeighted) {
     unsigned n_procs = comm.size();
     EXPECT_EQ(n_procs, 4);
     ippl::OrthoTree<3> tree_3d(5, 1, ippl::BoundingBox<3>({0.0, 0.0, 0.0}, {1.0, 1.0, 1.0}));
-    Kokkos::vector<size_t> weights(3, 1);
-    weights[0] = 2;
-    Kokkos::vector<ippl::morton_code> expected(2, 1);
-    Kokkos::vector<ippl::morton_code> result;
+    Kokkos::View<size_t*> weights("weights", 3);
+    weights(0) = 2;
+    for (unsigned int i = 1; i < weights.size(); i++) {
+        weights(i) = 1;
+    }
+    Kokkos::View<ippl::morton_code*> expected("expected", 2);
+    for (size_t i = 0; i < 2; i++) {
+        expected(i) = 1;
+    }
+    Kokkos::View<ippl::morton_code*> result;
     if (rank == 0 || rank == 1) {
-        Kokkos::vector<ippl::morton_code> data(3);
+        Kokkos::View<ippl::morton_code*> data("data", 3);
         for (unsigned int i = 0; i < data.size(); i++) {
-            data[i] = 3 * rank + i;
+            data(i) = 3 * rank + i;
         }
         result = tree_3d.partition(data, weights);
     } else {
-        Kokkos::vector<ippl::morton_code> data;
-        weights.clear();
-        result = tree_3d.partition(data, weights);
+        Kokkos::View<ippl::morton_code*> data;
+        Kokkos::View<size_t*> empty;
+        result = tree_3d.partition(data, empty);
     }
 
     if (rank == 0 || rank == 2) {
-        expected.resize(1);
-        expected[0] = 3 * rank / 2;
+        expected = Kokkos::View<ippl::morton_code*>("expected", 1);
+        expected(0) = 3 * rank / 2;
     } else if (rank == 1) {
-        expected.resize(2);
-        expected[0] = 1;
-        expected[1] = 2;
+        expected = Kokkos::View<ippl::morton_code*>("expected", 2);
+        expected(0) = 1;
+        expected(1) = 2;
     } else {
-        expected[0] = 4;
-        expected[1] = 5;
+        expected = Kokkos::View<ippl::morton_code*>("expected", 2);
+        expected(0) = 4;
+        expected(1) = 5;
     }
     ASSERT_EQ(result.size(), expected.size());
     for (size_t i = 0; i < expected.size(); i++) {
@@ -80,24 +93,42 @@ TEST(ParallelOrthoTreeTest, PartitionTestDistributeUneven) {
     unsigned n_procs = comm.size();
     EXPECT_EQ(n_procs, 4);
     ippl::OrthoTree<3> tree_3d(5, 1, ippl::BoundingBox<3>({0.0, 0.0, 0.0}, {1.0, 1.0, 1.0}));
-    Kokkos::vector<size_t> weights;
-    Kokkos::vector<ippl::morton_code> expected;
-    Kokkos::vector<ippl::morton_code> result;
+    Kokkos::View<size_t*> weights;
+    Kokkos::View<ippl::morton_code*> expected;
+    Kokkos::View<ippl::morton_code*> result;
     if (rank == 0) {
-        Kokkos::vector<ippl::morton_code> data(6, 1);
-        weights  = Kokkos::vector<size_t>(6, 1);
-        expected = Kokkos::vector<ippl::morton_code>(3, 1);
+        Kokkos::View<ippl::morton_code*> data("data", 6);
+        weights  = Kokkos::View<size_t*>("weights", 6);
+        for (size_t i = 0; i < data.size(); i++) {
+            data(i) = 1;
+            weights(i) = 1;
+        }
+        expected = Kokkos::View<ippl::morton_code*>("expected", 3);
+        for (size_t i = 0; i < expected.size(); i++) {
+            expected(i) = 1;
+        }
         result   = tree_3d.partition(data, weights);
 
     } else if (rank == 1) {
-        Kokkos::vector<ippl::morton_code> data(2, 1);
-        weights  = Kokkos::vector<size_t>(2, 1);
-        expected = Kokkos::vector<ippl::morton_code>(3, 1);
+        Kokkos::View<ippl::morton_code*> data("data", 2);
+        weights  = Kokkos::View<size_t*>("weights", 2);
+        for (size_t i = 0; i < 2; i++) {
+            weights(i) = 1;
+            data(i) = 1;
+        }
+        expected = Kokkos::View<ippl::morton_code*>("expected", 3);
+        for (size_t i = 0; i < expected.size(); i++) {
+            expected(i) = 1;
+        }
         result   = tree_3d.partition(data, weights);
     } else {
-        Kokkos::vector<ippl::morton_code> data(1, 1);
-        weights  = Kokkos::vector<size_t>(1, 1);
-        expected = Kokkos::vector<ippl::morton_code>(2, 1);
+        Kokkos::View<ippl::morton_code*> data("data", 1);
+        data(0) = 1;
+        weights  = Kokkos::View<size_t*>("weight", 1);
+        weights(0) = 1;
+        expected = Kokkos::View<ippl::morton_code*>("expected", 2);
+        expected(0) = 1;
+        expected(1) = 1;
         result   = tree_3d.partition(data, weights);
     }
     ASSERT_EQ(result.size(), expected.size());
