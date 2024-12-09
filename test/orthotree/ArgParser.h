@@ -14,12 +14,14 @@ namespace ippl {
      * @brief simple argument parser to make our runs simpler to repeat etc etc
      */
     class ArgParser {
-        static const std::string prefix;  // prefix for the arguments
-
     public:
+        static const std::string prefix;  // prefix for the arguments
+        static const std::string help_command;
+
         template <typename T>
         static void add_argument(const std::string& name, const T& default_value,
                                  const std::string& description) {
+            // min and max are not enabled for this
             arguments()[name] = {to_string(default_value), description};
         }
 
@@ -28,7 +30,7 @@ namespace ippl {
             parsed_args().clear();
             for (const auto& arg : args()) {
                 // if help is found we print it and abort
-                if (arg == prefix + "help") {
+                if (arg == prefix + ArgParser::help_command) {
                     if (Comm->rank() == 0) {
                         print_help();
                     }
@@ -55,17 +57,20 @@ namespace ippl {
          * @tparam the type of the value we want to get
          */
         template <typename T>
-        static T get(const std::string& name) {
-            auto it = parsed_args().find(name);
+        static T get(const std::string& key) {
+            // did we pass a value for this key?
+            auto it = parsed_args().find(key);
             if (it != parsed_args().end()) {
                 return convert<T>(it->second);
             }
 
-            auto def_it = arguments().find(name);
+            // does the key even exist?
+            auto def_it = arguments().find(key);
             if (def_it == arguments().end()) {
-                throw std::runtime_error("Argument not found: " + name);
+                throw std::runtime_error("Argument not found: " + key);
             }
 
+            // return the default value
             return convert<T>(def_it->second.default_value);
         }
 
@@ -75,6 +80,15 @@ namespace ippl {
                 std::cout << "  " << prefix << std::setw(20) << std::left << name
                           << info.description << " (default: " << info.default_value << ")\n";
             }
+        }
+
+        static std::string get_args() {
+            std::ostringstream oss;
+            for (const auto& argument : arguments()) {
+                const std::string arg_name = argument.first;
+                oss << arg_name << '=' << get<std::string>(arg_name) << " ";
+            }
+            return oss.str();
         }
 
     private:
@@ -105,7 +119,8 @@ namespace ippl {
         static std::string to_string(const T& value);
     };
 
-    inline const std::string ArgParser::prefix = "-";
+    inline const std::string ArgParser::prefix  = "-";
+    const std::string ArgParser::help_command   = "help";
 
     // ================
     // SPECIALISATIONS
@@ -114,6 +129,11 @@ namespace ippl {
     template <>
     inline int ArgParser::convert<int>(const std::string& value) {
         return std::stoi(value);
+    }
+
+    template <>
+    inline bool ArgParser::convert<bool>(const std::string& value) {
+        return value == "true";
     }
 
     template <>

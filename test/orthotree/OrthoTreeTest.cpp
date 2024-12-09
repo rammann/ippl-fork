@@ -37,10 +37,14 @@ static void define_arguments() {
     ArgParser::add_argument<size_t>("max_depth", 8, "Maximum depth of the octree");
     ArgParser::add_argument<size_t>("num_particles", 5000, "Number of particles per processor");
     ArgParser::add_argument<double>("min_bounds", 0.0, "Min coordinate of the bounding box");
-    ArgParser::add_argument<double>("max_bounds", 1.1, "Max coordinate of the bounding box");
-    ArgParser::add_argument<size_t>("seed", 0xdeadbeef, "Seed for the random initialisation");
-    ArgParser::add_argument<std::string>("distribution", "spiral",
+    ArgParser::add_argument<double>("max_bounds", 1.0, "Max coordinate of the bounding box");
+    ArgParser::add_argument<size_t>("seed", std::random_device{}(),
+                                    "Seed for the random initialisation, default is random");
+    ArgParser::add_argument<std::string>("dist", "spiral",
                                          "Type of particle distribution, one of: {random, spiral}");
+    ArgParser::add_argument<std::string>("enable_visualisation", "true",
+                                         "Enables or disables the output of visualisation data");
+    ArgParser::add_argument<size_t>("log_level", 0, "Sets the log level for our outputs.");
 }
 
 int main(int argc, char* argv[]) {
@@ -48,6 +52,13 @@ int main(int argc, char* argv[]) {
     {
         define_arguments();
         ArgParser::parse(argc, argv);
+
+        // logging at the beginning in case the run crashes
+        if (Comm->rank() == 0) {
+            std::cerr << "Replicate this run with: \n"
+                      << "./visualise.sh " << Comm->size() << " " << ArgParser::get_args()
+                      << std::endl;
+        }
 
         const size_t dimensions = ArgParser::get<size_t>("dim");
 
@@ -61,8 +72,9 @@ int main(int argc, char* argv[]) {
         }
 
         if (Comm->rank() == 0) {
-            std::cerr << "=> THE SEED OF THIS EXPERIMENT IS: 0x" << std::hex
-                      << ArgParser::get<size_t>("seed") << std::endl;
+            std::cerr << "Replicate this run with: \n"
+                      << "./visualise.sh " << Comm->size() << " " << ArgParser::get_args()
+                      << std::endl;
         }
     }
 
@@ -81,11 +93,17 @@ void run_experiment() {
     const double min_bounds = ArgParser::get<double>("min_bounds");
     const double max_bounds = ArgParser::get<double>("max_bounds");
 
+    const bool enable_visualisation = ArgParser::get<bool>("enable_visualisation");
+    const size_t log_level          = ArgParser::get<size_t>("log_level");
+
     ippl::OrthoTree<Dim> tree(
         max_depth, max_particles,
         ((Dim == 2) ? ippl::BoundingBox<Dim>({min_bounds, min_bounds}, {max_bounds, max_bounds})
                     : ippl::BoundingBox<Dim>({min_bounds, min_bounds, min_bounds},
                                              {max_bounds, max_bounds, max_bounds})));
+
+    tree.setVisualisation(enable_visualisation);
+    tree.setLogLevel(log_level);
 
     auto particles = initializeParticles<Dim>();
     tree.build_tree(particles);
@@ -94,7 +112,7 @@ void run_experiment() {
 template <size_t Dim>
 auto initializeParticles() {
     const size_t num_particles              = ArgParser::get<size_t>("num_particles");
-    const std::string particle_distribution = ArgParser::get<std::string>("distribution");
+    const std::string particle_distribution = ArgParser::get<std::string>("dist");
 
     typedef ippl::ParticleSpatialLayout<double, Dim> particle_layout_type;
     typedef ippl::OrthoTreeParticle<particle_layout_type> bunch_type;
