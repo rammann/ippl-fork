@@ -14,13 +14,26 @@ namespace ippl {
      * @brief simple argument parser to make our runs simpler to repeat etc etc
      */
     class ArgParser {
-        static const std::string prefix;  // prefix for the arguments
-
     public:
+        static const std::string prefix;  // prefix for the arguments
+        static const std::string random_argument;
+        static const std::string help_argument;
+        static bool enable_random_vals;
+
         template <typename T>
         static void add_argument(const std::string& name, const T& default_value,
                                  const std::string& description) {
-            arguments()[name] = {to_string(default_value), description};
+            // min and max are not enabled for this
+            arguments()[name] = {to_string(default_value), "", "", description};
+        }
+
+        template <typename T>
+        static void add_argument(const std::string& name, const T& default_value,
+                                 const T& min_value, const T& max_value,
+                                 const std::string& description) {
+            // min and max are enabled for this
+            arguments()[name] = {to_string(default_value), to_string(min_value),
+                                 to_string(max_value), description};
         }
 
         static void parse(int argc, char* argv[]) {
@@ -28,12 +41,17 @@ namespace ippl {
             parsed_args().clear();
             for (const auto& arg : args()) {
                 // if help is found we print it and abort
-                if (arg == prefix + "help") {
+                if (arg == prefix + help_argument) {
                     if (Comm->rank() == 0) {
                         print_help();
                     }
                     exit(1);  // aborting because the visualise.sh script would open an empty
                               // window, which is annoying
+                }
+
+                if (arg == prefix + random_argument) {
+                    enable_random_vals = true;
+                    continue;
                 }
 
                 auto pos = arg.find('=');
@@ -55,31 +73,80 @@ namespace ippl {
          * @tparam the type of the value we want to get
          */
         template <typename T>
-        static T get(const std::string& name) {
-            auto it = parsed_args().find(name);
+        static T get(const std::string& key) {
+            // did we pass a value for this key?
+            auto it = parsed_args().find(key);
             if (it != parsed_args().end()) {
                 return convert<T>(it->second);
             }
 
-            auto def_it = arguments().find(name);
+            // does the key even exist?
+            auto def_it = arguments().find(key);
             if (def_it == arguments().end()) {
-                throw std::runtime_error("Argument not found: " + name);
+                throw std::runtime_error("Argument not found: " + key);
             }
 
+            // generate a random value for this key if (enabled and min/max is given)
+            if (enable_random_vals && !def_it->second.min_value.empty()
+                && !def_it->second.max_value.empty()) {
+                T min_val = convert<T>(def_it->second.min_value);
+                T max_val = convert<T>(def_it->second.max_value);
+
+                if (min_val > max_val) {
+                    throw std::runtime_error("Invalid range for argument: " + key);
+                }
+
+                T random_val = generate_random<T>(min_val, max_val);
+                // store the random value in case there is a second call
+                parsed_args()[key] = to_string(random_val);
+                return random_val;
+            }
+
+            // return the default value
             return convert<T>(def_it->second.default_value);
         }
 
         static void print_help() {
             std::cout << "Usage: program [options]\nOptions:\n";
+            std::cout << "  " << prefix << std::setw(20) << std::left << ArgParser::random_argument
+                      << "Enables random arguments for arguments that provide min/max values and "
+                         "are not defined by the user\n";
+
             for (const auto& [name, info] : arguments()) {
                 std::cout << "  " << prefix << std::setw(20) << std::left << name
                           << info.description << " (default: " << info.default_value << ")\n";
             }
         }
 
+        static std::string get_args() {
+            std::ostringstream oss;
+            for (const auto& argument : arguments()) {
+                const std::string arg_name = argument.first;
+                oss << arg_name << '=' << get<std::string>(arg_name) << " ";
+            }
+            return oss.str();
+        }
+
+        template <typename T>
+        static T generate_random(T min_val, T max_val) {
+            static std::random_device rd;
+            static std::mt19937 gen(rd());
+            if constexpr (std::is_integral_v<T>) {
+                std::uniform_int_distribution<T> dis(min_val, max_val);
+                return dis(gen);
+            } else if constexpr (std::is_floating_point_v<T>) {
+                std::uniform_real_distribution<T> dis(min_val, max_val);
+                return dis(gen);
+            } else {
+                throw std::runtime_error("Unsupported type for random generation");
+            }
+        }
+
     private:
         struct ArgumentInfo {
             std::string default_value;
+            std::string min_value;
+            std::string max_value;
             std::string description;
         };
 
@@ -106,6 +173,9 @@ namespace ippl {
     };
 
     inline const std::string ArgParser::prefix = "-";
+    const std::string ArgParser::random_argument = "rand";
+    const std::string ArgParser::help_argument   = "help";
+    bool ArgParser::enable_random_vals           = false;
 
     // ================
     // SPECIALISATIONS
@@ -114,6 +184,11 @@ namespace ippl {
     template <>
     inline int ArgParser::convert<int>(const std::string& value) {
         return std::stoi(value);
+    }
+
+    template <>
+    inline bool ArgParser::convert<bool>(const std::string& value) {
+        return value == "true";
     }
 
     template <>
