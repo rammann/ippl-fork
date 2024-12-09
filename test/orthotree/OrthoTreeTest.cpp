@@ -44,6 +44,7 @@ static void define_arguments() {
                                          "Type of particle distribution, one of: {random, spiral}");
     ArgParser::add_argument<std::string>("enable_visualisation", "true",
                                          "Enables or disables the output of visualisation data");
+    ArgParser::add_argument<size_t>("log_level", 0, "Sets the log level for our outputs.");
 }
 
 int main(int argc, char* argv[]) {
@@ -51,6 +52,13 @@ int main(int argc, char* argv[]) {
     {
         define_arguments();
         ArgParser::parse(argc, argv);
+
+        // logging at the beginning in case the run crashes
+        if (Comm->rank() == 0) {
+            std::cerr << "Replicate this run with: \n"
+                      << "./visualise.sh " << Comm->size() << " " << ArgParser::get_args()
+                      << std::endl;
+        }
 
         const size_t dimensions = ArgParser::get<size_t>("dim");
 
@@ -86,6 +94,7 @@ void run_experiment() {
     const double max_bounds = ArgParser::get<double>("max_bounds");
 
     const bool enable_visualisation = ArgParser::get<bool>("enable_visualisation");
+    const size_t log_level          = ArgParser::get<size_t>("log_level");
 
     ippl::OrthoTree<Dim> tree(
         max_depth, max_particles,
@@ -94,6 +103,7 @@ void run_experiment() {
                                              {max_bounds, max_bounds, max_bounds})));
 
     tree.setVisualisation(enable_visualisation);
+    tree.setLogLevel(log_level);
 
     auto particles = initializeParticles<Dim>();
     tree.build_tree(particles);

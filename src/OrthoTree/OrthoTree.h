@@ -69,6 +69,7 @@ namespace ippl {
         OrthoTree(size_t max_depth, size_t max_particles_per_node, const bounds_t& root_bounds);
 
         void setVisualisation(bool enable) { enable_visualisation = enable; }
+        void setLogLevel(size_t level) { logger.setOutputLevel(level); }
 
         /**
          * @brief This is the most basic way to build a tree. Its inefficien, but it (should) be
