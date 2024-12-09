@@ -23,16 +23,7 @@ TEST(ParallelConstruction, AssertWorldSize) {
 }
 
 TEST(ParallelConstruction, ActualTest) {
-    constexpr size_t Dim    = 2;
-    const double min_bounds = 0.0;
-    const double max_bounds = 1.0;
-
-    const size_t num_particles_per_proc   = 1000;
-    const size_t max_particles_per_octant = 100;
-    const size_t max_depth                = 8;
-
-    testFunction<Dim>(min_bounds, max_bounds, num_particles_per_proc, max_particles_per_octant,
-                      max_depth);
+    runTests();
 }
 
 // this is required to test the orthotree, as it depends on ippl
