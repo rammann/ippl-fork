@@ -27,7 +27,7 @@ std::string generateCommandToReplicate(int world_size, uint64_t seed, size_t num
             << "./visualise " << world_size << " dim=" << Dim << " seed=" << seed
             << " num_particles=" << num_particles_per_proc << " max_depth=" << max_depth
             << " max_particles=" << max_particles_per_octant << " min_bounds=" << min_bounds
-            << " max_bounds=" << max_bounds << std::endl;
+            << " max_bounds=" << max_bounds << " dist=random" << std::endl;
     return command.str();
 }
 
@@ -121,22 +121,24 @@ void testRun(double min_bounds, double max_bounds, size_t max_particles_per_octa
  */
 void runTests() {
     /**
-     * @brief This is a collection of test data. This way we can test and compare the
+     * This is a collection of test data. This way we can test and compare the
      * construction of our tree with the sequential version with multiple different params.
+     *
+     * This results in 2 * 4 * 4 * 4 = 128 configurations which we run on 2, 4, 8 cores.
+     *
+     * => total of 384 test runs
      */
     struct {
         std::vector<double> min_bounds_v = {-1.0, 0.0};
-        double max_bounds                = 1.0;  // 2
+        double max_bounds                = 1.0;
 
-        std::vector<size_t> num_particles_v       = {100, 500, 1000, 2000};       // 4
-        std::vector<size_t> max_depth_v           = {2, 4, 6, 8, 10};             // 5
-        std::vector<double> max_particles_ratio_v = {0.01, 0.05, 0.1, 0.2, 0.5};  // 5
-    } test_data;  // total = 2 * 4 * 5 * 5 = 200 runs lol
+        std::vector<size_t> num_particles_v       = {500, 1000, 2000, 5000};
+        std::vector<size_t> max_depth_v           = {2, 4, 6, 8};
+        std::vector<double> max_particles_ratio_v = {2, 5, 10, 20};
+    } test_data;
 
     static constexpr size_t Dim2 = 2;
     static constexpr size_t Dim3 = 3;
-    // * 2 = 400 runs
-    // -> we test it for world_size in {2, 4, 8} -> 1600 runs whupsi
 
     const size_t seed       = std::random_device{}();
     const double max_bounds = test_data.max_bounds;
@@ -147,7 +149,7 @@ void runTests() {
             auto particles3D = getParticles<Dim3>(num_particles, min_bounds, max_bounds, seed);
             for (size_t max_depth : test_data.max_depth_v) {
                 for (double max_particles_ratio : test_data.max_particles_ratio_v) {
-                    const size_t max_particles = num_particles * max_particles_ratio;
+                    const size_t max_particles = num_particles / max_particles_ratio;
 
                     testRun<Dim2>(min_bounds, max_bounds, max_particles, max_depth, particles2D,
                                   generateCommandToReplicate<Dim2>(
