@@ -19,7 +19,7 @@ namespace ippl {
         , morton_helper(max_depth)
         , aid_list_m(AidList<Dim>(max_depth))
         , logger("OrthoTree", std::cout, INFORM_ALL_NODES) {
-        logger.setOutputLevel(5);
+        logger.setOutputLevel(0);
         logger.setPrintNode(INFORM_ALL_NODES);
     }
 
