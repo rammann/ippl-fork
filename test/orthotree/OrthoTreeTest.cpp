@@ -32,6 +32,7 @@ template <size_t Dim>
 void run_experiment();
 
 static void define_arguments() {
+    // algorithm arguments
     ArgParser::add_argument<size_t>("dim", 2, "Dimension of the simulation");
     ArgParser::add_argument<size_t>("max_particles", 10, "Maximum particles per octant");
     ArgParser::add_argument<size_t>("max_depth", 8, "Maximum depth of the octree");
@@ -42,6 +43,10 @@ static void define_arguments() {
                                     "Seed for the random initialisation, default is random");
     ArgParser::add_argument<std::string>("dist", "spiral",
                                          "Type of particle distribution, one of: {random, spiral}");
+
+    // output arguments
+    ArgParser::add_argument<std::string>("print_stats", "true",
+                                         "Sets the log level for our outputs.");
     ArgParser::add_argument<std::string>("enable_visualisation", "true",
                                          "Enables or disables the output of visualisation data");
     ArgParser::add_argument<size_t>("log_level", 0, "Sets the log level for our outputs.");
@@ -93,17 +98,19 @@ void run_experiment() {
     const double min_bounds = ArgParser::get<double>("min_bounds");
     const double max_bounds = ArgParser::get<double>("max_bounds");
 
-    const bool enable_visualisation = ArgParser::get<bool>("enable_visualisation");
-    const size_t log_level          = ArgParser::get<size_t>("log_level");
-
     ippl::OrthoTree<Dim> tree(
         max_depth, max_particles,
         ((Dim == 2) ? ippl::BoundingBox<Dim>({min_bounds, min_bounds}, {max_bounds, max_bounds})
                     : ippl::BoundingBox<Dim>({min_bounds, min_bounds, min_bounds},
                                              {max_bounds, max_bounds, max_bounds})));
 
+    const bool enable_visualisation = ArgParser::get<bool>("enable_visualisation");
+    const size_t log_level          = ArgParser::get<size_t>("log_level");
+    const bool enable_stats         = ArgParser::get<bool>("print_stats");
+
     tree.setVisualisation(enable_visualisation);
     tree.setLogLevel(log_level);
+    tree.setPrintStats(enable_stats);
 
     auto particles = initializeParticles<Dim>();
     tree.build_tree(particles);
