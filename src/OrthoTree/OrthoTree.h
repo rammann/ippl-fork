@@ -54,23 +54,22 @@ namespace ippl {
         const bounds_t root_bounds_m;
         const Morton<Dim> morton_helper;
 
-        // as of now the tree is stored only as morton codes, this needs to be discussed as a group
-        Kokkos::vector<morton_code> tree_m;
-
-        // NEW TREE TYPE!
-        Kokkos::View<morton_code*> finished_tree;
-
         size_t n_particles;
 
         AidList<Dim> aid_list_m;
 
-        int world_rank;
-        int world_size;
+        size_t world_rank;
+        size_t world_size;
 
         Inform logger;
 
+        bool enable_visualisation;
+
     public:
         OrthoTree(size_t max_depth, size_t max_particles_per_node, const bounds_t& root_bounds);
+
+        void setVisualisation(bool enable) { enable_visualisation = enable; }
+        void setLogLevel(size_t level) { logger.setOutputLevel(level); }
 
         /**
          * @brief This is the most basic way to build a tree. Its inefficien, but it (should) be
@@ -129,6 +128,8 @@ namespace ippl {
          */
         Kokkos::vector<morton_code> partition(Kokkos::vector<morton_code>& octants,
                                               Kokkos::vector<size_t>& weights);
+        Kokkos::View<morton_code*> partition(Kokkos::View<morton_code*> octants,
+                                             Kokkos::View<size_t*> weights);
 
         /**
          * ALGO 8
@@ -158,6 +159,8 @@ namespace ippl {
 #pragma endregion  // balancing
 
 #pragma region helpers
+
+        
         /**
          * @brief Compares the following aspects of the trees:
          * - n_particles
@@ -211,6 +214,10 @@ namespace ippl {
         }
 
         void particles_to_file(particle_t const& particles) {
+            if (!enable_visualisation) {
+                return;
+            }
+
             std::string outputPath = std::string(IPPL_SOURCE_DIR)
                                      + "/src/OrthoTree/scripts/output/particles"
                                      + std::to_string(Comm->rank()) + ".txt";
@@ -229,6 +236,10 @@ namespace ippl {
          */
         template <typename T>
         void octants_to_file(const T& octants) {
+            if (!enable_visualisation) {
+                return;
+            }
+
             std::string outputPath = std::string(IPPL_SOURCE_DIR)
                                      + "/src/OrthoTree/scripts/output/octants"
                                      + std::to_string(Comm->rank()) + ".txt";

@@ -71,23 +71,4 @@ namespace ippl {
 
         return tree_view;
     }
-
-    template <size_t Dim>
-    bool OrthoTree<Dim>::operator==(const OrthoTree& other) {
-        if (n_particles != other.n_particles) {
-            return false;
-        }
-
-        if (tree_m.size() != other.tree_m.size()) {
-            return false;
-        }
-
-        for (size_t i = 0; i < tree_m.size(); ++i) {
-            if (tree_m[i] != other.tree_m[i]) {
-                return false;
-            }
-        }
-
-        return true;
-    }
 }  // namespace ippl
