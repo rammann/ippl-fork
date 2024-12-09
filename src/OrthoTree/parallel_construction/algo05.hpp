@@ -24,7 +24,7 @@ namespace ippl {
 
     template <size_t Dim>
     Kokkos::View<morton_code*> OrthoTree<Dim>::partition(Kokkos::View<morton_code*> octants,
-                                                         Kokkos::View<morton_code*> weights) {
+                                                         Kokkos::View<size_t*> weights) {
         START_FUNC;
         world_rank = Comm->rank();
         world_size = Comm->size();
@@ -175,7 +175,6 @@ namespace ippl {
         }
         Comm->barrier();
         return partitioned_octants;
-
     }
 
     template <size_t Dim>
@@ -184,7 +183,7 @@ namespace ippl {
 
         START_FUNC;
         Kokkos::View<morton_code*> octants_view(octants.data(), octants.size());
-        Kokkos::View<morton_code*> weights_view(weights.data(), weights.size());
+        Kokkos::View<size_t*> weights_view(weights.data(), weights.size());
         Kokkos::View<morton_code*> partitioned_octants = partition(octants_view, weights_view);
         Kokkos::vector<morton_code> partitioned_octants_vector;
         for (size_t i = 0; i < partitioned_octants.size(); ++i) {
