@@ -40,6 +40,8 @@ namespace ippl {
         // this needs to be initialized before constructing the tree
         this->aid_list_m.initialize(root_bounds_m, particles);
 
+        // without the step below the parallel/sequential trees can never be identical, as the
+        // parallel version never contains the root node
         morton_code root_octant(0);
         auto octants                             = morton_helper.get_children(root_octant);
         Kokkos::View<morton_code*> finished_tree = build_tree_from_octants(octants);
