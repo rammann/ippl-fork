@@ -38,6 +38,11 @@ add_test_with_gtest(parallel_tree_test parallel_construction/algo5.cpp)
 add_test_with_gtest(linearise_test parallel_construction/algo8.cpp)
 add_test_with_gtest(complete_region_test parallel_construction/algo2.cpp)
 
+add_test_with_gtest(parallel_construction_2 parallel_construction/full_test/2_ranks.cpp)
+add_test_with_gtest(parallel_construction_4 parallel_construction/full_test/4_ranks.cpp)
+add_test_with_gtest(parallel_construction_8 parallel_construction/full_test/8_ranks.cpp)
+
+
 # paralell balancing tests
 # TODO: 
 

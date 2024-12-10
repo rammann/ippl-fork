@@ -19,7 +19,7 @@ namespace ippl {
         , morton_helper(max_depth)
         , aid_list_m(AidList<Dim>(max_depth))
         , logger("OrthoTree", std::cout, INFORM_ALL_NODES) {
-        logger.setOutputLevel(5);
+        logger.setOutputLevel(0);
         logger.setPrintNode(INFORM_ALL_NODES);
     }
 
@@ -40,35 +40,16 @@ namespace ippl {
         // this needs to be initialized before constructing the tree
         this->aid_list_m.initialize(root_bounds_m, particles);
 
-        Kokkos::vector<morton_code> result_tree;
+        // without the step below the parallel/sequential trees can never be identical, as the
+        // parallel version never contains the root node
+        morton_code root_octant(0);
+        auto octants                             = morton_helper.get_children(root_octant);
+        Kokkos::View<morton_code*> finished_tree = build_tree_from_octants(octants);
 
-        std::stack<std::pair<morton_code, size_t>> s;
-        s.push({ morton_code(0), particles.getLocalNum() });
+        particles_to_file(particles);
+        octants_to_file(finished_tree);
 
-        while ( !s.empty() ) {
-            const auto& [octant, count] = s.top(); s.pop();
-
-            if ( count <= max_particles_per_node_m || morton_helper.get_depth(octant) >= max_depth_m ) {
-                result_tree.push_back(octant);
-                continue;
-            }
-
-            for ( const auto& child_octant : morton_helper.get_children(octant) ) {
-                const size_t count = aid_list_m.getNumParticlesInOctant(child_octant);
-
-                // no need to push in this case
-                if ( count > 0 ) {
-                    s.push({ child_octant, count });
-                }
-            }
-        }
-
-        // if we sort the tree after construction we can compare two trees
-        std::sort(result_tree.begin(), result_tree.end());
-
-        Kokkos::View<morton_code*> tree_view("tree_view_naive", result_tree.size());
-        tree_view.assign_data(result_tree.data());
-
-        return tree_view;
+        return finished_tree;
     }
+
 }  // namespace ippl

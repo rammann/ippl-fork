@@ -27,6 +27,9 @@ namespace ippl {
     public:
         AidList(size_t max_depth);
 
+        void setLogLevel(int level) { logger.setOutputLevel(level); }
+        void setLogOutput(bool enable) { logger.on(enable); }
+
         template <typename PLayout>
         void initialize(const BoundingBox<Dim>& root_bounds, PLayout const& particles);
 

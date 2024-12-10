@@ -77,7 +77,7 @@ namespace ippl {
         static void print_help() {
             std::cout << "Usage: program [options]\nOptions:\n";
             for (const auto& [name, info] : arguments()) {
-                std::cout << "  " << prefix << std::setw(20) << std::left << name
+                std::cout << "  " << prefix << std::setw(30) << std::left << name
                           << info.description << " (default: " << info.default_value << ")\n";
             }
         }
@@ -86,7 +86,7 @@ namespace ippl {
             std::ostringstream oss;
             for (const auto& argument : arguments()) {
                 const std::string arg_name = argument.first;
-                oss << arg_name << '=' << get<std::string>(arg_name) << " ";
+                oss << "-" << arg_name << '=' << get<std::string>(arg_name) << " ";
             }
             return oss.str();
         }
