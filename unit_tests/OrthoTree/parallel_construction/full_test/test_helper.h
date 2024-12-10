@@ -207,7 +207,8 @@ void runTests() {
 
         std::vector<size_t> num_particles_v       = {500, 1000, 2000, 5000, 10000, 50000};
         std::vector<size_t> max_depth_v           = {3, 4, 6, 8};
-        std::vector<double> max_particles_ratio_v = {1 / 3, 1 / 4, 1 / 5, 1 / 10};
+        std::vector<double> max_particles_ratio_v = {/*1. / 2,*/ 1. / 3, 1. / 4, 1. / 5, 1. / 10,
+                                                     1. / 20};
     } test_data;
 
     static constexpr size_t Dim2 = 2;
