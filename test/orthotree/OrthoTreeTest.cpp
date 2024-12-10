@@ -50,6 +50,9 @@ static void define_arguments() {
     ArgParser::add_argument<std::string>("enable_visualisation", "true",
                                          "Enables or disables the output of visualisation data");
     ArgParser::add_argument<size_t>("log_level", 0, "Sets the log level for our outputs.");
+
+    ArgParser::add_argument<std::string>("parallel", "true",
+                                         "true for parallel, false for sequential run");
 }
 
 int main(int argc, char* argv[]) {
@@ -107,13 +110,18 @@ void run_experiment() {
     const bool enable_visualisation = ArgParser::get<bool>("enable_visualisation");
     const size_t log_level          = ArgParser::get<size_t>("log_level");
     const bool enable_stats         = ArgParser::get<bool>("print_stats");
+    const bool run_parallel         = ArgParser::get<bool>("parallel");
 
     tree.setVisualisation(enable_visualisation);
     tree.setLogLevel(log_level);
     tree.setPrintStats(enable_stats);
 
     auto particles = initializeParticles<Dim>();
-    tree.build_tree(particles);
+
+    if (run_parallel)
+        tree.build_tree(particles);
+    else
+        tree.build_tree_naive(particles);
 }
 
 template <size_t Dim>

@@ -86,7 +86,7 @@ namespace ippl {
             std::ostringstream oss;
             for (const auto& argument : arguments()) {
                 const std::string arg_name = argument.first;
-                oss << arg_name << '=' << get<std::string>(arg_name) << " ";
+                oss << "-" << arg_name << '=' << get<std::string>(arg_name) << " ";
             }
             return oss.str();
         }
