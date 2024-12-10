@@ -39,7 +39,7 @@ namespace ippl {
             const size_t octant_depth    = this->morton_helper.get_depth(octant);
             const size_t remaining_depth = this->max_depth_m - octant_depth;
 
-            // worst_case
+            // worst_case: we use all available octants
             const size_t max_possible_size = (size_t(1) << (Dim * remaining_depth));
 
             return max_possible_size;
@@ -63,9 +63,14 @@ namespace ippl {
             const size_t n_particles_in_octant =
                 this->aid_list_m.getNumParticlesInOctant(cur_octant);
 
-            if (n_particles_in_octant == 0) {
-                continue;
+            /*
+            TODO:
+            THIS IS OK FOR DEBUGGING PURPOSES (nicer visualisation), BUT WE SHOULD REENABLE THIS
+            LATER, WE DONT CARE ABOUT EMPTY OCTANTS
+
+            if (n_particles_in_octant == 0) { continue;
             }
+            */
 
             if (octant_depth >= this->max_depth_m
                 || n_particles_in_octant <= this->max_particles_per_node_m) {
@@ -87,6 +92,8 @@ namespace ippl {
 
         // only sort what we need, the rest should already be sorted
         std::sort(tree_view.data() + old_size, tree_view.data() + occupied_size);
+
+        // I WILL LEAVE THIS IN HERE FOR NOW, MIGHT CATCH ERRORS QUICKER IN LATER STAGES
 
         // these following lines are for testing purposes
         // they check that the resulting tree is sorted and doesn't leave gaps
