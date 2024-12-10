@@ -18,7 +18,7 @@ namespace ippl {
 
         auto octants = block_partition(min_octant, max_octant);
 
-        particles_to_file(particles);
+        particles_to_file(particles);  // runs much faster if we print here instead of below lol
 
         // Each proc has now as much of the aid_list as he needs and can start building the
         // tree.
