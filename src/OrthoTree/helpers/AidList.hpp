@@ -11,7 +11,7 @@ namespace ippl {
         logger.setOutputLevel(5);
         logger.setPrintNode(INFORM_ALL_NODES);
 
-        logger << "Initialized AidList" << endl;
+        // logger << "Initialized AidList" << endl;
     }
 
     template <size_t Dim>
