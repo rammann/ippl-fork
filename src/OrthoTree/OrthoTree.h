@@ -186,9 +186,17 @@ namespace ippl {
 
 #pragma endregion  // helpers
 
+        /**
+         * @brief Constructs a tree in each octant inside the given container.
+         * Templated for now to make it work with Kokkos::View and Kokkos::vectors
+         */
         template <typename Container>
         Kokkos::View<morton_code*> build_tree_from_octants(const Container& octants);
 
+        /**
+         * @brief Constructs an OrthoTree in the given Octant. It will automatically resize the view
+         * to the needed size and apply 'shrink_to_fit' after finishing.
+         */
         void build_tree_from_octant(morton_code root_octant, Kokkos::View<morton_code*>& tree_view);
 
     public:
