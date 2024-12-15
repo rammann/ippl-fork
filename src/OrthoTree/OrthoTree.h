@@ -48,7 +48,6 @@ namespace ippl {
         using bounds_t        = BoundingBox<Dim>;
 
         using aid_list_t = Kokkos::vector<Kokkos::pair<morton_code, size_t>>;
-
         const size_t max_depth_m;
         const size_t max_particles_per_node_m;
         const bounds_t root_bounds_m;
@@ -146,9 +145,8 @@ namespace ippl {
          * @return list of linearised octants - sorted
          * @warning THIS FUNCTION ASSUMES THAT THE OCTANTS ARE SORTED
          */
-        Kokkos::vector<morton_code> linearise_octants(Kokkos::vector<morton_code> const& octants);
-
         Kokkos::View<morton_code*> linearise_octants(Kokkos::View<morton_code*> const& octants);
+
 #pragma endregion  // paralell construction
 
 #pragma region balancing
