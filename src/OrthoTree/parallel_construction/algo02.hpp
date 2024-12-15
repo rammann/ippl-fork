@@ -27,7 +27,9 @@ namespace ippl {
             morton_helper.get_nearest_common_ancestor(code_a, code_b);
 
         std::stack<morton_code> stack;
-        stack.push(nearest_comm_ancestor);
+        for (morton_code child : morton_helper.get_children(nearest_comm_ancestor)) {
+            stack.push(child);
+        }
 
         while (!stack.empty()) {
             morton_code current_node = stack.top();
@@ -52,7 +54,7 @@ namespace ippl {
         }
 
         // shrink to fit, if necessary
-        if (idx != estimated_size) {
+        if (idx != min_lin_tree.size()) {
             Kokkos::resize(min_lin_tree, idx);
         }
 

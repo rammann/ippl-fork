@@ -118,6 +118,7 @@ namespace ippl {
          * @brief Implements the logic part of algorithm 3.
          */
         Kokkos::vector<morton_code> complete_tree(Kokkos::vector<morton_code>& tree);
+        Kokkos::View<morton_code*> complete_tree(Kokkos::View<morton_code*> tree);
 
         /**
          * ALGO 4
