@@ -19,6 +19,9 @@ namespace ippl {
     template <size_t Dim>
     Kokkos::View<morton_code*> OrthoTree<Dim>::linearise_octants(
         const Kokkos::View<morton_code*>& octants) {
+        assert(octants.size() > 0
+               && "Octants.size() is zero, dont call this function with an empty list!");
+
         Kokkos::View<morton_code*> linearised("linearised", octants.size());
 
         size_t j = 0;
