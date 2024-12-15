@@ -135,8 +135,6 @@ namespace ippl {
          * @brief This function partitions the workload of building the tree across
          * the available mpi ranks.
          */
-        Kokkos::vector<morton_code> partition(Kokkos::vector<morton_code>& octants,
-                                              Kokkos::vector<size_t>& weights);
         Kokkos::View<morton_code*> partition(Kokkos::View<morton_code*> octants,
                                              Kokkos::View<size_t*> weights);
 
