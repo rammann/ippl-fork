@@ -2,17 +2,7 @@
 
 /*
 TODO:
-- IMPLEMENT THIS NEW FUNCTION SIGNATURE
 - WRITE TESTS FOR THE FUNCTION
-- ADJUST THE SIGNATURE IN ORTHOTREE.H
-
-namespace ippl {
-
-    template <size_t Dim>
-    Kokkos::View<morton_code*> OrthoTree<Dim>::linearise_octants(
-                                        Kokkos::View<morton_code*> octants);
-
-}  // namespace ippl
 */
 
 namespace ippl {
@@ -38,19 +28,5 @@ namespace ippl {
         Kokkos::resize(linearised, j+1);
 
         return linearised;
-    }
-
-    // wrapper to make it work with old algos, remove this
-    template <size_t Dim>
-    Kokkos::vector<morton_code> OrthoTree<Dim>::linearise_octants(
-        const Kokkos::vector<morton_code>& octants) {
-        Kokkos::View<morton_code*> linearise_view(octants.data(), octants.size());
-        auto res = linearise_octants(linearise_view);
-        Kokkos::vector<morton_code> vec_res;
-        for (size_t i = 0; i < linearise_view.size(); ++i) {
-            vec_res.push_back(linearise_view[i]);
-        }
-
-        return vec_res;
     }
 }  // namespace ippl

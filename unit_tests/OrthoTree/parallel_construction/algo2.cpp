@@ -29,7 +29,7 @@ TEST(CompleteRegion, CompleteSimpleQuad) {
     expected(7) = morton.encode({0, 4}, 1);
     std::sort(expected.data(), expected.data() + expected.size());
 
-    Kokkos::View<morton_code*> complete_region = tree.complete_region_new(code_a, code_b);
+    Kokkos::View<morton_code*> complete_region = tree.complete_region(code_a, code_b);
 
     ASSERT_EQ(expected.size(), complete_region.size()) << "Sizes dont match!";
 

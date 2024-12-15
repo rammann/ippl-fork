@@ -2,21 +2,14 @@
 
 /*
 TODO:
-- IMPLEMENT THIS NEW FUNCTION SIGNATURE
 - WRITE TESTS FOR THE FUNCTION
-- ADJUST THE SIGNATURE IN ORTHOTREE.H
 
-namespace ippl {
-    template <size_t Dim>
-    Kokkos::View<morton_code*> OrthoTree<Dim>::complete_region(morton_code code_a,
-                                                               morton_code code_b);
-}  // namespace ippl
 */
 
 namespace ippl {
     template <size_t Dim>
-    Kokkos::View<morton_code*> OrthoTree<Dim>::complete_region_new(morton_code code_a,
-                                                                   morton_code code_b) {
+    Kokkos::View<morton_code*> OrthoTree<Dim>::complete_region(morton_code code_a,
+                                                               morton_code code_b) {
         assert(code_a < code_b);
 
         size_t estimated_size = 79;  // should never have to resize with this
@@ -60,16 +53,5 @@ namespace ippl {
 
         std::sort(min_lin_tree.data(), min_lin_tree.data() + min_lin_tree.size());
         return min_lin_tree;
-    }
-
-    template <size_t Dim>
-    Kokkos::vector<morton_code> OrthoTree<Dim>::complete_region(morton_code code_a,
-                                                                morton_code code_b) {
-        auto res = complete_region_new(code_a, code_b);
-        Kokkos::vector<morton_code> ret_vec;
-        for (size_t i = 0; i < res.size(); ++i) {
-            ret_vec.push_back(res[i]);
-        }
-        return ret_vec;
     }
 }  // namespace ippl

@@ -15,23 +15,7 @@ namespace ippl {
 
 namespace ippl {
     template <size_t Dim>
-    Kokkos::vector<morton_code> OrthoTree<Dim>::complete_tree(
-        Kokkos::vector<morton_code>& octants) {
-        Kokkos::View<morton_code*> octants_view(octants.data(), octants.size());
-
-        auto result_view = complete_tree(octants_view);
-        Kokkos::vector<morton_code> result_vec;
-        for (size_t i = 0; i < result_view.size(); ++i) {
-            result_vec.push_back(result_view[i]);
-        }
-        return result_vec;
-    }
-
-    template <size_t Dim>
     Kokkos::View<morton_code*> OrthoTree<Dim>::complete_tree(Kokkos::View<morton_code*> octants) {
-        world_rank = Comm->rank();
-        world_size = Comm->size();
-
         // this removes duplicates, inefficient as of now
         std::map<morton_code, int> m;
         for (auto octant : std::span(octants.data(), octants.size())) {
@@ -41,7 +25,8 @@ namespace ippl {
         Kokkos::resize(octants, m.size());  // shrink
         size_t octants_idx = 0;
         for (const auto [octant, count] : m) {
-            octants[octants_idx++] = octant;
+            octants[octants_idx] = octant;
+            octants_idx++;
         }
 
         octants = linearise_octants(octants);
@@ -89,8 +74,8 @@ namespace ippl {
         Kokkos::View<morton_code*> R_view("R_view", R_base_size);
 
         auto insert_into_R = [&](morton_code octant_a, morton_code octant_b) {
-            auto complete_region_data       = complete_region(octant_a, octant_b);
-            const size_t additional_octants = complete_region_data.size() + 1;
+            auto complete_region_view       = complete_region(octant_a, octant_b);
+            const size_t additional_octants = complete_region_view.size() + 1;
             size_t remaining_space          = R_view.size() - R_index;
 
             while (remaining_space <= additional_octants) {
@@ -98,11 +83,13 @@ namespace ippl {
                 remaining_space = R_view.size() - R_index;
             }
 
-            R_view[R_index++] = octant_a;
+            R_view[R_index] = octant_a;
+            R_index++;
 
             for (morton_code elem :
-                 std::span(complete_region_data.data(), complete_region_data.size())) {
-                R_view[R_index++] = elem;
+                 std::span(complete_region_view.data(), complete_region_view.size())) {
+                R_view[R_index] = elem;
+                R_index++;
             }
         };
 
@@ -127,7 +114,8 @@ namespace ippl {
             }
 
             // insert to the back
-            R_view[R_index++] = octants[octants.size() - 1];
+            R_view[R_index] = octants[octants.size() - 1];
+            R_index++;
 
         } else {
             Kokkos::resize(R_view, R_index);
