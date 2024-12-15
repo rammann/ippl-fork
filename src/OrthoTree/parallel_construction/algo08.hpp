@@ -37,6 +37,7 @@ namespace ippl {
         return linearised;
     }
 
+    // wrapper to make it work with old algos, remove this
     template <size_t Dim>
     Kokkos::vector<morton_code> OrthoTree<Dim>::linearise_octants(
         const Kokkos::vector<morton_code>& octants) {
