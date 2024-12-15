@@ -25,7 +25,8 @@ namespace ippl {
         Kokkos::resize(octants, m.size());  // shrink
         size_t octants_idx = 0;
         for (const auto [octant, count] : m) {
-            octants[octants_idx++] = octant;
+            octants[octants_idx] = octant;
+            octants_idx++;
         }
 
         octants = linearise_octants(octants);
@@ -82,11 +83,13 @@ namespace ippl {
                 remaining_space = R_view.size() - R_index;
             }
 
-            R_view[R_index++] = octant_a;
+            R_view[R_index] = octant_a;
+            R_index++;
 
             for (morton_code elem :
                  std::span(complete_region_view.data(), complete_region_view.size())) {
-                R_view[R_index++] = elem;
+                R_view[R_index] = elem;
+                R_index++;
             }
         };
 
@@ -111,7 +114,8 @@ namespace ippl {
             }
 
             // insert to the back
-            R_view[R_index++] = octants[octants.size() - 1];
+            R_view[R_index] = octants[octants.size() - 1];
+            R_index++;
 
         } else {
             Kokkos::resize(R_view, R_index);
