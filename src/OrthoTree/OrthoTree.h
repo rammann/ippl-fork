@@ -54,23 +54,31 @@ namespace ippl {
         const bounds_t root_bounds_m;
         const Morton<Dim> morton_helper;
 
-        // as of now the tree is stored only as morton codes, this needs to be discussed as a group
-        Kokkos::vector<morton_code> tree_m;
-
-        // NEW TREE TYPE!
-        Kokkos::View<morton_code*> finished_tree;
-
         size_t n_particles;
 
         AidList<Dim> aid_list_m;
 
-        int world_rank;
-        int world_size;
+        size_t world_rank;
+        size_t world_size;
 
         Inform logger;
 
+        bool enable_visualisation = false;
+        bool enable_print_stats   = false;
+
     public:
         OrthoTree(size_t max_depth, size_t max_particles_per_node, const bounds_t& root_bounds);
+
+        void setVisualisation(bool enable) { enable_visualisation = enable; }
+        void setPrintStats(bool enable) { enable_print_stats = enable; }
+        void setLogOutput(bool enable) {
+            logger.on(enable);
+            aid_list_m.setLogOutput(enable);
+        }
+        void setLogLevel(size_t level) {
+            logger.setOutputLevel(level);
+            aid_list_m.setLogLevel(level);
+        }
 
         /**
          * @brief This is the most basic way to build a tree. Its inefficien, but it (should) be
@@ -119,7 +127,7 @@ namespace ippl {
          *
          * @return block partitioned octree, and unpartitioned_tree is re-distributed
          **/
-        Kokkos::vector<morton_code> block_partition(morton_code min_octant, morton_code max_octant);
+        auto block_partition(morton_code min_octant, morton_code max_octant);
 
         /**
          * ALGO 5
@@ -129,6 +137,8 @@ namespace ippl {
          */
         Kokkos::vector<morton_code> partition(Kokkos::vector<morton_code>& octants,
                                               Kokkos::vector<size_t>& weights);
+        Kokkos::View<morton_code*> partition(Kokkos::View<morton_code*> octants,
+                                             Kokkos::View<size_t*> weights);
 
         /**
          * ALGO 8
@@ -158,6 +168,8 @@ namespace ippl {
 #pragma endregion  // balancing
 
 #pragma region helpers
+
+        
         /**
          * @brief Compares the following aspects of the trees:
          * - n_particles
@@ -174,15 +186,74 @@ namespace ippl {
 
 #pragma endregion  // helpers
 
-        Kokkos::View<morton_code*> build_tree_from_octants(
-            const Kokkos::vector<morton_code>& octants);
+        /**
+         * @brief Constructs a tree in each octant inside the given container.
+         * Templated for now to make it work with Kokkos::View and Kokkos::vectors
+         */
+        template <typename Container>
+        Kokkos::View<morton_code*> build_tree_from_octants(const Container& octants);
 
-        void init_aid_list_from_octants(morton_code min_octant, morton_code max_octant);
-
-        std::pair<morton_code, morton_code> get_relevant_aid_list(particle_t const& particles);
+        /**
+         * @brief Constructs an OrthoTree in the given Octant. It will automatically resize the view
+         * to the needed size and apply 'shrink_to_fit' after finishing.
+         */
+        void build_tree_from_octant(morton_code root_octant, Kokkos::View<morton_code*>& tree_view);
 
     public:
 #pragma region print_helpers
+
+        void print_stats(Kokkos::View<morton_code*>& tree_view, const auto& particles) {
+            if (!enable_print_stats) {
+                return;
+            }
+
+            size_t total_particles = 0;
+            for (size_t i = 0; i < tree_view.size(); ++i) {
+                auto num_particles = this->aid_list_m.getNumParticlesInOctant(tree_view[i]);
+                total_particles += num_particles;
+            }
+
+            size_t global_total_particles = 0;
+            Comm->allreduce(&total_particles, &global_total_particles, 1, std::plus<size_t>());
+
+            const size_t col_width = 15;
+
+            auto printer = [col_width](const auto& rank, const auto& tree_size,
+                                       const auto& num_particles) {
+                std::cerr << std::left << std::setw(col_width) << rank << std::left
+                          << std::setw(col_width) << tree_size << std::left << std::setw(col_width)
+                          << num_particles << std::endl;
+            };
+
+            {
+                // buffer to print the stats in order
+                int ring_buf;
+                if (world_rank + 1 < world_size) {
+                    mpi::Status status;
+                    Comm->recv(&ring_buf, 1, world_rank + 1, 0, status);
+                } else {
+                    std::cerr << std::string(col_width * 3, '=') << std::endl;
+                    printer("rank", "octs_now", "particles");
+                    std::cerr << std::string(col_width * 3, '-') << std::endl;
+                }
+
+                printer(world_rank, tree_view.size(), total_particles);
+
+                if (world_rank > 0) {
+                    Comm->send(ring_buf, 1, world_rank - 1, 0);
+                }
+            }
+
+            if (world_rank == 0) {
+                std::cerr << std::string(col_width * 3, '-') << std::endl
+                          << "We now have " << global_total_particles << " particles" << std::endl
+                          << "("
+                          << (100.0 * (double)global_total_particles
+                              / (double)particles.getTotalNum())
+                          << "% of starting value lol)" << std::endl
+                          << std::string(col_width * 3, '-') << std::endl;
+            }
+        }
 
         std::ostream& print_octant(std::ostream& os, morton_code octant) {
             const grid_coordinate grid = morton_helper.decode(octant);
@@ -211,6 +282,10 @@ namespace ippl {
         }
 
         void particles_to_file(particle_t const& particles) {
+            if (!enable_visualisation) {
+                return;
+            }
+
             std::string outputPath = std::string(IPPL_SOURCE_DIR)
                                      + "/src/OrthoTree/scripts/output/particles"
                                      + std::to_string(Comm->rank()) + ".txt";
@@ -229,6 +304,10 @@ namespace ippl {
          */
         template <typename T>
         void octants_to_file(const T& octants) {
+            if (!enable_visualisation) {
+                return;
+            }
+
             std::string outputPath = std::string(IPPL_SOURCE_DIR)
                                      + "/src/OrthoTree/scripts/output/octants"
                                      + std::to_string(Comm->rank()) + ".txt";
