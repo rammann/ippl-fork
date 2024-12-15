@@ -109,15 +109,13 @@ namespace ippl {
          *
          * @return list of morton codes of minimal linear octree between the two octants
          **/
-        Kokkos::vector<morton_code> complete_region(morton_code code_a, morton_code code_b);
-        Kokkos::View<morton_code*> complete_region_new(morton_code code_a, morton_code code_b);
+        Kokkos::View<morton_code*> complete_region(morton_code code_a, morton_code code_b);
 
         /**
          * ALGO 3
          *
          * @brief Implements the logic part of algorithm 3.
          */
-        Kokkos::vector<morton_code> complete_tree(Kokkos::vector<morton_code>& tree);
         Kokkos::View<morton_code*> complete_tree(Kokkos::View<morton_code*> tree);
 
         /**
