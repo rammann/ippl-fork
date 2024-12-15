@@ -2,17 +2,7 @@
 
 /*
 TODO:
-- IMPLEMENT THIS NEW FUNCTION SIGNATURE
 - WRITE TESTS FOR THE FUNCTION
-- ADJUST THE SIGNATURE IN ORTHOTREE.H
-
-namespace ippl {
-
-    template <size_t Dim>
-    Kokkos::View<morton_code*> OrthoTree<Dim>::linearise_octants(
-                                        Kokkos::View<morton_code*> octants);
-
-}  // namespace ippl
 */
 
 namespace ippl {

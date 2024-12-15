@@ -47,7 +47,6 @@ namespace ippl {
         using particle_t      = particle_type_template<Dim>;
         using bounds_t        = BoundingBox<Dim>;
 
-        using aid_list_t = Kokkos::vector<Kokkos::pair<morton_code, size_t>>;
         const size_t max_depth_m;
         const size_t max_particles_per_node_m;
         const bounds_t root_bounds_m;
