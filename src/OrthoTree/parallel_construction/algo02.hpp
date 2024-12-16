@@ -12,6 +12,15 @@ namespace ippl {
                                                                morton_code code_b) {
         assert(code_a < code_b);
 
+        // special case (not specified in the paper): 
+        // one code is an ancestor of the other 
+        // -> the bigger code is already the region, don't need to complete anything
+        if (morton_helper.is_ancestor(code_a, code_b)
+            || morton_helper.is_ancestor(code_b, code_a)) {
+            Kokkos::View<morton_code*> min_lin_tree_empty("empty min_lin_tree", 0);
+            return min_lin_tree_empty;
+        }
+
         size_t estimated_size = 79;  // should never have to resize with this
         Kokkos::View<morton_code*> min_lin_tree("min_lin_tree", estimated_size);
         size_t idx = 0;
@@ -37,8 +46,8 @@ namespace ippl {
                     // conservative resizing
                     Kokkos::resize(min_lin_tree, min_lin_tree.size() + estimated_size);
                 }
-
-                min_lin_tree[idx++] = current_node;
+                min_lin_tree[idx] = current_node;
+                idx++;
             } else if (is_ancestor_of_a || is_ancestor_of_b) {
                 for (morton_code child : morton_helper.get_children(current_node)) {
                     stack.push(child);
