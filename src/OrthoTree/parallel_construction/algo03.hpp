@@ -17,6 +17,8 @@ namespace ippl {
     Kokkos::vector<morton_code> OrthoTree<Dim>::complete_tree(
         Kokkos::vector<morton_code>& octants) {
         START_FUNC;
+        IpplTimings::TimerRef timer = IpplTimings::getTimer("complete_tree");
+        IpplTimings::startTimer(timer);
         world_rank = Comm->rank();
         world_size = Comm->size();
 
@@ -105,6 +107,8 @@ namespace ippl {
             R.push_back(octants[n - 1]);
         }
 
+        IpplTimings::stopTimer(timer);
+        
         END_FUNC;
         return R;
     }

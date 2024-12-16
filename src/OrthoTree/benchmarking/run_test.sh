@@ -22,7 +22,7 @@ shift
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Find the build directory for the test executable by navigating up directories and searching for the build directory
 TEST_DIR=""
-TEST_EXE="OrthoTreeTest"
+TEST_EXE="OrthoTreeBenchmarking"
 
 for i in {1..5}; do
     if [ -d "$SCRIPT_DIR/build" ]; then
@@ -56,7 +56,7 @@ if [ "$LOGGING_FLAG" -eq 1 ]; then
     echo "Running test with $NUM_PROCESSORS processors: $TEST_EXE $@"
     mpirun -n "$NUM_PROCESSORS" --use-hwthread-cpus "$TEST_EXE" "$@" 
 else
-    mpirun -n "$NUM_PROCESSORS" --use-hwthread-cpus "$TEST_EXE" "$@" --info 1 -visualize_helper=false -print_stats=false
+    mpirun -n "$NUM_PROCESSORS" --use-hwthread-cpus "$TEST_EXE" "$@" --info 5 -visualize_helper=false -print_stats=false
     echo "Test $TEST_EXE completed successfully."
 fi
 

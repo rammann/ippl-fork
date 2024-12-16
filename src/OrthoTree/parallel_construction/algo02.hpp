@@ -18,6 +18,10 @@ namespace ippl {
     Kokkos::vector<morton_code> OrthoTree<Dim>::complete_region(morton_code code_a,
                                                                 morton_code code_b) {
         START_FUNC;
+
+        IpplTimings::TimerRef timer = IpplTimings::getTimer("complete_region");
+        IpplTimings::startTimer(timer);
+
         assert(code_a < code_b);
 
         morton_code neares_comm_ancestor =
@@ -44,6 +48,7 @@ namespace ippl {
 
         std::sort(min_lin_tree.begin(), min_lin_tree.end());
 
+        IpplTimings::stopTimer(timer);
         END_FUNC;
         return min_lin_tree;
     }

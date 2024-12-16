@@ -90,7 +90,7 @@ int main(int argc, char* argv[]) {
                 << std::endl;
         }
     }
-    
+
     IpplTimings::print();
     ippl::finalize();
 
@@ -125,7 +125,7 @@ void run_experiment() {
     auto particles = initializeParticles<Dim>();
 
     IpplTimings::TimerRef timer;
-    timer = IpplTimings::getTimer("build_tree");
+    timer = IpplTimings::getTimer("total");
     IpplTimings::startTimer(timer);
     if (run_parallel)
         tree.build_tree(particles);

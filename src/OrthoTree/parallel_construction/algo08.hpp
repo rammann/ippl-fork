@@ -20,6 +20,9 @@ namespace ippl {
     Kokkos::vector<morton_code> OrthoTree<Dim>::linearise_octants(
         const Kokkos::vector<morton_code>& octants) {
         START_FUNC;
+        IpplTimings::TimerRef timer = IpplTimings::getTimer("linearise_octants");
+        IpplTimings::startTimer(timer);
+
         logger << "size: " << octants.size() << endl;
         Kokkos::vector<morton_code> linearised;
 
@@ -34,6 +37,7 @@ namespace ippl {
         linearised.push_back(octants.back());
 
         logger << "finished, size is: " << linearised.size() << endl;
+        IpplTimings::stopTimer(timer);
         END_FUNC;
         return linearised;
     }

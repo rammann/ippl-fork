@@ -9,6 +9,9 @@ namespace ippl {
     Kokkos::View<morton_code*> OrthoTree<Dim>::build_tree(particle_t const& particles) {
         START_FUNC;
 
+        IpplTimings::TimerRef timer = IpplTimings::getTimer("build_tree");
+        IpplTimings::startTimer(timer);
+
         world_size = Comm->size();
         world_rank = Comm->rank();  // TODO: move this to constructor, but then all tests need a
                                     // main to init ippl
@@ -26,7 +29,9 @@ namespace ippl {
 
         octants_to_file(tree_view);
         print_stats(tree_view, particles);
-
+    
+        IpplTimings::stopTimer(timer);
+        
         return tree_view;
     }
 
