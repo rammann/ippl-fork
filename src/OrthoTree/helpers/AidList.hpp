@@ -24,6 +24,10 @@ namespace ippl {
             logger << "Aid list is initialized with size: " << size() << endl;
             distribute_buckets();
         }
+        else{
+            //receive the bucket borders
+
+        }
         sort_local_aidlist();
     }
 
@@ -54,13 +58,60 @@ namespace ippl {
         // broadcast the bucket borders
         Comm->broadcast(bucket_borders.data(), bucket_borders.extent(0), 0);
 
+        // view of views for the buckets
+        Kokkos::View<Kokkos::View<morton_code*>*> buckets_octants("buckets_octants", world_size);
+        Kokkos::View<Kokkos::View<size_t*>*> buckets_particle_ids("buckets_particle_ids", world_size);
+
+        // allocate the guesstimated space for the buckets
+        for(size_t i = 0; i < world_size; ++i) {
+            buckets(i) = Kokkos::View<morton_code*>("bucket_octants_" + std::to_string(i), n_particles/world_size);
+            buckets_particle_ids(i) = Kokkos::View<size_t*>("bucket_particle_ids_" + std::to_string(i), n_particles/world_size);
+        }
+
+        //vector storing the actual sizes of the buckets initially 0
+        Kokkos::View<size_t*> bucket_sizes("bucket_sizes", world_size);
+        Kokkos::deep_copy(bucket_sizes, 0);
 
 
+        //get the target rank for a given octant
+        auto get_target_rank = [&](morton_code octant) {
+            size_t target_rank = 0;
+            for(size_t i = 0; i < world_size - 1; ++i) {
+                if(octant < bucket_borders(i)) {
+                    target_rank = i;
+                    break;
+                }
+            }
+            return target_rank;
+        };
 
+        // fill the buckets
+        Kokkos::parallel_for("Fill buckets", n_particles, KOKKOS_LAMBDA(const size_t i) {
+            const morton_code octant = octants(i);
+            const size_t target_rank = get_target_rank(octant);
+            const size_t idx = Kokkos::atomic_fetch_add(&bucket_sizes(target_rank), 1);
+            //if the bucket is full, we need to resize it
+            if(idx >= buckets(target_rank).extent(0)) {
+                Kokkos::resize(buckets(target_rank), 2 * idx);
+            }
+            buckets_octants(target_rank)(idx) = octant;
+            buckets_particle_ids(target_rank)(idx) = particle_ids(i);
+        });
 
+        // send the buckets
 
-        Kokkos::parallel_for("Randomize octants", getOctants().extent(0), randu_gen);
+        for(size_t i = 1; i < world_size; ++i) {
+            if(i == world_rank) {
+                continue;
+            }
+            Comm->send(bucket_sizes(i), i, 1);
+            Comm->send(buckets_octants(i).data(), bucket_sizes(i), i, 0);
+            Comm->send(buckets_particle_ids(i).data(), bucket_sizes(i), i, 1);
+        }
 
+        // set the local bucket
+        octants = buckets_octants(0);
+        particle_ids = buckets_particle_ids(0);
         return;
     }
 
