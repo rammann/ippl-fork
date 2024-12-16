@@ -1,4 +1,5 @@
 #include "AidList.h"
+#include "random"
 
 namespace ippl {
     template <size_t Dim>
@@ -10,6 +11,7 @@ namespace ippl {
         , logger("AidList", std::cerr, INFORM_ALL_NODES) {
         logger.setOutputLevel(5);
         logger.setPrintNode(INFORM_ALL_NODES);
+        bucket_borders = Kokkos::View<morton_code*>("bucket_borders", world_size - 1);
 
         // logger << "Initialized AidList" << endl;
     }
@@ -20,8 +22,54 @@ namespace ippl {
         if (world_rank == 0) {
             initialize_from_rank(max_depth, root_bounds, particles);
             logger << "Aid list is initialized with size: " << size() << endl;
+            distribute_buckets();
         }
+        sort_local_aidlist();
     }
+
+    template <size_t Dim>
+    void AidList<Dim>::distribute_buckets() {
+
+        size_t n_particles = octants.size();
+
+        for(size_t i = 0; i < world_size - 1; ++i) {
+
+            bool is_unique = true;
+            size_t index = 0;
+            do{
+                index = std::rand() % n_particles;
+                for(size_t j = 0; j < i; ++j) {
+                    if(bucket_borders(j) == octants(index)) {
+                        is_unique = false;
+                        break;
+                    }
+                }
+            }while(!is_unique);
+            bucket_borders(i) = getOctant((i + 1) * size() / world_size);
+        }
+
+        // sort the bucket borders
+        std::sort(bucket_borders.data(), bucket_borders.data() + bucket_borders.extent(0));
+
+        // broadcast the bucket borders
+        Comm->broadcast(bucket_borders.data(), bucket_borders.extent(0), 0);
+
+
+
+
+
+
+        Kokkos::parallel_for("Randomize octants", getOctants().extent(0), randu_gen);
+
+        return;
+    }
+
+    template <size_t Dim>
+    void AidList<Dim>::sort_local_aidlist() {
+        return;
+    }
+
+
 
     template <size_t Dim>
     template <typename PLayout>
@@ -34,7 +82,7 @@ namespace ippl {
         size_t max_depth, const BoundingBox<Dim>& root_bounds,
         OrthoTreeParticle<ippl::ParticleSpatialLayout<double, Dim>> const& particles) {
         if (world_rank != 0) {
-            throw std::runtime_error("kys aogfbeuebgueigbewiugbwlgwegbewkjl");
+            throw std::runtime_error("This function should only be called on rank 0!");
         }
 
         if (!this->is_gathered(particles)) {
@@ -48,8 +96,9 @@ namespace ippl {
         using grid_coordinate                  = grid_coordinate_template<Dim>;
         const real_coordinate root_bounds_size = root_bounds.get_max() - root_bounds.get_min();
 
-        // temporary structure to hold the data... TODO: make this smarter
-        std::vector<std::pair<morton_code, size_t>> temp_aid_list(n_particles);
+        // allocate the space for the octants and the particle ids
+        octants = Kokkos::View<morton_code *> ("octants", n_particles);
+        particle_ids = Kokkos::View<size_t *> ("particle_ids", n_particles);
 
         for (size_t i = 0; i < n_particles; ++i) {
             // this gets rid of cancellation, thank you @NumCSE script
@@ -57,27 +106,10 @@ namespace ippl {
                 (particles.R(i) - root_bounds.get_min()) * (grid_size - 1) / root_bounds_size);
 
             // encode the grid coordinate and store it
-            temp_aid_list[i] = {morton_helper.encode(grid_coord, max_depth), i};
+            octants(i) = morton_helper.encode(grid_coord,max_depth);
+            // store the particle id
+            particle_ids(i) = i;
         }
-
-        // sort by morton codes: TODO: make this smarter
-        std::sort(temp_aid_list.begin(), temp_aid_list.end(), [](const auto& a, const auto& b) {
-            return a.first < b.first;
-        });
-
-        this->resize(n_particles);
-
-        // ARE MIRRORS/DEEP COPIES REALLY NEEDED??
-        auto host_octants      = Kokkos::create_mirror_view(this->getOctants());
-        auto host_particle_ids = Kokkos::create_mirror_view(this->getParticleIDs());
-
-        for (size_t i = 0; i < n_particles; ++i) {
-            host_octants(i)      = temp_aid_list[i].first;
-            host_particle_ids(i) = temp_aid_list[i].second;
-        }
-
-        Kokkos::deep_copy(this->getOctants(), host_octants);
-        Kokkos::deep_copy(this->getParticleIDs(), host_particle_ids);
     }
 
     template <size_t Dim>
