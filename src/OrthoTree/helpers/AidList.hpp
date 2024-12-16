@@ -131,6 +131,29 @@ namespace ippl {
 
     template <size_t Dim>
     void AidList<Dim>::sort_local_aidlist() {
+
+        // sort the local aid list
+        Kokkos::View<size_t*> indices("indices", octants.size());
+        Kokkos::parallel_for("Sort indices", octants.size(), KOKKOS_LAMBDA(const size_t i) {
+            indices(i) = i;
+        });
+        std::sort(indices.data(), indices.data() + indices.extent(0), [&](size_t a, size_t b) {
+            return octants(a) < octants(b);
+        });
+
+        // allocate the space for the sorted aid list
+        Kokkos::View<morton_code*> sorted_octants("sorted_octants", octants.size());
+        Kokkos::View<size_t*> sorted_particle_ids("sorted_particle_ids", octants.size());
+
+        // fill the sorted aid list
+        Kokkos::parallel_for("Fill sorted aid list", octants.size(), KOKKOS_LAMBDA(const size_t i) {
+            sorted_octants(i) = octants(indices(i));
+            sorted_particle_ids(i) = particle_ids(indices(i));
+        });
+
+        // swap the sorted aid list with the original one
+        octants = sorted_octants;
+        particle_ids = sorted_particle_ids;
         return;
     }
 
