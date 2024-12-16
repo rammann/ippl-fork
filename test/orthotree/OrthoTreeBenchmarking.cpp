@@ -124,7 +124,7 @@ void run_experiment() {
 
     const size_t num_particles = ArgParser::get<size_t>("num_particles_tot");
     const size_t num_particles_per_proc = num_particles / Comm->size();
-    auto particles = initializeParticles<Dim>(const size_t num_particles_per_proc);
+    auto particles = initializeParticles<Dim>(num_particles_per_proc);
 
     IpplTimings::TimerRef timer;
     timer = IpplTimings::getTimer("orthotree_build");
