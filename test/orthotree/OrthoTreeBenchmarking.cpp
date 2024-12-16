@@ -72,7 +72,7 @@ int main(int argc, char* argv[]) {
         }
 
         const size_t dimensions = ArgParser::get<size_t>("dim");
-        
+
         // logging to find where it hangs
         if (Comm->rank() == 0) {
             std::cerr << "Running OrthoTree benchmark in " << dimensions << "D" << std::endl;
@@ -89,13 +89,24 @@ int main(int argc, char* argv[]) {
             exit(1);
         }
 
+        // logging at the end in case the run crashes
+        if (Comm->rank() == 0 && visualize_helper) {
+            std::cerr << "Finished run with: \n"
+                << "./visualise.sh " << Comm->size() << " " << ArgParser::get_args()
+                << std::endl;
+        }
+
         if (Comm->rank() == 0 && visualize_helper) {
             std::cerr << "Replicate this run with: \n"
                 << "./visualise.sh " << Comm->size() << " " << ArgParser::get_args()
                 << std::endl;
         }
+        if (Comm->rank() == 0 && ArgParser::get<bool>("print_stats")) {
+            std::cerr << "Starting to print timings" << std::endl;
+            IpplTimings::print();
+            std::cerr << "Finished printing timings" << std::endl;
+        }
     }
-    IpplTimings::print();
     ippl::finalize();
 
     return 0;
