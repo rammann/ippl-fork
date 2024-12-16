@@ -20,10 +20,10 @@
 using namespace ippl;
 
 template <size_t Dim, typename ParticlePositioins>
-void initializeSpiral(ParticlePositioins& particle_positions);
+void initializeSpiral(ParticlePositioins& particle_positions, const size_t num_particles);
 
 template <size_t Dim, typename ParticlePositioins>
-void initializeRandom(ParticlePositioins& particle_positions);
+void initializeRandom(ParticlePositioins& particle_positions, const size_t num_particles);
 
 template <size_t Dim>
 auto initializeParticles(const size_t num_particles);
@@ -153,10 +153,10 @@ auto initializeParticles(const size_t num_particles) {
         bunch.R.getHostMirror();
 
     if (particle_distribution == "spiral") {
-        initializeSpiral<Dim>(positions_host);
+        initializeSpiral<Dim>(positions_host, num_particles);
     }
     else if (particle_distribution == "random") {
-        initializeRandom<Dim>(positions_host);
+        initializeRandom<Dim>(positions_host, num_particles);
     }
     else {
         std::cerr << "Distribution: " << particle_distribution << " is not suppoerted!";
@@ -170,12 +170,11 @@ auto initializeParticles(const size_t num_particles) {
 }
 
 template <size_t Dim, typename PLayout>
-void initializeRandom(PLayout& particle_positions) {
+void initializeRandom(PLayout& particle_positions, const size_t num_particles) {
     static_assert((Dim == 2 || Dim == 3) && "We only specialise for 2D and 3D!");
 
-    const size_t num_particles = ArgParser::get<size_t>("num_particles");
     const double min_bounds = ArgParser::get<double>("min_bounds");
-    const double max_bounds = ArgParser::get<double>("max_bounds");
+    const double max_bounds = ArgParser::get<double>("max_bounds"); 
     const size_t seed = ArgParser::get<size_t>("seed");
 
     std::mt19937_64 eng(seed);
@@ -196,10 +195,9 @@ void initializeRandom(PLayout& particle_positions) {
 }
 
 template <size_t Dim, typename ParticlePositioins>
-void initializeSpiral(ParticlePositioins& particle_positions) {
+void initializeSpiral(ParticlePositioins& particle_positions, const size_t num_particles) {
     static_assert((Dim == 2 || Dim == 3) && "Spirals are only possible in 2D or 3D!");
 
-    const size_t num_particles = ArgParser::get<size_t>("num_particles");
     const double min_bounds = ArgParser::get<double>("min_bounds");
     const double max_bounds = ArgParser::get<double>("max_bounds");
     const double bounds_size = max_bounds - min_bounds;
