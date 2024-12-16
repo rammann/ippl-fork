@@ -101,24 +101,9 @@ int main(int argc, char* argv[]) {
                 << "./visualise.sh " << Comm->size() << " " << ArgParser::get_args()
                 << std::endl;
         }
-    }
-    // Add rank information to timing prints
-    int rank = Comm->rank();
-    std::cerr << "Rank " << rank << ": Starting to print timings" << std::endl;
-
-    // Add barrier before printing timings
-    ippl::Comm->barrier();
-
-    if (rank == 0) {
         IpplTimings::print();
     }
-
-    // Add barrier after printing timings
-    ippl::Comm->barrier();
-
-    std::cerr << "Rank " << rank << ": Finished printing timings" << std::endl;
     ippl::finalize();
-
     return 0;
 }
 
