@@ -63,49 +63,57 @@ int main(int argc, char* argv[]) {
         define_arguments();
         ArgParser::parse(argc, argv);
         const bool visualize_helper = ArgParser::get<bool>("visualize_helper");
-
-        // logging at the beginning in case the run crashes
-        if (Comm->rank() == 0 && visualize_helper) {
-            std::cerr << "Replicate this run with: \n"
-                << "./visualise.sh " << Comm->size() << " " << ArgParser::get_args()
-                << std::endl;
-        }
-
         const size_t dimensions = ArgParser::get<size_t>("dim");
 
-        // logging to find where it hangs
-        if (Comm->rank() == 0) {
-            std::cerr << "Running OrthoTree benchmark in " << dimensions << "D" << std::endl;
-        }
+        // Add the for loop here
+        for (int iteration = 0; iteration < 5; ++iteration) {
+            // Optional: Print which iteration we're on
+            if (Comm->rank() == 0) {
+                std::cerr << "\nStarting iteration " << iteration + 1 << " of 5\n" << std::endl;
+            }
 
-        if (dimensions == 2) {
-            run_experiment<2>();
-        }
-        else if (dimensions == 3) {
-            run_experiment<3>();
-        }
-        else {
-            std::cerr << "We only specialise for 2D and 3D!";
-            exit(1);
-        }
+            // logging at the beginning in case the run crashes
+            if (Comm->rank() == 0 && visualize_helper) {
+                std::cerr << "Replicate this run with: \n"
+                    << "./visualise.sh " << Comm->size() << " " << ArgParser::get_args()
+                    << std::endl;
+            }
 
-        // logging at the end in case the run crashes
-        if (Comm->rank() == 0 && visualize_helper) {
-            std::cerr << "Finished run with: \n"
-                << "./visualise.sh " << Comm->size() << " " << ArgParser::get_args()
-                << std::endl;
-        }
+            // logging to find where it hangs
+            if (Comm->rank() == 0) {
+                std::cerr << "Running OrthoTree benchmark in " << dimensions << "D" << std::endl;
+            }
 
-        if (Comm->rank() == 0 && visualize_helper) {
-            std::cerr << "Replicate this run with: \n"
-                << "./visualise.sh " << Comm->size() << " " << ArgParser::get_args()
-                << std::endl;
+            if (dimensions == 2) {
+                run_experiment<2>();
+            }
+            else if (dimensions == 3) {
+                run_experiment<3>();
+            }
+            else {
+                std::cerr << "We only specialise for 2D and 3D!";
+                exit(1);
+            }
+
+            // logging at the end in case the run crashes
+            if (Comm->rank() == 0 && visualize_helper) {
+                std::cerr << "Finished run with: \n"
+                    << "./visualise.sh " << Comm->size() << " " << ArgParser::get_args()
+                    << std::endl;
+            }
+
+            if (Comm->rank() == 0 && visualize_helper) {
+                std::cerr << "Replicate this run with: \n"
+                    << "./visualise.sh " << Comm->size() << " " << ArgParser::get_args()
+                    << std::endl;
+            }
+            IpplTimings::print();
         }
-        IpplTimings::print();
     }
     ippl::finalize();
     return 0;
 }
+
 
 template <size_t Dim>
 void run_experiment() {
