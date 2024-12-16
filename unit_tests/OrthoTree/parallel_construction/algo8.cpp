@@ -27,8 +27,6 @@ TEST(LineariseTestOct, LineariseOctantsTest) {
         }
     }
 
-    std::cerr << "I MAANGED TO GET TILL HERE" << std::endl;
-
     // octants need to be sorted
     std::sort(expected.begin(), expected.end());
     std::sort(octs.data(), octs.data() + octs.size());
