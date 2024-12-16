@@ -101,12 +101,22 @@ int main(int argc, char* argv[]) {
                 << "./visualise.sh " << Comm->size() << " " << ArgParser::get_args()
                 << std::endl;
         }
-        if (Comm->rank() == 0 && ArgParser::get<bool>("print_stats")) {
-            std::cerr << "Starting to print timings" << std::endl;
-            IpplTimings::print();
-            std::cerr << "Finished printing timings" << std::endl;
-        }
     }
+    // Add rank information to timing prints
+    int rank = Comm->rank();
+    std::cerr << "Rank " << rank << ": Starting to print timings" << std::endl;
+
+    // Add barrier before printing timings
+    ippl::Comm->barrier();
+
+    if (rank == 0) {
+        IpplTimings::print();
+    }
+
+    // Add barrier after printing timings
+    ippl::Comm->barrier();
+
+    std::cerr << "Rank " << rank << ": Finished printing timings" << std::endl;
     ippl::finalize();
 
     return 0;
