@@ -90,7 +90,6 @@ int main(int argc, char* argv[]) {
                 << std::endl;
         }
     }
-
     IpplTimings::print();
     ippl::finalize();
 
@@ -135,6 +134,7 @@ void run_experiment() {
         tree.build_tree_naive(particles);
 
     IpplTimings::stopTimer(timer);
+    Comm->barrier();
 }
 
 template <size_t Dim>
@@ -174,7 +174,7 @@ void initializeRandom(PLayout& particle_positions, const size_t num_particles) {
     static_assert((Dim == 2 || Dim == 3) && "We only specialise for 2D and 3D!");
 
     const double min_bounds = ArgParser::get<double>("min_bounds");
-    const double max_bounds = ArgParser::get<double>("max_bounds"); 
+    const double max_bounds = ArgParser::get<double>("max_bounds");
     const size_t seed = ArgParser::get<size_t>("seed");
 
     std::mt19937_64 eng(seed);
