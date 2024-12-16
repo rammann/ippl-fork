@@ -26,7 +26,7 @@ template <size_t Dim, typename ParticlePositioins>
 void initializeRandom(ParticlePositioins& particle_positions);
 
 template <size_t Dim>
-auto initializeParticles();
+auto initializeParticles(const size_t num_particles);
 
 template <size_t Dim>
 void run_experiment();
@@ -36,7 +36,7 @@ static void define_arguments() {
     ArgParser::add_argument<size_t>("dim", 2, "Dimension of the simulation");
     ArgParser::add_argument<size_t>("max_particles", 10, "Maximum particles per octant");
     ArgParser::add_argument<size_t>("max_depth", 8, "Maximum depth of the octree");
-    ArgParser::add_argument<size_t>("num_particles", 5000, "Number of particles per processor");
+    ArgParser::add_argument<size_t>("num_particles_tot", 5000, "Number of particles in total");
     ArgParser::add_argument<double>("min_bounds", 0.0, "Min coordinate of the bounding box");
     ArgParser::add_argument<double>("max_bounds", 1.0, "Max coordinate of the bounding box");
     ArgParser::add_argument<size_t>("seed", std::random_device{}(),
@@ -122,7 +122,9 @@ void run_experiment() {
     tree.setLogLevel(log_level);
     tree.setPrintStats(enable_stats);
 
-    auto particles = initializeParticles<Dim>();
+    const size_t num_particles = ArgParser::get<size_t>("num_particles_tot");
+    const size_t num_particles_per_proc = num_particles / Comm->size();
+    auto particles = initializeParticles<Dim>(const size_t num_particles_per_proc);
 
     IpplTimings::TimerRef timer;
     timer = IpplTimings::getTimer("orthotree_build");
@@ -136,8 +138,7 @@ void run_experiment() {
 }
 
 template <size_t Dim>
-auto initializeParticles() {
-    const size_t num_particles = ArgParser::get<size_t>("num_particles");
+auto initializeParticles(const size_t num_particles) {
     const std::string particle_distribution = ArgParser::get<std::string>("dist");
 
     typedef ippl::ParticleSpatialLayout<double, Dim> particle_layout_type;
