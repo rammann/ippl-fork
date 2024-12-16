@@ -72,6 +72,11 @@ int main(int argc, char* argv[]) {
         }
 
         const size_t dimensions = ArgParser::get<size_t>("dim");
+        
+        // logging to find where it hangs
+        if (Comm->rank() == 0) {
+            std::cerr << "Running OrthoTree benchmark in " << dimensions << "D" << std::endl;
+        }
 
         if (dimensions == 2) {
             run_experiment<2>();
