@@ -26,7 +26,21 @@ namespace ippl {
         }
         else{
             //receive the bucket borders
+            Comm->broadcast(bucket_borders.data(), bucket_borders.extent(0), 0);
 
+            //receive the bucket size
+            size_t bucket_size;
+            Comm->recv(&bucket_size, 0, 1);
+
+            //allocate the space for the bucket in the aid list
+            octants = Kokkos::View<morton_code*>("octants", bucket_size);
+            particle_ids = Kokkos::View<size_t*>("particle_ids", bucket_size);
+
+            //receive the octants and the particle ids
+            Comm->recv(octants.data(), bucket_size, 0, 0);
+            Comm->recv(particle_ids.data(), bucket_size, 0, 0);
+
+            logger << "Received " << bucket_size << " octants on rank " << world_rank << endl;
         }
         sort_local_aidlist();
     }
