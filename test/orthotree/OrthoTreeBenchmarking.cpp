@@ -45,7 +45,7 @@ static void define_arguments() {
         "Type of particle distribution, one of: {random, spiral}");
 
     // output arguments
-    ArgParser::add_argument<std::string>("print_stats", "false",
+    ArgParser::add_argument<std::string>("print_stats", "true",
         "Sets the log level for our outputs.");
     ArgParser::add_argument<std::string>("enable_visualisation", "false",
         "Enables or disables the output of visualisation data");
