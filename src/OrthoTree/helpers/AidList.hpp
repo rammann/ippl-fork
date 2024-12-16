@@ -61,10 +61,13 @@ namespace ippl {
         }
 
         // sort by morton codes: TODO: make this smarter
+        IpplTimings::TimerRef timer = IpplTimings::getTimer("sort_aid_list");
+        IpplTimings::startTimer(timer);
         std::sort(temp_aid_list.begin(), temp_aid_list.end(), [](const auto& a, const auto& b) {
             return a.first < b.first;
         });
-
+        IpplTimings::stopTimer(timer);
+        
         this->resize(n_particles);
 
         // ARE MIRRORS/DEEP COPIES REALLY NEEDED??

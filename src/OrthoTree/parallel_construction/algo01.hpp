@@ -10,7 +10,6 @@ namespace ippl {
         START_FUNC;
 
         IpplTimings::TimerRef timer = IpplTimings::getTimer("build_tree");
-        IpplTimings::startTimer(timer);
 
         world_size = Comm->size();
         world_rank = Comm->rank();  // TODO: move this to constructor, but then all tests need a
@@ -18,6 +17,8 @@ namespace ippl {
 
         this->aid_list_m.initialize(root_bounds_m, particles);
         auto [min_octant, max_octant] = this->aid_list_m.getMinReqOctants();
+
+        IpplTimings::startTimer(timer);
 
         auto octants = block_partition(min_octant, max_octant);
 
@@ -31,7 +32,7 @@ namespace ippl {
         print_stats(tree_view, particles);
     
         IpplTimings::stopTimer(timer);
-        
+
         return tree_view;
     }
 
