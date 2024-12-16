@@ -1,5 +1,13 @@
 #include "AidList.h"
 #include "random"
+#include "chrono"
+
+//turn of logging
+#define INFORM_ALL_NODES 0
+
+//define resize  factor
+#define RESIZE_FACTOR 1.05
+
 
 namespace ippl {
     template <size_t Dim>
@@ -19,43 +27,71 @@ namespace ippl {
     template <size_t Dim>
     template <typename PLayout>
     void AidList<Dim>::initialize(const BoundingBox<Dim>& root_bounds, PLayout const& particles) {
+        logger<<"Initializing AidList"<<endl;
         if (world_rank == 0) {
             initialize_from_rank(max_depth, root_bounds, particles);
-            logger << "Aid list is initialized with size: " << size() << endl;
+            logger << "initial Aid list is initialized with size: " << octants.size() << endl;
             distribute_buckets();
         }
         else{
+            mpi::Status stat;
             //receive the bucket borders
+
+            //logger << "Receiving bucket borders on rank " << world_rank << endl;
             Comm->broadcast(bucket_borders.data(), bucket_borders.extent(0), 0);
+            //logger << "Received bucket borders on rank " << world_rank << endl;
+
+            //print received bucket borders on rank 1
+            if(world_rank == 1){
+                for(size_t i = 0; i < world_size - 1; ++i){
+                    break;
+                    logger << "Bucket border " << i << ": " << bucket_borders(i) << endl;
+                }
+            }
 
             //receive the bucket size
             size_t bucket_size;
-            Comm->recv(&bucket_size, 0, 1);
+            //logger << "Receiving bucket size on rank " << world_rank << endl;
+            Comm->recv(&bucket_size, 1, 0, 1, stat);
+            //logger << "Received bucket size on rank " << world_rank << " with size: " << bucket_size << endl;
 
             //allocate the space for the bucket in the aid list
+            //logger << "Allocating space for the bucket on rank " << world_rank << endl;
             octants = Kokkos::View<morton_code*>("octants", bucket_size);
             particle_ids = Kokkos::View<size_t*>("particle_ids", bucket_size);
 
             //receive the octants and the particle ids
-            Comm->recv(octants.data(), bucket_size, 0, 0);
-            Comm->recv(particle_ids.data(), bucket_size, 0, 0);
+            //logger << "Receiving octants and particle ids on rank " << world_rank << endl;
+            Comm->recv(octants.data(), bucket_size, 0, 0, stat);
+            //logger << "Received octants on rank " << world_rank << endl;
+            Comm->recv(particle_ids.data(), bucket_size, 0, 1, stat);
+            //logger << "Received particle ids on rank " << world_rank << endl;
 
-            logger << "Received " << bucket_size << " octants on rank " << world_rank << endl;
         }
         sort_local_aidlist();
+        logger << "AidList initialized with size: " << octants.size() << endl;
     }
 
     template <size_t Dim>
     void AidList<Dim>::distribute_buckets() {
 
+        logger << "Distributing buckets" << endl;
         size_t n_particles = octants.size();
+
+        // random engine
+        
+
+        std::mt19937_64 eng(0);
+        std::uniform_int_distribution<size_t> unif(0, n_particles);
+
+        
 
         for(size_t i = 0; i < world_size - 1; ++i) {
 
             bool is_unique = true;
             size_t index = 0;
             do{
-                index = std::rand() % n_particles;
+                index = unif(eng);
                 for(size_t j = 0; j < i; ++j) {
                     if(bucket_borders(j) == octants(index)) {
                         is_unique = false;
@@ -63,24 +99,29 @@ namespace ippl {
                     }
                 }
             }while(!is_unique);
-            bucket_borders(i) = getOctant((i + 1) * size() / world_size);
+            bucket_borders(i) = octants(index); 
+            logger << "actual Bucket border " << i << ": " << bucket_borders(i) << endl;
         }
 
         // sort the bucket borders
         std::sort(bucket_borders.data(), bucket_borders.data() + bucket_borders.extent(0));
 
         // broadcast the bucket borders
+        logger << "Broadcasting bucket borders" << endl;
         Comm->broadcast(bucket_borders.data(), bucket_borders.extent(0), 0);
+        logger << "Broadcasted bucket borders" << endl;
 
         // view of views for the buckets
         Kokkos::View<Kokkos::View<morton_code*>*> buckets_octants("buckets_octants", world_size);
         Kokkos::View<Kokkos::View<size_t*>*> buckets_particle_ids("buckets_particle_ids", world_size);
 
         // allocate the guesstimated space for the buckets
+        logger << "Allocating space for the buckets" << endl;
         for(size_t i = 0; i < world_size; ++i) {
-            buckets(i) = Kokkos::View<morton_code*>("bucket_octants_" + std::to_string(i), n_particles/world_size);
+            buckets_octants(i) = Kokkos::View<morton_code*>("bucket_octants_" + std::to_string(i), n_particles/world_size);
             buckets_particle_ids(i) = Kokkos::View<size_t*>("bucket_particle_ids_" + std::to_string(i), n_particles/world_size);
         }
+        logger << "Allocated space for the buckets" << endl;
 
         //vector storing the actual sizes of the buckets initially 0
         Kokkos::View<size_t*> bucket_sizes("bucket_sizes", world_size);
@@ -89,7 +130,7 @@ namespace ippl {
 
         //get the target rank for a given octant
         auto get_target_rank = [&](morton_code octant) {
-            size_t target_rank = 0;
+            size_t target_rank = world_size - 1;
             for(size_t i = 0; i < world_size - 1; ++i) {
                 if(octant < bucket_borders(i)) {
                     target_rank = i;
@@ -100,28 +141,55 @@ namespace ippl {
         };
 
         // fill the buckets
+
+        logger << "Filling buckets" << endl;
         Kokkos::parallel_for("Fill buckets", n_particles, KOKKOS_LAMBDA(const size_t i) {
             const morton_code octant = octants(i);
             const size_t target_rank = get_target_rank(octant);
             const size_t idx = Kokkos::atomic_fetch_add(&bucket_sizes(target_rank), 1);
             //if the bucket is full, we need to resize it
-            if(idx >= buckets(target_rank).extent(0)) {
-                Kokkos::resize(buckets(target_rank), 2 * idx);
+            if(idx >= buckets_octants(target_rank).extent(0)) {
+                size_t new_size = RESIZE_FACTOR * idx;
+                Kokkos::resize(buckets_octants(target_rank), new_size);
+                Kokkos::resize(buckets_particle_ids(target_rank), new_size);
             }
             buckets_octants(target_rank)(idx) = octant;
             buckets_particle_ids(target_rank)(idx) = particle_ids(i);
         });
+        logger << "Filled buckets" << endl;
 
         // send the buckets
 
-        for(size_t i = 1; i < world_size; ++i) {
-            if(i == world_rank) {
-                continue;
+        logger << "Sending buckets" << endl;
+
+        // log the bucket sizes
+        if(world_rank == 0) {
+            for(size_t i = 0; i < world_size; ++i) {
+                logger << "Bucket " << i << " has size: " << bucket_sizes(i) << endl;
             }
-            Comm->send(bucket_sizes(i), i, 1);
-            Comm->send(buckets_octants(i).data(), bucket_sizes(i), i, 0);
-            Comm->send(buckets_particle_ids(i).data(), bucket_sizes(i), i, 1);
         }
+        for(size_t i = 1; i < world_size; ++i) {
+            //resize the buckets to the actual size
+            /*
+            Kokkos::resize(buckets_octants(i), bucket_sizes(i));
+            Kokkos::resize(buckets_particle_ids(i), bucket_sizes(i));
+
+            Kokkos::View<morton_code*> bucket_octants = buckets_octants(i);
+            Kokkos::View<size_t*> bucket_particle_ids = buckets_particle_ids(i);
+            */
+
+            Comm->send(bucket_sizes(i),1, i, 1);
+            //try to send the buckets
+
+            //Comm->send(bucket_octants(0), bucket_octants.size(), i, 0);
+            //Comm->send(bucket_particle_ids(0), bucket_particle_ids.size(), i, 1);
+            Comm->send(buckets_octants(i)(0), bucket_sizes(i), i, 0);
+            Comm->send(buckets_particle_ids(i)(0), bucket_sizes(i), i, 1);
+        }
+        logger << "Sent buckets" << endl;
+
+        Kokkos::resize(buckets_octants(0), bucket_sizes(0));
+        Kokkos::resize(buckets_particle_ids(0), bucket_sizes(0));
 
         // set the local bucket
         octants = buckets_octants(0);
@@ -198,6 +266,8 @@ namespace ippl {
             // store the particle id
             particle_ids(i) = i;
         }
+        //log size of aid list
+        logger << "Size of aid list: " << octants.size() << endl;
     }
 
     template <size_t Dim>
