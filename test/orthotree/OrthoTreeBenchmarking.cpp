@@ -55,6 +55,8 @@ static void define_arguments() {
         "true for parallel, false for sequential run");
     ArgParser::add_argument<std::string>("visualize_helper", "false",
         "Enables the replicate this run message");
+    ArgParser::add_argument<unsigned>("iterations", 1,
+        "Number of iterations to run the benchmark for");
 }
 
 int main(int argc, char* argv[]) {
@@ -64,9 +66,10 @@ int main(int argc, char* argv[]) {
         ArgParser::parse(argc, argv);
         const bool visualize_helper = ArgParser::get<bool>("visualize_helper");
         const size_t dimensions = ArgParser::get<size_t>("dim");
+        const unsigned iterations = ArgParser::get<unsigned>("iterations");
 
         // Add the for loop here
-        for (int iteration = 0; iteration < 5; ++iteration) {
+        for (int iteration = 0; iteration < iterations; ++iteration) {
             // Optional: Print which iteration we're on
             if (Comm->rank() == 0) {
                 std::cerr << "\nStarting iteration " << iteration + 1 << " of 5\n" << std::endl;
