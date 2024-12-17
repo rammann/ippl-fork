@@ -39,6 +39,9 @@ namespace ippl {
     Kokkos::View<morton_code*> OrthoTree<Dim>::build_tree_naive(particle_t const& particles) {
         // this needs to be initialized before constructing the tree
         this->aid_list_m.initialize(root_bounds_m, particles);
+        IpplTimings::TimerRef timer = IpplTimings::getTimer("build_tree");
+        IpplTimings::clearTimer(timer);
+        IpplTimings::startTimer(timer);
 
         // without the step below the parallel/sequential trees can never be identical, as the
         // parallel version never contains the root node
@@ -49,6 +52,7 @@ namespace ippl {
         particles_to_file(particles);
         octants_to_file(finished_tree);
 
+        IpplTimings::stopTimer(timer);
         return finished_tree;
     }
 
