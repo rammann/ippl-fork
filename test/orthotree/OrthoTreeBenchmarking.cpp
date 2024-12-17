@@ -148,10 +148,11 @@ void run_experiment() {
     tree.setPrintStats(enable_stats);
 
     const size_t num_particles = ArgParser::get<size_t>("num_particles_tot");
+    const size_t num_particles_per_proc;
     if (num_particles != 5000) {
-        const size_t num_particles_per_proc = num_particles / Comm->size();
+        num_particles_per_proc = num_particles / Comm->size();
     } else {
-        const size_t num_particles_per_proc = ArgParser::get<size_t>("num_particles");
+        num_particles_per_proc = ArgParser::get<size_t>("num_particles");
     }
     auto particles = initializeParticles<Dim>(num_particles_per_proc);
 
