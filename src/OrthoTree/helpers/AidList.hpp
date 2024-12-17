@@ -381,53 +381,40 @@ namespace ippl {
 
     template <size_t Dim>
     template <typename Container>
+    void AidList<Dim>::getNumParticlesSendBuff(const Container& octants, Kokkos::View<Kokkos::View<size_t*>*>& send_buffs) {
+
+        send_buffs = Kokkos::View<Kokkos::View<size_t*>*>("send_buffs", world_size);
+        size_t size_buff = octants.size() / world_size;
+        Kokkos::parallel_for("Initialize sizes", world_size, KOKKOS_LAMBDA(const size_t i) {
+            send_buffs(i) = Kokkos::View<size_t*>("send_buff", size_buff);
+        });
+
+        for (size_t i = 0; i < octants.size(); ++i) {
+            const morton_code octant = octants[i];
+            const size_t target_rank  = get_target_rank(octant);
+            const size_t idx          = Kokkos::atomic_fetch_add(&send_buffs(target_rank).extent(0), 1);
+            if (idx >= send_buffs(target_rank).extent(0)) {
+                size_t new_size = RESIZE_FACTOR * idx;
+                Kokkos::resize(send_buffs(target_rank), new_size);
+            }
+            send_buffs(target_rank)(idx) = octant;
+        }
+    }
+
+    template <size_t Dim>
+    template <typename Container>
     Kokkos::View<size_t*> AidList<Dim>::getNumParticlesInOctantsParallel(
         const Container& octant_container) {
-        size_t size_buff;
-        Kokkos::View<size_t*> weights("weights_view", octant_container.size());
-        if (world_rank == 0) {
-            for (size_t rank = 1; rank < world_size; ++rank) {
-                // receive the size of the octants from rank
-                mpi::Status size_status;
-                Comm->recv(&size_buff, 1, rank, 0, size_status);
 
-                // allocate the required space and receive the cotants
-                std::vector<morton_code> octants_buff(size_buff);
-                mpi::Status octants_status;
-                Comm->recv(octants_buff.data(), size_buff, rank, 0, octants_status);
+        //figure out which ranks need to be asked
+        Kokkos::View<Kokkos::View<morton_code*>*> send_buffs;
 
-                // no need to shrink, we only send what we need
-                if (weights.size() < size_buff) {
-                    Kokkos::resize(weights, size_buff);
-                }
+        getNumParticlesSendBuff(octant_container, send_buffs);
 
-                for (size_t i = 0; i < size_buff; ++i) {
-                    weights[i] = getNumParticlesInOctant(octants_buff[i]);
-                }
+        // send the octants to the ranks
 
-                // send back the weights
-                Comm->send(*weights.data(), size_buff, rank, 0);
-            }
+            
 
-            // calculate own weights
-            size_buff = octant_container.size();
-            Kokkos::resize(weights,
-                           size_buff);  // we must shrink here, as we return wrong values if we dont
-            for (size_t i = 0; i < size_buff; ++i) {
-                weights[i] = getNumParticlesInOctant(octant_container[i]);
-            }
 
-        } else {
-            // send size of octants we are requesting to rank 0
-            size_buff = octant_container.size();
-            Comm->send(size_buff, 1, 0, 0);
-            // send the actual octants to rank 0
-            Comm->send(*octant_container.data(), size_buff, 0, 0);
-            // reserve space for the weights we will receive
-            mpi::Status weights_status;
-            Comm->recv(weights.data(), size_buff, 0, 0, weights_status);
-        }
-
-        return weights;
     }
 }  // namespace ippl

@@ -72,6 +72,15 @@ namespace ippl {
         size_t getUpperBoundIndexExclusive(morton_code octant) const;
 
         /**
+         * @brief returns a view of views storing a buffer for the octants that will be sent to each rank
+         * to request the number of particles in the given octants.
+         * @tparam Container Some container with: random_access iterators and functions '.data()' and
+         * '.size()'
+         */
+        template <typename Container>
+        void getNumParticlesSendBuff(const Container& octants, Kokkos::View<Kokkos::View<size_t*>*>& send_buffs);
+
+        /**
          * @brief Calculates the number of particles for each octant.
          * @warning This function assumes, that the AidList is on rank0, and that it is called from
          * all ranks simultaneously! It will freeze if the later is not fullfilled.
