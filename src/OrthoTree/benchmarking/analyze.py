@@ -74,21 +74,47 @@ def create_timing_dataframe(all_data):
     
     return pd.DataFrame(rows)
 
-def plot_scaling_analysis(df):
-    # Create a figure with multiple subplots
-    plt.figure(figsize=(15, 10))
+def plot_scaling_analysis(df, operations=None):
+    """
+    Create a scatter plot with regression line for wall_avg time scaling for specified operations.
     
-    # Plot wall average time vs number of nodes
-    sns.scatterplot(data=df, x='nodes', y='wall_avg', hue='operation', style='operation')
-    plt.xscale('log')
+    Args:
+        df: DataFrame containing the timing data.
+        operations: List of operation names to plot. If None, plots all operations.
+    """
+    # Create a directory for plots if it doesn't exist
+    plot_dir = 'plots'
+    os.makedirs(plot_dir, exist_ok=True)
+    
+    plt.figure(figsize=(15, 8))
+    
+    # Filter the DataFrame for specified operations
+    if operations is not None:
+        df_filtered = df[df['operation'].isin(operations)]
+    else:
+        df_filtered = df
+    
+    # Plot wall average time vs number of nodes with regression lines
+    sns.scatterplot(data=df_filtered, x='nodes', y='wall_avg', hue='operation', style='operation')
+    
+    # Add a regression line for each operation
+    for operation in df_filtered['operation'].unique():
+        sns.lineplot(data=df_filtered[df_filtered['operation'] == operation], 
+                     x='nodes', y='wall_avg', label=f"{operation} trend", errorbar=None)
+    
     plt.yscale('log')
     plt.title('Average Wall Time Scaling')
     plt.xlabel('Number of Nodes')
     plt.ylabel('Wall Time (s)')
     plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    
     plt.tight_layout()
-    plt.savefig('scaling_analysis.png')
+    
+    # Save the plot in the plots directory
+    if operations is not None:
+        plt.savefig(os.path.join(plot_dir, 'scaling_analysis_{}.png'.format('_'.join(operations))))
+    else:
+        plt.savefig(os.path.join(plot_dir, 'scaling_analysis.png'))
+    
     plt.close()
 
 def plot_operation_breakdown(df, operations=None):
@@ -99,6 +125,10 @@ def plot_operation_breakdown(df, operations=None):
         df: DataFrame containing the timing data
         operations: List of operation names to plot. If None, plots all operations.
     """
+    # Create a directory for plots if it doesn't exist
+    plot_dir = 'plots'
+    os.makedirs(plot_dir, exist_ok=True)
+
     plt.figure(figsize=(15, 8))
     
     # Filter the DataFrame for specified operations
@@ -116,10 +146,13 @@ def plot_operation_breakdown(df, operations=None):
     plt.ylabel('Wall Time (s)')
     plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.tight_layout()
+
+    # Save the plot in the plots directory
     if operations is not None:
-        plt.savefig('operation_breakdown_{}.png'.format('_'.join(operations)))
+        plt.savefig(os.path.join(plot_dir, 'operation_breakdown_{}.png'.format('_'.join(operations))))
     else:
-        plt.savefig('operation_breakdown.png')
+        plt.savefig(os.path.join(plot_dir, 'operation_breakdown.png'))
+
     plt.close()
 
 def plot_operation_grouped(df, operations=None, exclude_operations=None):
@@ -131,6 +164,10 @@ def plot_operation_grouped(df, operations=None, exclude_operations=None):
         operations: List of operation names to plot. If None, plots all operations.
         exclude_operations: List of operation names to exclude from the plot.
     """
+    # Create a directory for plots if it doesn't exist
+    plot_dir = 'plots'
+    os.makedirs(plot_dir, exist_ok=True)
+
     plt.figure(figsize=(15, 8))
     
     # Filter the DataFrame for specified operations
@@ -155,7 +192,7 @@ def plot_operation_grouped(df, operations=None, exclude_operations=None):
     plt.xticks(rotation=0)
     plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.tight_layout()
-    plt.savefig('operation_grouped.png')
+    plt.savefig(os.path.join(plot_dir, 'operation_grouped.png'))
     plt.close()
 
 def main():
@@ -170,11 +207,17 @@ def main():
     
     # Generate plots
     print("Available operations:", sorted(df['operation'].unique()))
-    plot_scaling_analysis(df)
     plot_operation_grouped(df, operations=['block_partition', 'build_tree', 'complete_region', 'complete_tree', 'getNumParticlesInOc', 'linearise_octants', 'orthotree_build', 'partition'])
     plot_operation_breakdown(df, operations=['orthotree_build'])
+    plot_scaling_analysis(df, operations=['orthotree_build'])
     plot_operation_breakdown(df, operations=['build_tree'])
+    plot_scaling_analysis(df, operations=['build_tree'])
     plot_operation_breakdown(df, operations=['getNumParticlesInOc'])
+    plot_scaling_analysis(df, operations=['getNumParticlesInOc'])
+    plot_operation_breakdown(df, operations=['block_partition'])
+    plot_scaling_analysis(df, operations=['block_partition'])
+    plot_operation_breakdown(df, operations=['partition'])
+    plot_scaling_analysis(df, operations=['partition'])
     
     # Save the processed data
     df.to_csv('timing_analysis.csv', index=False)
