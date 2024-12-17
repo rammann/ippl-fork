@@ -5,6 +5,8 @@
 //define resize  factor
 #define RESIZE_FACTOR 1.05
 
+#define BORDER_MAX_ITER 10
+
 
 namespace ippl {
     template <size_t Dim>
@@ -81,61 +83,31 @@ namespace ippl {
         
 
         std::mt19937_64 eng(0);
-        std::uniform_int_distribution<size_t> unif(0, n_particles);
-
-        // helper view to store border particle ids
-        Kokkos::View<size_t*> border_particle_ids("particle_ids", n_particles);
+        std::uniform_int_distribution<size_t> unif(0, n_particles-1);
+        
 
         for(size_t i = 0; i < world_size - 1; ++i) {
 
             bool is_unique = true;
-            size_t index = 0;
+            size_t index = unif(eng);
+            size_t count = 0;
             do{
                 index = unif(eng);
+                is_unique = true;
                 for(size_t j = 0; j < i; ++j) {
-                    if(bucket_borders(j) == octants(index) && border_particle_ids(j) == particle_ids(index)) {
+                    if(bucket_borders(j) == octants(index)) {
                         is_unique = false;
                         logger << "Bucket border " << i << " is not unique, trying again" << endl;
                         break;
                     }
                 }
-            }while(!is_unique);
+            }while(!is_unique && ++count < BORDER_MAX_ITER);
             bucket_borders(i) = octants(index); 
-            border_particle_ids(i) = particle_ids(index);
-            
             logger << "actual Bucket border " << i << ": " << bucket_borders(i) << endl;
         }
 
         // sort the bucket borders
-
-        //lexographical comparison bucket borders then particle ids
-        auto compare_octants_lex = [&](size_t a, size_t b) {
-            if(octants(a) < octants(b)) {
-                return true;
-            }
-            else if(octants(a) == octants(b)) {
-                return particle_ids(a) < particle_ids(b);
-            }
-            return false;
-        };
-        //sort indices
-        Kokkos::View<size_t*> bucket_indices("bucket_indices", world_size - 1);
-        for(size_t i = 0; i < world_size - 1; ++i) {
-            bucket_indices(i) = i;
-        }
-
-        std::sort(bucket_indices.data(), bucket_indices.data() + bucket_indices.extent(0), compare_octants_lex);
-
-        // sort the bucket borders
-        Kokkos::View<morton_code*> sorted_bucket_borders("sorted_bucket_borders", world_size - 1);
-        Kokkos::View<size_t*> sorted_border_particle_ids("sorted_border_particle_ids", world_size - 1);
-        for(size_t i = 0; i < world_size - 1; ++i) {
-            sorted_bucket_borders(i) = bucket_borders(bucket_indices(i));
-            sorted_border_particle_ids(i) = border_particle_ids(bucket_indices(i));
-        }
-
-
-        bucket_borders = sorted_bucket_borders;
+        std::sort(bucket_borders.data(), bucket_borders.data() + bucket_borders.extent(0));
 
         // broadcast the bucket borders
         logger << "Broadcasting bucket borders" << endl;
@@ -160,10 +132,10 @@ namespace ippl {
 
 
         //get the target rank for a given octant
-        auto get_target_rank = [&](size_t idx) {
+        auto get_target_rank = [&](morton_code octant) {
             size_t target_rank = world_size - 1;
             for(size_t i = 0; i < world_size - 1; ++i) {
-                if(octants(idx) < bucket_borders(i) || (octants(idx) == bucket_borders(i) && particle_ids(idx) < border_particle_ids(i))) {
+                if(octant < bucket_borders(i)) {
                     target_rank = i;
                     break;
                 }
@@ -175,7 +147,8 @@ namespace ippl {
 
         logger << "Filling buckets" << endl;
         Kokkos::parallel_for("Fill buckets", n_particles, KOKKOS_LAMBDA(const size_t i) {
-            const size_t target_rank = get_target_rank(i);
+            const morton_code octant = octants(i);
+            const size_t target_rank = get_target_rank(octant);
             const size_t idx = Kokkos::atomic_fetch_add(&bucket_sizes(target_rank), 1);
             //if the bucket is full, we need to resize it
             if(idx >= buckets_octants(target_rank).extent(0)) {
@@ -183,7 +156,7 @@ namespace ippl {
                 Kokkos::resize(buckets_octants(target_rank), new_size);
                 Kokkos::resize(buckets_particle_ids(target_rank), new_size);
             }
-            buckets_octants(target_rank)(idx) = octants(i);
+            buckets_octants(target_rank)(idx) = octant;
             buckets_particle_ids(target_rank)(idx) = particle_ids(i);
         });
         logger << "Filled buckets" << endl;
