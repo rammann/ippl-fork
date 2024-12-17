@@ -201,6 +201,10 @@ namespace ippl {
     template <typename Container>
     Kokkos::vector<size_t> AidList<Dim>::getNumParticlesInOctantsParallel(
         const Container& octant_container) {
+        IpplTimings::TimerRef timer = IpplTimings::getTimer("getNumParticlesInOctantsParallel");
+        IpplTimings::clearTimer(timer);
+        IpplTimings::startTimer(timer);
+
         size_t size_buff;
         Kokkos::vector<size_t> weights;
         if (world_rank == 0) {
@@ -245,7 +249,7 @@ namespace ippl {
             mpi::Status weights_status;
             Comm->recv(weights.data(), size_buff, 0, 0, weights_status);
         }
-
+        IpplTimings::stopTimer(timer);
         return weights;
     }
 }  // namespace ippl

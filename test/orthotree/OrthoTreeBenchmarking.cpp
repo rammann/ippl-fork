@@ -72,7 +72,8 @@ int main(int argc, char* argv[]) {
         for (size_t iteration = 0; iteration < iterations; ++iteration) {
             // Optional: Print which iteration we're on
             if (Comm->rank() == 0) {
-                std::cerr << "\nStarting iteration " << iteration + 1 << " of 5\n" << std::endl;
+                std::cerr << "\nStarting iteration " << iteration + 1 << " of " << iterations
+                    << std::endl;
             }
 
             // logging at the beginning in case the run crashes
@@ -111,6 +112,7 @@ int main(int argc, char* argv[]) {
                     << std::endl;
             }
             IpplTimings::print();
+            IpplTimings::print("timings" + std::to_string(iteration) + ".dat");
         }
     }
     ippl::finalize();
@@ -147,8 +149,7 @@ void run_experiment() {
     const size_t num_particles_per_proc = num_particles / Comm->size();
     auto particles = initializeParticles<Dim>(num_particles_per_proc);
 
-    IpplTimings::TimerRef timer;
-    timer = IpplTimings::getTimer("orthotree_build");
+    IpplTimings::TimerRef timer = IpplTimings::getTimer("orthotree_build");
     IpplTimings::clearTimer(timer);
     IpplTimings::startTimer(timer);
     if (run_parallel)
