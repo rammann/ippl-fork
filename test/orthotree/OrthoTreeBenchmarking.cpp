@@ -37,6 +37,8 @@ static void define_arguments() {
     ArgParser::add_argument<size_t>("max_particles", 10, "Maximum particles per octant");
     ArgParser::add_argument<size_t>("max_depth", 8, "Maximum depth of the octree");
     ArgParser::add_argument<size_t>("num_particles_tot", 5000, "Number of particles in total");
+    ArgParser::add_argument<size_t>("num_particles", 5000,
+        "Number of particles per processor");
     ArgParser::add_argument<double>("min_bounds", 0.0, "Min coordinate of the bounding box");
     ArgParser::add_argument<double>("max_bounds", 1.0, "Max coordinate of the bounding box");
     ArgParser::add_argument<size_t>("seed", std::random_device{}(),
@@ -146,7 +148,11 @@ void run_experiment() {
     tree.setPrintStats(enable_stats);
 
     const size_t num_particles = ArgParser::get<size_t>("num_particles_tot");
-    const size_t num_particles_per_proc = num_particles / Comm->size();
+    if (num_particles != 5000) {
+        const size_t num_particles_per_proc = num_particles / Comm->size();
+    } else {
+        const size_t num_particles_per_proc = ArgParser::get<size_t>("num_particles");
+    }
     auto particles = initializeParticles<Dim>(num_particles_per_proc);
 
     IpplTimings::TimerRef timer = IpplTimings::getTimer("orthotree_build");
