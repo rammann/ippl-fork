@@ -172,20 +172,7 @@ namespace ippl {
             }
         }
         for(size_t i = 1; i < world_size; ++i) {
-            //resize the buckets to the actual size
-            /*
-            Kokkos::resize(buckets_octants(i), bucket_sizes(i));
-            Kokkos::resize(buckets_particle_ids(i), bucket_sizes(i));
-
-            Kokkos::View<morton_code*> bucket_octants = buckets_octants(i);
-            Kokkos::View<size_t*> bucket_particle_ids = buckets_particle_ids(i);
-            */
-
             Comm->send(bucket_sizes(i),1, i, 1);
-            //try to send the buckets
-
-            //Comm->send(bucket_octants(0), bucket_octants.size(), i, 0);
-            //Comm->send(bucket_particle_ids(0), bucket_particle_ids.size(), i, 1);
             if(bucket_sizes(i) > 0){
                 Comm->send(buckets_octants(i)(0), bucket_sizes(i), i, 0);
                 Comm->send(buckets_particle_ids(i)(0), bucket_sizes(i), i, 1);
