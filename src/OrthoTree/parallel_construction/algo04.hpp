@@ -9,6 +9,7 @@ namespace ippl {
     auto OrthoTree<Dim>::block_partition(morton_code min_octant, morton_code max_octant) {
         START_FUNC;
         IpplTimings::TimerRef timer = IpplTimings::getTimer("block_partition");
+        IpplTimings::clearTimer(timer);
         IpplTimings::startTimer(timer);
 
         auto T = complete_region(min_octant, max_octant);

@@ -18,6 +18,7 @@ namespace ippl {
         this->aid_list_m.initialize(root_bounds_m, particles);
         auto [min_octant, max_octant] = this->aid_list_m.getMinReqOctants();
 
+        IpplTimings::clearTimer(timer);
         IpplTimings::startTimer(timer);
 
         auto octants = block_partition(min_octant, max_octant);

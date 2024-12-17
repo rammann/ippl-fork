@@ -18,6 +18,7 @@ namespace ippl {
         Kokkos::vector<morton_code>& octants) {
         START_FUNC;
         IpplTimings::TimerRef timer = IpplTimings::getTimer("complete_tree");
+        IpplTimings::clearTimer(timer);
         IpplTimings::startTimer(timer);
         world_rank = Comm->rank();
         world_size = Comm->size();

@@ -27,6 +27,7 @@ namespace ippl {
                                                          Kokkos::View<size_t*> weights) {
         START_FUNC;
         IpplTimings::TimerRef timer = IpplTimings::getTimer("partition");
+        IpplTimings::clearTimer(timer);
         IpplTimings::startTimer(timer);
 
         world_rank = Comm->rank();

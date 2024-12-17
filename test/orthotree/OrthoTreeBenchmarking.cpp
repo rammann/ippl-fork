@@ -149,6 +149,7 @@ void run_experiment() {
 
     IpplTimings::TimerRef timer;
     timer = IpplTimings::getTimer("orthotree_build");
+    IpplTimings::clearTimer(timer);
     IpplTimings::startTimer(timer);
     if (run_parallel)
         tree.build_tree(particles);

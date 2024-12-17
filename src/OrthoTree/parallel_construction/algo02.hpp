@@ -20,6 +20,7 @@ namespace ippl {
         START_FUNC;
 
         IpplTimings::TimerRef timer = IpplTimings::getTimer("complete_region");
+        IpplTimings::clearTimer(timer);
         IpplTimings::startTimer(timer);
 
         assert(code_a < code_b);
