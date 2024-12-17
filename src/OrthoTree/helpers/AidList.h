@@ -78,7 +78,7 @@ namespace ippl {
          * '.size()'
          */
         template <typename Container>
-        void getNumParticlesSendBuff(const Container& octants, Kokkos::View<Kokkos::View<size_t*>*>& send_buffs);
+        void getNumParticlesSendBuff(const Container& octants, Kokkos::View<Kokkos::View<size_t*>*>& send_buffs, Kokkos::View<size_t*>& sizes);
 
         /**
          * @brief Calculates the number of particles for each octant.

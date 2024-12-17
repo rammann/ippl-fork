@@ -381,24 +381,35 @@ namespace ippl {
 
     template <size_t Dim>
     template <typename Container>
-    void AidList<Dim>::getNumParticlesSendBuff(const Container& octants, Kokkos::View<Kokkos::View<size_t*>*>& send_buffs) {
+    void AidList<Dim>::getNumParticlesSendBuff(const Container& octants, Kokkos::View<Kokkos::View<size_t*>*>& send_buffs, Kokkos::View<size_t*>& sizes) {
 
         send_buffs = Kokkos::View<Kokkos::View<size_t*>*>("send_buffs", world_size);
         size_t size_buff = octants.size() / world_size;
+
+
         Kokkos::parallel_for("Initialize sizes", world_size, KOKKOS_LAMBDA(const size_t i) {
             send_buffs(i) = Kokkos::View<size_t*>("send_buff", size_buff);
+            size_buffs(i) = 0;
         });
 
+//TODO: Implement the parallel for loop
         for (size_t i = 0; i < octants.size(); ++i) {
             const morton_code octant = octants[i];
-            const size_t target_rank  = get_target_rank(octant);
-            const size_t idx          = Kokkos::atomic_fetch_add(&send_buffs(target_rank).extent(0), 1);
-            if (idx >= send_buffs(target_rank).extent(0)) {
-                size_t new_size = RESIZE_FACTOR * idx;
-                Kokkos::resize(send_buffs(target_rank), new_size);
+            const size_t lower_bound_idx = std::lower_bound(bucket_borders.data(), bucket_borders.data() + bucket_borders.extent(0), octant) - bucket_borders.data();
+            const size_t upper_bound_idx = std::upper_bound(bucket_borders.data(), bucket_borders.data() + bucket_borders.extent(0), octant) - bucket_borders.data();
+            upper_bound_idx = upper_bound_idx == 0 ? upper_bound_idx : upper_bound_idx - 1;
+
+            for (size_t j = lower_bound_idx; j <= upper_bound_idx; ++j) {
+                const size_t target_rank = j;
+                const size_t idx = Kokkos::atomic_fetch_add(&size_buffs(target_rank), 1);
+                if (idx >= send_buffs(target_rank).extent(0)) {
+                    size_t new_size = RESIZE_FACTOR * idx;
+                    Kokkos::resize(send_buffs(target_rank), new_size);
+                }
+                send_buffs(target_rank)(idx) = octant;
+                
             }
-            send_buffs(target_rank)(idx) = octant;
-        }
+       }
     }
 
     template <size_t Dim>
@@ -408,8 +419,9 @@ namespace ippl {
 
         //figure out which ranks need to be asked
         Kokkos::View<Kokkos::View<morton_code*>*> send_buffs;
+        Kokkos::View<size_t*> sizes("sizes", world_size);
 
-        getNumParticlesSendBuff(octant_container, send_buffs);
+        getNumParticlesSendBuff(octant_container, send_buffs, sizes);
 
         // send the octants to the ranks
 
