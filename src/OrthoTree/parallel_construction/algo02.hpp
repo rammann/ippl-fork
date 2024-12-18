@@ -19,8 +19,8 @@ namespace ippl {
         morton_code code_b) {
         START_FUNC;
 
-        IpplTimings::TimerRef timer = IpplTimings::getTimer("complete_region");
-        IpplTimings::startTimer(timer);
+        IpplTimings::TimerRef completeRegionTimer = IpplTimings::getTimer("complete_region");
+        IpplTimings::startTimer(completeRegionTimer);
 
         assert(code_a < code_b);
 
@@ -49,7 +49,7 @@ namespace ippl {
 
         std::sort(min_lin_tree.begin(), min_lin_tree.end());
 
-        IpplTimings::stopTimer(timer);
+        IpplTimings::stopTimer(completeRegionTimer);
         END_FUNC;
         return min_lin_tree;
     }

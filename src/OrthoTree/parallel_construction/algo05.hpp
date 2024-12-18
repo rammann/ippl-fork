@@ -26,8 +26,8 @@ namespace ippl {
     Kokkos::View<morton_code*> OrthoTree<Dim>::partition(Kokkos::View<morton_code*> octants,
         Kokkos::View<size_t*> weights) {
         START_FUNC;
-        IpplTimings::TimerRef timer = IpplTimings::getTimer("partition");
-        IpplTimings::startTimer(timer);
+        IpplTimings::TimerRef partitionTimer = IpplTimings::getTimer("partition");
+        IpplTimings::startTimer(partitionTimer);
 
         world_rank = Comm->rank();
         world_size = Comm->size();
@@ -178,7 +178,7 @@ namespace ippl {
         }
         Comm->barrier();
 
-        IpplTimings::stopTimer(timer);
+        IpplTimings::stopTimer(partitionTimer);
         END_FUNC;
         return partitioned_octants;
     }

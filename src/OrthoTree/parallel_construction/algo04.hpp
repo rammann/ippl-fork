@@ -8,8 +8,8 @@ namespace ippl {
     template <size_t Dim>
     auto OrthoTree<Dim>::block_partition(morton_code min_octant, morton_code max_octant) {
         START_FUNC;
-        IpplTimings::TimerRef timer = IpplTimings::getTimer("block_partition");
-        IpplTimings::startTimer(timer);
+        IpplTimings::TimerRef blockPartitionTimer = IpplTimings::getTimer("block_partition");
+        IpplTimings::startTimer(blockPartitionTimer);
 
         auto T = complete_region(min_octant, max_octant);
 
@@ -41,7 +41,7 @@ namespace ippl {
 
         IpplTimings::stopTimer(innitfromoctants);
 
-        IpplTimings::stopTimer(timer);
+        IpplTimings::stopTimer(blockPartitionTimer);
         END_FUNC;
         return octants;
     }
