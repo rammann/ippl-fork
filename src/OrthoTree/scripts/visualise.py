@@ -308,10 +308,12 @@ def plot_combined_processors(data_folder, should_plot_particles=False, show_stat
 
 data_folder = "output"
 
-title=None
-max_depth=10
-max_particles_per_octant=500
+# those have to be set manualy by you, else we dont print them
 show_stats=True
+
+title=None
+max_depth=None
+max_particles_per_octant=None
 
 """
 This will generate one plot, where each processor will be colored differently. (not that usefull)
