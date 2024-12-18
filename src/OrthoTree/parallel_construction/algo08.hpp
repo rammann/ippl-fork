@@ -2,43 +2,37 @@
 
 /*
 TODO:
-- IMPLEMENT THIS NEW FUNCTION SIGNATURE
 - WRITE TESTS FOR THE FUNCTION
-- ADJUST THE SIGNATURE IN ORTHOTREE.H
-
-namespace ippl {
-
-    template <size_t Dim>
-    Kokkos::View<morton_code*> OrthoTree<Dim>::linearise_octants(
-                                        Kokkos::View<morton_code*> octants);
-
-}  // namespace ippl
 */
 
 namespace ippl {
     template <size_t Dim>
-    Kokkos::vector<morton_code> OrthoTree<Dim>::linearise_octants(
-        const Kokkos::vector<morton_code>& octants) {
-        START_FUNC;
+    Kokkos::View<morton_code*> OrthoTree<Dim>::linearise_octants(
+        const Kokkos::View<morton_code*>& octants) {
+
         IpplTimings::TimerRef linOctantsTimer = IpplTimings::getTimer("linearise_octants");
         IpplTimings::startTimer(linOctantsTimer);
 
-        logger << "size: " << octants.size() << endl;
-        Kokkos::vector<morton_code> linearised;
+        assert(octants.size() > 0
+               && "Octants.size() is zero, dont call this function with an empty list!");
 
+        Kokkos::View<morton_code*> linearised("linearised", octants.size());
+
+        size_t j = 0;
         for (size_t i = 0; i < octants.size() - 1; ++i) {
             if (morton_helper.is_ancestor(octants[i + 1], octants[i])) {
                 continue;
             }
 
-            linearised.push_back(octants[i]);
+            linearised[j] = octants[i];
+            ++j;
         }
 
-        linearised.push_back(octants.back());
+        linearised[j] = octants[octants.size() - 1];
+        Kokkos::resize(linearised, j+1);
 
-        logger << "finished, size is: " << linearised.size() << endl;
         IpplTimings::stopTimer(linOctantsTimer);
-        END_FUNC;
+
         return linearised;
     }
 }  // namespace ippl

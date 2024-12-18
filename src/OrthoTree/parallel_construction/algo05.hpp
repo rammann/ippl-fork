@@ -25,12 +25,10 @@ namespace ippl {
     template <size_t Dim>
     Kokkos::View<morton_code*> OrthoTree<Dim>::partition(Kokkos::View<morton_code*> octants,
         Kokkos::View<size_t*> weights) {
-        START_FUNC;
+        
         IpplTimings::TimerRef partitionTimer = IpplTimings::getTimer("partition");
         IpplTimings::startTimer(partitionTimer);
 
-        world_rank = Comm->rank();
-        world_size = Comm->size();
         Kokkos::View<morton_code*> prefix_sum("prefix_sum", octants.size());
 
         // the global weight up to right after this rank
@@ -181,21 +179,5 @@ namespace ippl {
         IpplTimings::stopTimer(partitionTimer);
         END_FUNC;
         return partitioned_octants;
-    }
-
-    template <size_t Dim>
-    Kokkos::vector<morton_code> OrthoTree<Dim>::partition(Kokkos::vector<morton_code>& octants,
-        Kokkos::vector<size_t>& weights) {
-
-        START_FUNC;
-        Kokkos::View<morton_code*> octants_view(octants.data(), octants.size());
-        Kokkos::View<size_t*> weights_view(weights.data(), weights.size());
-        Kokkos::View<morton_code*> partitioned_octants = partition(octants_view, weights_view);
-        Kokkos::vector<morton_code> partitioned_octants_vector;
-        for (size_t i = 0; i < partitioned_octants.size(); ++i) {
-            partitioned_octants_vector.push_back(partitioned_octants(i));
-        }
-        END_FUNC;
-        return partitioned_octants_vector;
     }
 }  // namespace ippl

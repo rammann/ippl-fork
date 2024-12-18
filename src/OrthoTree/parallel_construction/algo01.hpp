@@ -11,11 +11,7 @@ namespace ippl {
 
         IpplTimings::TimerRef buildTreeTimer = IpplTimings::getTimer("build_tree");
 
-        world_size = Comm->size();
-        world_rank = Comm->rank();  // TODO: move this to constructor, but then all tests need a
-        // main to init ippl
         IpplTimings::TimerRef aidListTimer = IpplTimings::getTimer("aid_list");
-        IpplTimings::clearTimer(aidListTimer);
         IpplTimings::startTimer(aidListTimer);
 
         this->aid_list_m.initialize(root_bounds_m, particles);
