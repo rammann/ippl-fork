@@ -128,10 +128,16 @@ namespace ippl {
     template <typename Container>
     Kokkos::View<morton_code*> OrthoTree<Dim>::build_tree_from_octants(const Container& octants) {
         Kokkos::View<morton_code*> finished_tree;
+        IpplTimings::TimerRef buildTreeFromOctantsTimer =
+            IpplTimings::getTimer("build_tree_from_octants");
+        IpplTimings::startTimer(buildTreeFromOctantsTimer);
+
 
         for (auto it = octants.data(); it != (octants.data() + octants.size()); ++it) {
             build_tree_from_octant(*it, finished_tree);
         }
+
+        IpplTimings::stopTimer(buildTreeFromOctantsTimer);
 
         return finished_tree;
     }
