@@ -351,8 +351,9 @@ namespace ippl {
 
 
         Kokkos::View<size_t*> ranges("ranges", 2*world_size);
+        auto ranges_begin = std::span(ranges.data(), ranges.size()).begin();
         Kokkos::deep_copy(ranges, 0);
-        range_window.create(*Comm, ranges.data(), ranges.data() + ranges.size());
+        range_window.create(*Comm, ranges_begin, ranges_begin + ranges.size());
         range_window.fence(0);
 
         morton_code lower_bound_octant = 0; 
@@ -395,10 +396,12 @@ namespace ippl {
         Kokkos::View<unsigned int*> recv_indices("recv_indices",  2*world_size);
         Kokkos::deep_copy(recv_indices, 0);
 
+        auto recv_indices_begin = std::span(recv_indices.data(), recv_indices.size()).begin();
+
         size_t new_size = 0;
 
         mpi::rma::Window<mpi::rma::Active> idx_window;
-        idx_window.create(*Comm, recv_indices.data(), recv_indices.data() + recv_indices.size());
+        idx_window.create(*Comm, recv_indices_begin, recv_indices_begin + recv_indices.size());
         idx_window.fence(0);
         for (unsigned rank = 0; rank < world_size; ++rank) {
             if (ranges(2*rank) == 0 && ranges(2*rank + 1) == 0) {
@@ -423,18 +426,21 @@ namespace ippl {
         }
         idx_window.fence(0);
 
+        std::cerr << "new size: " << new_size + 100000*world_rank << std::endl;
         Kokkos::View<morton_code*> new_octants("new_octants", new_size);
         Kokkos::View<size_t*> new_particle_ids("new_particle_ids", new_size);
 
         auto new_octants_start_it = std::span(new_octants.data(), new_size).begin();
         auto new_particles_start_it = std::span(new_octants.data(), new_size).begin();
+        auto octants_begin = std::span(octants.data(), octants.size()).begin();
+        auto particle_ids_begin = std::span(particle_ids.data(), particle_ids.size()).begin();
 
 
         mpi::rma::Window<mpi::rma::Active> octants_window;
         mpi::rma::Window<mpi::rma::Active> particle_ids_window;
 
-        octants_window.create(*Comm, octants.data(), octants.data() + octants.size());
-        particle_ids_window.create(*Comm, particle_ids.data(), particle_ids.data() + particle_ids.size());
+        octants_window.create(*Comm, octants_begin, octants_begin + octants.size());
+        particle_ids_window.create(*Comm, particle_ids_begin, particle_ids_begin + particle_ids.size());
         octants_window.fence(0);
         particle_ids_window.fence(0);
         size_t last_insert_idx = 0;
@@ -445,14 +451,14 @@ namespace ippl {
             
             size_t recv_size = recv_indices(2*rank + 1) - recv_indices(2*rank);
 
-            morton_code* start_it_octants = new_octants.data() + last_insert_idx;
-            morton_code* end_it_octants = start_it_octants + recv_size;
-            size_t* start_it_particle_ids = new_particle_ids.data() + last_insert_idx;
-            size_t* end_it_particle_ids = start_it_particle_ids + recv_size;
+            auto start_it_octants = new_octants_start_it + last_insert_idx;
+            auto end_it_octants = start_it_octants + recv_size;
+            auto start_it_particle_ids = new_particles_start_it + last_insert_idx;
+            auto end_it_particle_ids = start_it_particle_ids + recv_size;
 
             static_assert(std::contiguous_iterator<decltype(start_it_octants)>,
                           "Iterator does not satisfy contiguous_iterator");
-            octants_window.get(new_octants.data(), new_octants.data() + new_octants.size(), rank, recv_indices(2*rank));
+            octants_window.get(start_it_octants, end_it_octants, rank, recv_indices(2*rank));
             particle_ids_window.get(start_it_particle_ids, end_it_particle_ids, rank, recv_indices(2*rank));
             last_insert_idx += recv_size;
         }
@@ -461,6 +467,23 @@ namespace ippl {
 
         octants = new_octants;
         particle_ids = new_particle_ids;
+
+        auto bucket_borders_begin = std::span(bucket_borders.data(), bucket_borders.size()).begin();
+
+        mpi::rma::Window<mpi::rma::Active> bucket_window;
+        bucket_window.create(*Comm, bucket_borders_begin, bucket_borders_begin + bucket_borders.size());
+        bucket_window.fence(0);
+        // update buckets
+        if (world_rank != 0) {
+            bucket_window.put<size_t>(&octants(0), 0, world_rank-1);
+        }
+        bucket_window.fence(0);
+        if (world_rank != 0) {
+            bucket_window.get(bucket_borders_begin
+                , bucket_borders_begin + bucket_borders.size()
+                , 0, bucket_borders.size());
+        }
+        bucket_window.fence(0);
     }
 
     template <size_t Dim>
@@ -468,32 +491,16 @@ namespace ippl {
     Kokkos::View<size_t*> AidList<Dim>::getNumParticlesInOctantsParallel(
         const Container& octant_container) {
 
-        Kokkos::View<size_t*> result("result", octant_container.size());
+        morton_code min_octant = morton_helper.get_deepest_first_descendant(octant_container[0]);
+        morton_code max_octant = morton_helper.get_deepest_last_descendant(octant_container[octant_container.size() - 1]);
+        innitFromOctants(min_octant, max_octant);
 
-        Kokkos::parallel_for("Get num particles in octants", octant_container.size(),
-                             KOKKOS_LAMBDA(const size_t i) {
-                                 result(i) = getNumParticlesInOctant(octant_container[i]);
-                             });
         
-        std::vector<mpi::Request> requests;
-        requests.reserve(world_size - 1);
-
-        std::vector<size_t> octants_to_send;
-        std::vector<size_t> octants;
-        octants.data() = octant_container.data();
-
-        for(size_t i = 0; i < world_size; ++i) {
-            if(i == world_rank) continue;
-            if(octant_container[i])
-
-
+        Kokkos::View<size_t*> result("result", octant_container.size());
+        for (size_t i = 0; i < octant_container.size(); ++i) {
+            result(i) = getNumParticlesInOctant(octant_container[i]);
         }
 
-
-
-
-        
-        Kokkos::fence();
         return result;
 
     }
