@@ -356,6 +356,7 @@ namespace ippl {
         range_window.create(*Comm, ranges_begin, ranges_begin + ranges.size());
         range_window.fence(0);
 
+        logger << "communicate ranges" << endl;
         morton_code lower_bound_octant = 0; 
         morton_code upper_bound_octant = 0;
         for (size_t i = 0; i < world_size; ++i) {
@@ -399,6 +400,8 @@ namespace ippl {
         auto recv_indices_begin = std::span(recv_indices.data(), recv_indices.size()).begin();
 
         size_t new_size = 0;
+
+        logger << "communicate indices" << endl;
 
         mpi::rma::Window<mpi::rma::Active> idx_window;
         idx_window.create(*Comm, recv_indices_begin, recv_indices_begin + recv_indices.size());
@@ -490,7 +493,7 @@ namespace ippl {
     template <typename Container>
     Kokkos::View<size_t*> AidList<Dim>::getNumParticlesInOctantsParallel(
         const Container& octant_container) {
-
+        logger << "getNumParticlesInOctantsParallel" << endl;
         morton_code min_octant = morton_helper.get_deepest_first_descendant(octant_container[0]);
         morton_code max_octant = morton_helper.get_deepest_last_descendant(octant_container[octant_container.size() - 1]);
         innitFromOctants(min_octant, max_octant);

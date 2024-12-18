@@ -22,7 +22,7 @@ namespace ippl {
         world_rank = Comm->rank();
         world_size = Comm->size();
 
-        logger.setOutputLevel(0);
+        logger.setOutputLevel(5);
         logger.setPrintNode(INFORM_ALL_NODES);
     }
 
