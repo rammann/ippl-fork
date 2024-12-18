@@ -1,6 +1,8 @@
 #include "AidList.h"
-#include "random"
-#include "chrono"
+#include <random>
+#include <chrono>
+
+#include "Communicate/Window.h"
 
 //define resize  factor
 #define RESIZE_FACTOR 1.05
@@ -344,39 +346,121 @@ namespace ippl {
     void AidList<Dim>::innitFromOctants(morton_code min_octant, morton_code max_octant) {
         size_t size_buff;
         morton_code min_max_buff[2];
-        if (world_rank == 0) {
-            for (size_t rank = 1; rank < world_size; ++rank) {
-                mpi::Status status;
-                Comm->recv(*min_max_buff, 2, rank, 0, status);
 
-                const size_t start = getLowerBoundIndex(min_max_buff[0]);
-                const size_t end   = getUpperBoundIndexExclusive(min_max_buff[1]);
-                size_buff          = end - start;
+        mpi::rma::Window<mpi::rma::Active> range_window;
 
-                Comm->send(size_buff, 1, rank, 0);
 
-                Comm->send(*(octants.data() + start), size_buff, rank, 0);
-                Comm->send(*(particle_ids.data() + start), size_buff, rank, 0);
+        Kokkos::View<size_t*> ranges("ranges", 2*world_size);
+        Kokkos::deep_copy(ranges, 0);
+        range_window.create(*Comm, ranges.data(), ranges.data() + ranges.size());
+        range_window.fence(0);
 
-                logger << "sent " << size_buff << " octants to rank " << rank << " range: ("
-                       << getOctant(start) << ", " << getOctant(end) << ")" << endl;
-            }
-        } else {
-            min_max_buff[0] = min_octant;
-            min_max_buff[1] = morton_helper.get_deepest_last_descendant(max_octant);
+        morton_code lower_bound_octant = 0; 
+        morton_code upper_bound_octant = 0;
+        for (size_t i = 0; i < world_size; ++i) {
+          upper_bound_octant = morton_helper.get_deepest_last_descendant(0);
+          if (i < world_size - 1) {
+              upper_bound_octant = bucket_borders(i);
+          }
 
-            Comm->send(*min_max_buff, 2, 0, 0);
+          if (i > 0) {
+            lower_bound_octant = bucket_borders(i - 1);
+          }
 
-            mpi::Status size_status;
-            Comm->recv(&size_buff, 1, 0, 0, size_status);
+          // skip processor if no interesting octants are there
+          if (bucket_borders(i) <= min_octant
+              || lower_bound_octant >= max_octant) {
+              continue;
+          }
 
-            this->octants      = Kokkos::View<morton_code*>("aid_list_octants", size_buff);
-            this->particle_ids = Kokkos::View<size_t*>("aid_list_particle_ids", size_buff);
+          morton_code lower_range = std::max(min_octant, lower_bound_octant);
+          morton_code upper_range = std::min(max_octant, upper_bound_octant);
 
-            mpi::Status octants_status, particle_id_status;
-            Comm->recv(octants.data(), size_buff, 0, 0, octants_status);
-            Comm->recv(particle_ids.data(), size_buff, 0, 0, particle_id_status);
+          // no need to send to ourselves
+          if (i == world_rank) {
+              ranges(2*i) = lower_range;
+              ranges(2*i + 1) = upper_range;
+              continue;
+          }
+
+          // find the range of octants that are in the current bucket
+          range_window.put<morton_code>(&lower_range, i, 2 * i);
+          range_window.put<morton_code>(&upper_range, i, 2 * i + 1);
+          
         }
+
+        range_window.fence(0);
+
+        Kokkos::View<size_t*> send_indices("send_indices", 2*world_size);
+        Kokkos::View<unsigned int*> recv_indices("recv_indices",  2*world_size);
+        Kokkos::deep_copy(recv_indices, 0);
+
+        size_t new_size = 0;
+
+        mpi::rma::Window<mpi::rma::Active> idx_window;
+        idx_window.create(*Comm, recv_indices.data(), recv_indices.data() + recv_indices.size());
+        idx_window.fence(0);
+        for (unsigned rank = 0; rank < world_size; ++rank) {
+            if (ranges(2*rank) == 0 && ranges(2*rank + 1) == 0) {
+                continue;
+            }
+            send_indices(2*rank) = getLowerBoundIndex(ranges(2*rank));
+            send_indices(2*rank + 1) = getUpperBoundIndexExclusive(ranges(2*rank + 1));
+
+            size_t send_size = send_indices(2*rank + 1) - send_indices(2*rank);
+
+            new_size += send_size;
+            
+            // no need to communicate with ourselves 
+            if (rank == world_rank) {
+                recv_indices(2*rank) = send_indices(2*rank);
+                recv_indices(2*rank + 1) = send_indices(2*rank + 1);
+                continue;
+            }
+
+            idx_window.put<size_t>(&send_indices(2*rank), rank, 2*world_rank);
+            idx_window.put<size_t>(&send_indices(2*rank + 1), rank, 2*world_rank + 1);
+        }
+        idx_window.fence(0);
+
+        Kokkos::View<morton_code*> new_octants("new_octants", new_size);
+        Kokkos::View<size_t*> new_particle_ids("new_particle_ids", new_size);
+
+        auto new_octants_start_it = std::span(new_octants.data(), new_size).begin();
+        auto new_particles_start_it = std::span(new_octants.data(), new_size).begin();
+
+
+        mpi::rma::Window<mpi::rma::Active> octants_window;
+        mpi::rma::Window<mpi::rma::Active> particle_ids_window;
+
+        octants_window.create(*Comm, octants.data(), octants.data() + octants.size());
+        particle_ids_window.create(*Comm, particle_ids.data(), particle_ids.data() + particle_ids.size());
+        octants_window.fence(0);
+        particle_ids_window.fence(0);
+        size_t last_insert_idx = 0;
+        for (unsigned rank = 0; rank < world_size; ++rank) {
+            if (recv_indices(2*rank) == recv_indices(2*rank + 1)){
+                continue;
+            }
+            
+            size_t recv_size = recv_indices(2*rank + 1) - recv_indices(2*rank);
+
+            morton_code* start_it_octants = new_octants.data() + last_insert_idx;
+            morton_code* end_it_octants = start_it_octants + recv_size;
+            size_t* start_it_particle_ids = new_particle_ids.data() + last_insert_idx;
+            size_t* end_it_particle_ids = start_it_particle_ids + recv_size;
+
+            static_assert(std::contiguous_iterator<decltype(start_it_octants)>,
+                          "Iterator does not satisfy contiguous_iterator");
+            octants_window.get(new_octants.data(), new_octants.data() + new_octants.size(), rank, recv_indices(2*rank));
+            particle_ids_window.get(start_it_particle_ids, end_it_particle_ids, rank, recv_indices(2*rank));
+            last_insert_idx += recv_size;
+        }
+        octants_window.fence(0);
+        particle_ids_window.fence(0);
+
+        octants = new_octants;
+        particle_ids = new_particle_ids;
     }
 
     template <size_t Dim>
