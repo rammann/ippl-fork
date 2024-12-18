@@ -14,9 +14,14 @@ namespace ippl {
         world_size = Comm->size();
         world_rank = Comm->rank();  // TODO: move this to constructor, but then all tests need a
                                     // main to init ippl
+        IpplTimings::TimerRef aidlisttimer = IpplTimings::getTimer("aid_list");
+        IpplTimings::clearTimer(aidlisttimer);
+        IpplTimings::startTimer(aidlisttimer);
 
         this->aid_list_m.initialize(root_bounds_m, particles);
         auto [min_octant, max_octant] = this->aid_list_m.getMinReqOctants();
+        
+        IpplTimings::stopTimer(aidlisttimer);
 
         IpplTimings::clearTimer(timer);
         IpplTimings::startTimer(timer);

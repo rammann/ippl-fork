@@ -34,8 +34,14 @@ namespace ippl {
         auto weights = this->aid_list_m.getNumParticlesInOctantsParallel(G);
         auto octants = partition(G, weights);
 
+        IpplTimings::TimerRef innitfromoctants = IpplTimings::getTimer("innitFromOctants");
+        IpplTimings::clearTimer(innitfromoctants);
+        IpplTimings::startTimer(innitfromoctants);
+
         this->aid_list_m.innitFromOctants(*octants.data(), *(octants.data() + octants.size() - 1));
 
+        IpplTimings::stopTimer(innitfromoctants);
+        
         IpplTimings::stopTimer(timer);
         END_FUNC;
         return octants;
