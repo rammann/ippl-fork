@@ -467,133 +467,34 @@ namespace ippl {
     template <typename Container>
     Kokkos::View<size_t*> AidList<Dim>::getNumParticlesInOctantsParallel(
         const Container& octant_container) {
-            
-        logger<<"Computing number of particles in octants"<<endl;
-        Kokkos::View<size_t*> num_particles("num_particles", octant_container.size());
-        Kokkos::deep_copy(num_particles, 0);
 
-        std::vector<morton_code> octants_send_buff;
-        std::vector<morton_code> octants_receive_buff;
-        std::vector<size_t> num_particles_receive_buff;
-        std::vector<size_t> add_indices;
+        Kokkos::View<size_t*> result("result", octant_container.size());
 
-        int my_partner;
+        Kokkos::parallel_for("Get num particles in octants", octant_container.size(),
+                             KOKKOS_LAMBDA(const size_t i) {
+                                 result(i) = getNumParticlesInOctant(octant_container[i]);
+                             });
+        
+        std::vector<mpi::Request> requests;
+        requests.reserve(world_size - 1);
 
-        for(size_t i = 0; i < world_size -1; ++i) {
-            if(i==0){
-                my_partner = world_rank % 2 == 0 ? world_rank + 1 : world_rank - 1;
-                my_partner = my_partner < world_size ? my_partner : -1;
-            }
-            else{
+        std::vector<size_t> octants_to_send;
+        std::vector<size_t> octants;
+        octants.data() = octant_container.data();
 
-
-                my_partner =  (my_partner + 1) % world_size;
-                if(world_size%2 == 1 && my_partner == world_size - 1) my_partner = -1;
-            }
-
-            if(my_partner == -1 || my_partner == world_rank){
-                logger << "Skipping iteration " << i << endl;
-                continue;
-            }
-
-            for(size_t j = 0; j < octant_container.size(); ++j){
-                morton_code octant = octant_container[j];
-                if(octant < bucket_borders(my_partner) && octant >= bucket_borders(my_partner-1)){
-                    octants_send_buff.push_back(octant);
-                    add_indices.push_back(j);
-                }
-            }
-
-            mpi::Status status;
-            //print the octants
-            if(world_rank == 0){
-                for(size_t j = 0; j < octants_send_buff.size(); ++j){
-                    logger << "Octant " << j << ": " << octants_send_buff[j] << endl;
-                }
-            }
-                
-
-            if(world_rank < my_partner){
-                logger << "Sending octants to parnter " << my_partner << " iter " << i << endl;
-                size_t size = octants_send_buff.size();
-                Comm->send(size, 1, my_partner, 1);
-                logger << "Sent size to rank " << my_partner << endl;
-                if(size > 0) Comm->send(octants_send_buff.data(), size, my_partner, 0);
-                logger<<"Sent octants to rank "<<my_partner<<endl;
-
-                logger<<"Receiving octants from rank "<<my_partner<<endl;
-                size_t size_buff;
-                Comm->recv(&size_buff, 1, my_partner, 1, status);
-                logger<<"Received size from rank "<<my_partner<<endl;
-                octants_receive_buff.resize(size_buff);
-                if(size_buff > 0) Comm->recv(octants_receive_buff.data(), size_buff, my_partner, 0, status);
-                logger<<"Received octants from rank "<<my_partner<<endl;
-            }
-
-            else{
-                logger<<"Receiving octants from rank "<<my_partner<<endl;
-                size_t size_buff;
-                Comm->recv(&size_buff, 1, my_partner, 1, status);
-                logger<<"Received size from rank "<<my_partner<<endl;
-
-                octants_receive_buff.resize(size_buff);
-                if(size_buff > 0) Comm->recv(octants_receive_buff.data(), size_buff, my_partner, 0, status);
-                logger<<"Received octants from rank "<<my_partner<<endl;
-
-                logger << "Sending octants to parnter " << my_partner << " iter " << i << endl;
-                size_t size = octants_send_buff.size();
-                Comm->send(size, 1, my_partner, 1);
-                logger << "Sent size to rank " << my_partner << endl;
-                if(size > 0) Comm->send(octants_send_buff.data(), size, my_partner, 0);
-                logger<<"Sent octants to rank "<<my_partner<<endl;
-            }
-
-            //compute the number of particles in the octants
-            Kokkos::View<size_t*> num_particles_temp("num_particles_temp", octants_receive_buff.size());
-            Kokkos::parallel_for("Compute num particles temp", octants_receive_buff.size(), KOKKOS_LAMBDA(const size_t i) {
-                num_particles_temp(i) = getNumParticlesInOctant(octants_receive_buff[i]);
-            });
-
-            //send back the number of particles
-
-            if(world_rank < my_partner){
-                size_t size = num_particles_temp.size();
-                Comm->send(size, 1, my_partner, 1);
-                if(size > 0) Comm->send(num_particles_temp.data(), size, my_partner, 0);
-
-                size_t size_buff;
-                Comm->recv(&size_buff, 1, my_partner, 1,status);
-                num_particles_receive_buff.resize(size_buff);
-                if(size_buff > 0) Comm->recv(num_particles_receive_buff.data(), size_buff, my_partner, 0,status);
-            }
-
-            else{
-                size_t size_buff;
-                Comm->recv(&size_buff, 1, my_partner, 1,status);
-
-                num_particles_receive_buff.resize(size_buff);
-                if(size_buff > 0) Comm->recv(num_particles_receive_buff.data(), size_buff, my_partner, 0,status);
-
-                size_t size = num_particles_temp.size();
-                Comm->send(size, 1, my_partner, 1);
-                if(size > 0) Comm->send(num_particles_temp.data(), size, my_partner, 0);
-            }
-
-            //add the received number of particles to the total number of particles
-
-            std::for_each(add_indices.begin(), add_indices.end(), [&](size_t idx){
-                num_particles(idx) += num_particles_receive_buff[idx];
-            });
-
-            octants_send_buff.clear();
-            octants_receive_buff.clear();
-            num_particles_receive_buff.clear();
-            add_indices.clear();
+        for(size_t i = 0; i < world_size; ++i) {
+            if(i == world_rank) continue;
+            if(octant_container[i])
 
 
         }
-            
 
+
+
+
+        
+        Kokkos::fence();
+        return result;
 
     }
 }  // namespace ippl
