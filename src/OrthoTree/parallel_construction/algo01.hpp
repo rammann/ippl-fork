@@ -9,21 +9,21 @@ namespace ippl {
     Kokkos::View<morton_code*> OrthoTree<Dim>::build_tree(particle_t const& particles) {
         START_FUNC;
 
-        IpplTimings::TimerRef timer = IpplTimings::getTimer("build_tree");
+        IpplTimings::TimerRef buildTreeTimer = IpplTimings::getTimer("build_tree");
 
         world_size = Comm->size();
         world_rank = Comm->rank();  // TODO: move this to constructor, but then all tests need a
         // main to init ippl
-        IpplTimings::TimerRef aidlisttimer = IpplTimings::getTimer("aid_list");
-        IpplTimings::clearTimer(aidlisttimer);
-        IpplTimings::startTimer(aidlisttimer);
+        IpplTimings::TimerRef aidListTimer = IpplTimings::getTimer("aid_list");
+        IpplTimings::clearTimer(aidListTimer);
+        IpplTimings::startTimer(aidListTimer);
 
         this->aid_list_m.initialize(root_bounds_m, particles);
         auto [min_octant, max_octant] = this->aid_list_m.getMinReqOctants();
 
-        IpplTimings::stopTimer(aidlisttimer);
+        IpplTimings::stopTimer(aidListTimer);
 
-        IpplTimings::startTimer(timer);
+        IpplTimings::startTimer(buildTreeTimer);
 
         auto octants = block_partition(min_octant, max_octant);
 
@@ -36,7 +36,7 @@ namespace ippl {
         octants_to_file(tree_view);
         print_stats(tree_view, particles);
 
-        IpplTimings::stopTimer(timer);
+        IpplTimings::stopTimer(buildTreeTimer);
 
         return tree_view;
     }

@@ -357,6 +357,85 @@ def plot_operation_grouped(df, sim_params, operations=None, exclude_operations=N
     plt.savefig(os.path.join(plot_dir, filename))
     plt.close()
 
+def plot_operation_with_breakdown(df, sim_params, main_operation, operations=None, exclude_operations=None):
+    """
+    Create a bar chart showing a main operation alongside the breakdown of other operations.
+    
+    Args:
+        df: DataFrame containing the timing data.
+        sim_params: Dictionary containing simulation parameters.
+        main_operation: String specifying which operation to show as the main bar.
+        operations: List of operation names to plot. If None, plots all operations except main_operation.
+        exclude_operations: List of operation names to exclude from the plot.
+    """
+    plot_dir = 'plots'
+    os.makedirs(plot_dir, exist_ok=True)
+
+    # Create a more specific filename based on the operations
+    filename = f'operation_breakdown_{main_operation}'
+    if operations:
+        filename += '_' + '_'.join(operations)
+    if exclude_operations:
+        filename += '_exclude_' + '_'.join(exclude_operations)
+    filename += '.png'
+
+    plt.figure(figsize=(15, 8))
+    
+    # Filter the DataFrame for specified operations
+    if operations is not None:
+        other_operations = [op for op in operations if op != main_operation]
+        df_filtered = df[df['operation'].isin([main_operation] + other_operations)]
+    else:
+        other_operations = [op for op in df['operation'].unique() if op != main_operation]
+        df_filtered = df[df['operation'].isin([main_operation] + other_operations)]
+    
+    # Exclude specified operations
+    if exclude_operations is not None:
+        df_filtered = df_filtered[~df_filtered['operation'].isin(exclude_operations)]
+        other_operations = [op for op in other_operations if op not in exclude_operations]
+    
+    # Create pivot table for the data
+    pivot_data = df_filtered.pivot(index='nodes', columns='operation', values='wall_avg')
+    
+    # Plot main operation as individual bars
+    ax = plt.gca()
+    x = range(len(pivot_data.index))
+    main_times = pivot_data[main_operation]
+    ax.bar(x, main_times, width=0.4, label=main_operation)
+    
+    # Plot stacked bars for other operations
+    other_data = pivot_data[other_operations]
+    left = [0] * len(pivot_data.index)
+    for column in other_data.columns:
+        ax.bar([i + 0.5 for i in x], other_data[column], width=0.4,
+               bottom=left, label=column)
+        left = [l + v for l, v in zip(left, other_data[column])]
+    
+    # Set x-axis labels
+    plt.xticks([i + 0.25 for i in x], pivot_data.index)
+    
+    # Create title based on available parameters
+    if sim_params.get('num_particles_per_node'):
+        title = (f'Operation Time Breakdown by Node Count\n'
+                f'(part_per_node={sim_params["num_particles_per_node"]}, '
+                f'max_part={sim_params["max_particles"]}, '
+                f'depth={sim_params["max_depth"]}, '
+                f'dist={sim_params["dist"]})')
+    else:
+        title = (f'Operation Time Breakdown by Node Count\n'
+                f'(N={sim_params["num_particles"]}, '
+                f'max_part={sim_params["max_particles"]}, '
+                f'depth={sim_params["max_depth"]}, '
+                f'dist={sim_params["dist"]})')
+    
+    plt.title(title)
+    plt.xlabel('Number of Nodes')
+    plt.ylabel('Wall Time (s)')
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.tight_layout()
+    plt.savefig(os.path.join(plot_dir, filename))
+    plt.close()
+
 def plot_operation_speedup(df, sim_params, operations=None):
     """
     Create a speedup plot for specified operations.
@@ -444,32 +523,44 @@ def main():
     
     # Generate plots
     print("Available operations:", sorted(df['operation'].unique()))
+
+    plot_operation_with_breakdown(df, sim_params, 'orthotree_build', operations=['build_tree', 'aid_list'])
+
+    plot_operation_with_breakdown(df, sim_params, 'build_tree', operations=['block_partition', 'complete_region', 
+                                        'complete_tree', 'getNumParticlesInOc', 'linearise_octants', 
+                                        'partition'])
     
     plot_operation_grouped(df, sim_params, 
                          operations=   ['block_partition', 'build_tree', 'complete_region', 
                                         'complete_tree', 'getNumParticlesInOc', 'linearise_octants', 
                                         'partition'])
+
+    plot_operation_grouped(df, sim_params,
+                            operations=['orthotree_build', 'build_tree', 'aid_list'])
     plot_operation_grouped(df, sim_params,
                             operations=['block_partition', 'innitFromOctants'])
-    
+    plot_operation_grouped(df, sim_params,
+                            operations=['build_tree', 'block_partition'])
+    plot_operation_grouped(df, sim_params,
+                            operations=['build_tree', 'aid_list'])
+
     plot_operation_breakdown(df, sim_params, operations=['orthotree_build'])
     plot_operation_breakdown(df, sim_params, operations=['build_tree'])
     plot_operation_breakdown(df, sim_params, operations=['block_partition'])
     plot_operation_breakdown(df, sim_params, operations=['partition'])
     plot_operation_breakdown(df, sim_params, operations=['getNumParticlesInOc'])
 
+    # plot_scaling_analysis(df, sim_params, operations=['orthotree_build'])
+    # plot_scaling_analysis(df, sim_params, operations=['build_tree'])
+    # plot_scaling_analysis(df, sim_params, operations=['getNumParticlesInOc'])
+    # plot_scaling_analysis(df, sim_params, operations=['block_partition'])
+    # plot_scaling_analysis(df, sim_params, operations=['partition'])
 
-    plot_scaling_analysis(df, sim_params, operations=['orthotree_build'])
-    plot_scaling_analysis(df, sim_params, operations=['build_tree'])
-    plot_scaling_analysis(df, sim_params, operations=['getNumParticlesInOc'])
-    plot_scaling_analysis(df, sim_params, operations=['block_partition'])
-    plot_scaling_analysis(df, sim_params, operations=['partition'])
-
-    plot_operation_speedup(df, sim_params, operations=['orthotree_build'])
-    plot_operation_speedup(df, sim_params, operations=['build_tree'])
-    plot_operation_speedup(df, sim_params, operations=['getNumParticlesInOc'])
-    plot_operation_speedup(df, sim_params, operations=['block_partition'])
-    plot_operation_speedup(df, sim_params, operations=['partition'])
+    # plot_operation_speedup(df, sim_params, operations=['orthotree_build'])
+    # plot_operation_speedup(df, sim_params, operations=['build_tree'])
+    # plot_operation_speedup(df, sim_params, operations=['getNumParticlesInOc'])
+    # plot_operation_speedup(df, sim_params, operations=['block_partition'])
+    # plot_operation_speedup(df, sim_params, operations=['partition'])
     
 
     # Save the processed data
