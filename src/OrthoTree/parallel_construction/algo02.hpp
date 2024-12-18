@@ -9,11 +9,11 @@ TODO:
 namespace ippl {
     template <size_t Dim>
     Kokkos::View<morton_code*> OrthoTree<Dim>::complete_region(morton_code code_a,
-                                                               morton_code code_b) {
+        morton_code code_b) {
 
         IpplTimings::TimerRef completeRegionTimer = IpplTimings::getTimer("complete_region");
         IpplTimings::startTimer(completeRegionTimer);
-
+        
         assert(code_a < code_b);
 
         // special case (not specified in the paper): 
@@ -52,7 +52,8 @@ namespace ippl {
                 }
                 min_lin_tree[idx] = current_node;
                 idx++;
-            } else if (is_ancestor_of_a || is_ancestor_of_b) {
+            }
+            else if (is_ancestor_of_a || is_ancestor_of_b) {
                 for (morton_code child : morton_helper.get_children(current_node)) {
                     stack.push(child);
                 }

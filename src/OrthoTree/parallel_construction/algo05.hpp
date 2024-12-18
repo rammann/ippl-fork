@@ -177,7 +177,7 @@ namespace ippl {
         Comm->barrier();
 
         IpplTimings::stopTimer(partitionTimer);
-        END_FUNC;
+        
         return partitioned_octants;
     }
 }  // namespace ippl
