@@ -13,17 +13,16 @@ namespace ippl {
 
         world_size = Comm->size();
         world_rank = Comm->rank();  // TODO: move this to constructor, but then all tests need a
-                                    // main to init ippl
+        // main to init ippl
         IpplTimings::TimerRef aidlisttimer = IpplTimings::getTimer("aid_list");
         IpplTimings::clearTimer(aidlisttimer);
         IpplTimings::startTimer(aidlisttimer);
 
         this->aid_list_m.initialize(root_bounds_m, particles);
         auto [min_octant, max_octant] = this->aid_list_m.getMinReqOctants();
-        
+
         IpplTimings::stopTimer(aidlisttimer);
 
-        IpplTimings::clearTimer(timer);
         IpplTimings::startTimer(timer);
 
         auto octants = block_partition(min_octant, max_octant);
@@ -36,7 +35,7 @@ namespace ippl {
 
         octants_to_file(tree_view);
         print_stats(tree_view, particles);
-    
+
         IpplTimings::stopTimer(timer);
 
         return tree_view;
@@ -44,20 +43,20 @@ namespace ippl {
 
     template <size_t Dim>
     void OrthoTree<Dim>::build_tree_from_octant(morton_code root_octant,
-                                                Kokkos::View<morton_code*>& tree_view) {
+        Kokkos::View<morton_code*>& tree_view) {
         auto guesstimate_subtree_size = [this](morton_code octant) {
             // we can probably do some really smart guessing here
 
-            const size_t octant_depth    = this->morton_helper.get_depth(octant);
+            const size_t octant_depth = this->morton_helper.get_depth(octant);
             const size_t remaining_depth = this->max_depth_m - octant_depth;
 
             // worst_case: we use all available octants
             const size_t max_possible_size = (size_t(1) << (Dim * remaining_depth));
 
             return max_possible_size;
-        };
+            };
 
-        const size_t old_size      = tree_view.size();
+        const size_t old_size = tree_view.size();
         const size_t size_increase = guesstimate_subtree_size(root_octant);
 
         Kokkos::resize(tree_view, old_size + size_increase);
@@ -117,12 +116,12 @@ namespace ippl {
                 return false;
             }
             return b <= morton_helper.get_deepest_first_descendant(
-                       a + morton_helper.get_step_size(a));
-        };
+                a + morton_helper.get_step_size(a));
+            };
 
         assert(std::is_sorted(tree_view.data(), tree_view.data() + tree_view.size(),
-                              is_sorted_and_contiguous)
-               && "partitioned_tree is not sorted");
+            is_sorted_and_contiguous)
+            && "partitioned_tree is not sorted");
     }
 
     template <size_t Dim>

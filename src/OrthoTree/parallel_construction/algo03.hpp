@@ -18,7 +18,6 @@ namespace ippl {
         Kokkos::vector<morton_code>& octants) {
         START_FUNC;
         IpplTimings::TimerRef timer = IpplTimings::getTimer("complete_tree");
-        IpplTimings::clearTimer(timer);
         IpplTimings::startTimer(timer);
         world_rank = Comm->rank();
         world_size = Comm->size();
@@ -31,7 +30,7 @@ namespace ippl {
         }
 
         logger << "map has " << m.size()
-               << "octants in total, previously we had: " << octants.size() << endl;
+            << "octants in total, previously we had: " << octants.size() << endl;
 
         octants.clear();
         for (const auto [octant, count] : m) {
@@ -54,7 +53,8 @@ namespace ippl {
 
             // this imitates push_front
             first_rank0 = first_child;
-        } else if (world_rank == world_size - 1) {
+        }
+        else if (world_rank == world_size - 1) {
             const morton_code dld_root = morton_helper.get_deepest_last_descendant(morton_code(0));
             const morton_code A_finest =
                 morton_helper.get_nearest_common_ancestor(dld_root, octants.back());
@@ -109,7 +109,7 @@ namespace ippl {
         }
 
         IpplTimings::stopTimer(timer);
-        
+
         END_FUNC;
         return R;
     }

@@ -21,7 +21,6 @@ namespace ippl {
         const Kokkos::vector<morton_code>& octants) {
         START_FUNC;
         IpplTimings::TimerRef timer = IpplTimings::getTimer("linearise_octants");
-        IpplTimings::clearTimer(timer);
         IpplTimings::startTimer(timer);
 
         logger << "size: " << octants.size() << endl;

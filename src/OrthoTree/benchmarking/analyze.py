@@ -449,6 +449,8 @@ def main():
                          operations=   ['block_partition', 'build_tree', 'complete_region', 
                                         'complete_tree', 'getNumParticlesInOc', 'linearise_octants', 
                                         'partition'])
+    plot_operation_grouped(df, sim_params,
+                            operations=['block_partition', 'innitFromOctants'])
     
     plot_operation_breakdown(df, sim_params, operations=['orthotree_build'])
     plot_operation_breakdown(df, sim_params, operations=['build_tree'])
@@ -457,17 +459,17 @@ def main():
     plot_operation_breakdown(df, sim_params, operations=['getNumParticlesInOc'])
 
 
-    # plot_scaling_analysis(df, sim_params, operations=['orthotree_build'])
-    # plot_scaling_analysis(df, sim_params, operations=['build_tree'])
-    # plot_scaling_analysis(df, sim_params, operations=['getNumParticlesInOc'])
-    # plot_scaling_analysis(df, sim_params, operations=['block_partition'])
-    # plot_scaling_analysis(df, sim_params, operations=['partition'])
+    plot_scaling_analysis(df, sim_params, operations=['orthotree_build'])
+    plot_scaling_analysis(df, sim_params, operations=['build_tree'])
+    plot_scaling_analysis(df, sim_params, operations=['getNumParticlesInOc'])
+    plot_scaling_analysis(df, sim_params, operations=['block_partition'])
+    plot_scaling_analysis(df, sim_params, operations=['partition'])
 
-    # plot_operation_speedup(df, sim_params, operations=['orthotree_build'])
-    # plot_operation_speedup(df, sim_params, operations=['build_tree'])
-    # plot_operation_speedup(df, sim_params, operations=['getNumParticlesInOc'])
-    # plot_operation_speedup(df, sim_params, operations=['block_partition'])
-    # plot_operation_speedup(df, sim_params, operations=['partition'])
+    plot_operation_speedup(df, sim_params, operations=['orthotree_build'])
+    plot_operation_speedup(df, sim_params, operations=['build_tree'])
+    plot_operation_speedup(df, sim_params, operations=['getNumParticlesInOc'])
+    plot_operation_speedup(df, sim_params, operations=['block_partition'])
+    plot_operation_speedup(df, sim_params, operations=['partition'])
     
 
     # Save the processed data
