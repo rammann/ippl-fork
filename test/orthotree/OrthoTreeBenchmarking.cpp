@@ -114,7 +114,7 @@ int main(int argc, char* argv[]) {
                     << std::endl;
             }
             IpplTimings::print();
-            IpplTimings::print("timings" + std::to_string(iteration) + ".dat");
+            IpplTimings::print("timings.dat");
         }
     }
     ippl::finalize();
