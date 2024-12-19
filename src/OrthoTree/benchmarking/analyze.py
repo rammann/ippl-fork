@@ -514,6 +514,11 @@ def plot_operation_speedup(df, sim_params, operations=None):
 def main():
     # Assuming you're in the parent directory containing all N*_n* directories
     base_path = '.'
+
+    # Check if plots directory exists and delete it
+    if os.path.exists('plots'):
+        import shutil
+        shutil.rmtree('plots')
     
     # Get simulation parameters once at the start
     sim_params = get_simulation_params(base_path)
@@ -529,23 +534,9 @@ def main():
 
     plot_operation_with_breakdown(df, sim_params, 'orthotree_build', operations=['build_tree', 'aid_list'])
 
-    plot_operation_with_breakdown(df, sim_params, 'build_tree', operations=['block_partition', 'complete_region', 
-                                        'complete_tree', 'getNumParticlesInOc', 'linearise_octants', 
-                                        'partition'])
-    
-    plot_operation_grouped(df, sim_params, 
-                         operations=   ['block_partition', 'build_tree', 'complete_region', 
-                                        'complete_tree', 'getNumParticlesInOc', 'linearise_octants', 
-                                        'partition'])
+    plot_operation_with_breakdown(df, sim_params, 'build_tree', operations=['block_partition', 'build_tree_from_oct'])
 
-    plot_operation_grouped(df, sim_params,
-                            operations=['orthotree_build', 'build_tree', 'aid_list'])
-    plot_operation_grouped(df, sim_params,
-                            operations=['block_partition', 'innitFromOctants'])
-    plot_operation_grouped(df, sim_params,
-                            operations=['build_tree', 'block_partition'])
-    plot_operation_grouped(df, sim_params,
-                            operations=['build_tree', 'aid_list'])
+    plot_operation_with_breakdown(df, sim_params, 'block_partition', operations=['innitfromoctants'])
 
     plot_operation_breakdown(df, sim_params, operations=['orthotree_build'])
     plot_operation_breakdown(df, sim_params, operations=['build_tree'])
@@ -560,7 +551,7 @@ def main():
     # plot_scaling_analysis(df, sim_params, operations=['partition'])
 
     # plot_operation_speedup(df, sim_params, operations=['orthotree_build'])
-    # plot_operation_speedup(df, sim_params, operations=['build_tree'])
+    plot_operation_speedup(df, sim_params, operations=['build_tree'])
     # plot_operation_speedup(df, sim_params, operations=['getNumParticlesInOc'])
     # plot_operation_speedup(df, sim_params, operations=['block_partition'])
     # plot_operation_speedup(df, sim_params, operations=['partition'])
