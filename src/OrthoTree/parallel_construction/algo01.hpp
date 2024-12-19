@@ -22,14 +22,19 @@ namespace ippl {
 
         auto octants = block_partition(min_octant, max_octant);
 
+        IpplTimings::stopTimer(buildTreeTimer);
+
         particles_to_file(particles);  // runs much faster if we print here instead of below lol
 
         // Each proc has now as much of the aid_list as he needs and can start building the
         // tree.
+
+        IpplTimings::startTimer(buildTreeTimer);
+
         Kokkos::View<morton_code*> tree_view = build_tree_from_octants(octants);
 
         IpplTimings::stopTimer(buildTreeTimer);
-        
+
         octants_to_file(tree_view);
         print_stats(tree_view, particles);
         return tree_view;
