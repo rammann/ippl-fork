@@ -375,7 +375,7 @@ def plot_operation_with_breakdown(df, sim_params, main_operation, operations=Non
     os.makedirs(plot_dir, exist_ok=True)
 
     # Create a more specific filename based on the operations
-    filename = f'operation_breakdown_{main_operation}'
+    filename = f'operation_bar_{main_operation}'
     if operations:
         filename += '_' + '_'.join(operations)
     if exclude_operations:
