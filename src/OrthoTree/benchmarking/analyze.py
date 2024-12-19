@@ -13,7 +13,8 @@ def get_simulation_params(base_path):
                 'num_particles_per_node': None,
                 'max_particles': None,
                 'max_depth': None,
-                'dist': None
+                'dist': None,
+                'iterations': None
             }
             
             with open(file, 'r') as f:
@@ -28,13 +29,15 @@ def get_simulation_params(base_path):
                         params['max_depth'] = int(line.split('=')[1].split("'")[0])
                     elif "Option '-dist=" in line:
                         params['dist'] = line.split('=')[1].split("'")[0]
+                    elif "Option '-iterations=" in line:
+                        params['iterations'] = int(line.split('=')[1].split("'")[0])
             
             # Return the first set of parameters found
             return params
     
     return None
 
-def parse_timing_file(filepath):
+def parse_timing_file(filepath, iterations=1):
     # Initialize data storage
     data = {}
 
@@ -69,27 +72,27 @@ def parse_timing_file(filepath):
         if reading_totals and len(parts) >= 3:
             data[operation] = {
                 'nodes': n_nodes,
-                'wall_tot': float(parts[-1])
+                'wall_tot': float(parts[-1]) / iterations
             }
         elif reading_averages and len(parts) >= 5:
             if operation not in data:
                 data[operation] = {'nodes': n_nodes}
             data[operation].update({
-                'wall_max': float(parts[-3]),
-                'wall_min': float(parts[-2]),
-                'wall_avg': float(parts[-1])
+                'wall_max': float(parts[-3]) / iterations,
+                'wall_min': float(parts[-2]) / iterations,
+                'wall_avg': float(parts[-1]) / iterations
             })
     
     return data
 
-def collect_all_timing_data(base_path):
+def collect_all_timing_data(base_path, iterations=1):
     all_data = []
     
     # Walk through all N1_* and N2_* directories
     for directory in sorted(Path(base_path).glob('N[12]_n*')):
-        timing_file = directory / 'timings0.dat'
+        timing_file = directory / 'timings.dat'
         if timing_file.exists():
-            data = parse_timing_file(timing_file)
+            data = parse_timing_file(timing_file, iterations)
             all_data.append(data)
     
     return all_data
@@ -516,7 +519,7 @@ def main():
     sim_params = get_simulation_params(base_path)
     
     # Collect all timing data
-    all_data = collect_all_timing_data(base_path)
+    all_data = collect_all_timing_data(base_path, sim_params.get('iterations', 1))
     
     # Create a pandas DataFrame
     df = create_timing_dataframe(all_data)
