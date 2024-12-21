@@ -8,7 +8,7 @@ namespace ippl {
     template <size_t Dim>
     Kokkos::View<morton_code*> OrthoTree<Dim>::build_tree(particle_t const& particles) {
         START_FUNC;
-
+        std::cout << "Building tree" << std::endl;
         this->aid_list_m.initialize(root_bounds_m, particles);
         auto [min_octant, max_octant] = this->aid_list_m.getMinReqOctants();
 

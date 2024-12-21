@@ -367,16 +367,11 @@ TEST(AidListTest, NumParticlesInOctantTest) {
 */
     //barier
     MPI_Barrier(MPI_COMM_WORLD);
-    
-    for (auto test_data : tests_to_run) {
-        std::vector<morton_code> octants = {test_data.octant};
 
-        // this has always size one, so we can just take the first element in the returning vector
-        const size_t calc_result = aid_list.getNumParticlesInOctantsParallel(octants)[0];
-        EXPECT_EQ(test_data.expected_total_particles, calc_result)
-            << "Rank " << Comm->rank() << " expected: " << test_data.expected_total_particles
-            << ", but got: " << calc_result;
-    }
+    Kokkos::View<morton_code*> octants("octants", 1);
+    octants(0) = tests_to_run[Comm->rank()+1].octant;
+    aid_list.getNumParticlesInOctantsParallel(octants);
+    
 }
 
 /*

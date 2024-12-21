@@ -118,7 +118,6 @@ void run_experiment() {
 
     auto particles = initializeParticles<Dim>();
     int a;
-    std::cin >> a;
 
     auto begin = std::chrono::high_resolution_clock::now();
     if (run_parallel)

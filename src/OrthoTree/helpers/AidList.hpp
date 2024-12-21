@@ -308,37 +308,9 @@ namespace ippl {
     template <size_t Dim>
     std::pair<morton_code, morton_code> AidList<Dim>::getMinReqOctants() {
         morton_code min_max_octants[2];
-        if (world_rank == 0) {
-            const size_t size       = this->size();
-            const size_t batch_size = size / world_size;
-            const size_t remainder  = size % world_size;
 
-            // rank_{i+1} = [ (i * batch_size) + remainder, (i+1) * batch_size ]
-            Kokkos::parallel_for("Send min/max octants", world_size - 1, [=, this](const size_t i) {
-                morton_code local_min_max_octants[2] = {0};  // inside the parallel for because of
-                                                             // read-only
-                const size_t target_rank = i + 1;
-
-                // distribute the remainders for a more balanced load
-                const size_t start = (target_rank * batch_size) + (target_rank < remainder ? 1 : 0);
-                const size_t end   = start + batch_size;
-
-                local_min_max_octants[0] = getOctant(start);
-                local_min_max_octants[1] = getOctant(end - 1);
-
-                Comm->send(*local_min_max_octants, 2, target_rank, 0);
-            });
-
-            const size_t start = 0;
-            const size_t end   = batch_size + (0 < remainder ? 1 : 0);  // one extra octant
-
-            min_max_octants[0] = getOctant(start);
-            min_max_octants[1] = getOctant(end - 1);
-        } else {
-            mpi::Status status;
-            Comm->recv(min_max_octants, 2, 0, 0, status);
-        }
-
+        min_max_octants[0] = octants(0);
+        min_max_octants[1] = octants(octants.size() - 1);
         return std::make_pair(min_max_octants[0], min_max_octants[1]);
     }
 
@@ -347,6 +319,7 @@ namespace ippl {
         size_t size_buff;
         morton_code min_max_buff[2];
 
+        logger << "initializing from octants " << min_octant << ", " << max_octant << endl;
         mpi::rma::Window<mpi::rma::Active> range_window;
 
 
@@ -356,7 +329,6 @@ namespace ippl {
         range_window.create(*Comm, ranges_begin, ranges_begin + ranges.size());
         range_window.fence(0);
 
-        logger << "communicate ranges" << endl;
         morton_code lower_bound_octant = 0; 
         morton_code upper_bound_octant = 0;
         for (size_t i = 0; i < world_size; ++i) {
@@ -370,7 +342,7 @@ namespace ippl {
           }
 
           // skip processor if no interesting octants are there
-          if (bucket_borders(i) <= min_octant
+          if (bucket_borders(i) < min_octant
               || lower_bound_octant >= max_octant) {
               continue;
           }
@@ -401,7 +373,6 @@ namespace ippl {
 
         size_t new_size = 0;
 
-        logger << "communicate indices" << endl;
 
         mpi::rma::Window<mpi::rma::Active> idx_window;
         idx_window.create(*Comm, recv_indices_begin, recv_indices_begin + recv_indices.size());
@@ -414,7 +385,7 @@ namespace ippl {
             send_indices(2*rank + 1) = getUpperBoundIndexExclusive(ranges(2*rank + 1));
 
             size_t send_size = send_indices(2*rank + 1) - send_indices(2*rank);
-
+            //logger << "send size: " << send_size << " to rank " << rank << endl;
             new_size += send_size;
             
             // no need to communicate with ourselves 
@@ -429,7 +400,7 @@ namespace ippl {
         }
         idx_window.fence(0);
 
-        std::cerr << "new size: " << new_size + 100000*world_rank << std::endl;
+        logger << "new size: " << new_size << endl;
         Kokkos::View<morton_code*> new_octants("new_octants", new_size);
         Kokkos::View<size_t*> new_particle_ids("new_particle_ids", new_size);
 
@@ -461,9 +432,16 @@ namespace ippl {
 
             static_assert(std::contiguous_iterator<decltype(start_it_octants)>,
                           "Iterator does not satisfy contiguous_iterator");
+
+            last_insert_idx += recv_size;
+            if (rank == world_rank) {
+                std::copy(octants_begin + recv_indices(2*rank), octants_begin + recv_indices(2*rank + 1), start_it_octants);
+                std::copy(particle_ids_begin + recv_indices(2*rank), particle_ids_begin + recv_indices(2*rank + 1), start_it_particle_ids);
+                continue;
+            }
+
             octants_window.get(start_it_octants, end_it_octants, rank, recv_indices(2*rank));
             particle_ids_window.get(start_it_particle_ids, end_it_particle_ids, rank, recv_indices(2*rank));
-            last_insert_idx += recv_size;
         }
         octants_window.fence(0);
         particle_ids_window.fence(0);
@@ -484,7 +462,7 @@ namespace ippl {
         if (world_rank != 0) {
             bucket_window.get(bucket_borders_begin
                 , bucket_borders_begin + bucket_borders.size()
-                , 0, bucket_borders.size());
+                , 0, 0);
         }
         bucket_window.fence(0);
     }
