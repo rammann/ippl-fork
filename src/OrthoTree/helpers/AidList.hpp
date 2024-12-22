@@ -38,9 +38,7 @@ namespace ippl {
             mpi::Status stat;
             //receive the bucket borders
 
-            logger << "Receiving bucket borders on rank " << world_rank << endl;
             Comm->broadcast(bucket_borders.data(), bucket_borders.size(), 0);
-            logger << "Received bucket borders on rank " << world_rank << endl;
 
             //print received bucket borders on rank 1
             if(world_rank == 1){
@@ -52,12 +50,9 @@ namespace ippl {
 
             //receive the bucket size
             size_t bucket_size;
-            logger << "Receiving bucket size on rank " << world_rank << endl;
             Comm->recv(&bucket_size, 1, 0, 1, stat);
-            logger << "Received bucket size on rank " << world_rank << " with size: " << bucket_size << endl;
 
             //allocate the space for the bucket in the aid list
-            logger << "Allocating space for the bucket on rank " << world_rank << endl;
             octants = Kokkos::View<morton_code*>("octants", bucket_size);
             particle_ids = Kokkos::View<size_t*>("particle_ids", bucket_size);
 
@@ -65,16 +60,19 @@ namespace ippl {
             logger << "Receiving octants and particle ids on rank " << world_rank << endl;
             if(bucket_size > 0){
                 Comm->recv(octants.data(), bucket_size, 0, 0, stat);
-                logger << "Received octants on rank " << world_rank << endl;
                 Comm->recv(particle_ids.data(), bucket_size, 0, 1, stat);
-                logger << "Received particle ids on rank " << world_rank << endl;
             }
 
         }
         sort_local_aidlist();
         for (unsigned int i = 0; i < octants.size(); i++) {
           if (world_rank > 0) {
-            assert(octants(i) > bucket_borders(world_rank - 1));
+            if (octants(i) <= bucket_borders(world_rank - 1)) {
+              logger << "octant " << octants(i) << " is in bucket " << world_rank
+                     << " that only starts at " << bucket_borders(world_rank -1)
+                     << " at index " << i << endl;
+            }
+            assert(octants(i) >= bucket_borders(world_rank - 1));
           }
           if (world_rank < world_size - 1) {
             assert(octants(i) < bucket_borders(world_rank));
@@ -123,21 +121,8 @@ namespace ippl {
         std::sort(bucket_borders.data(), bucket_borders.data() + bucket_borders.extent(0));
 
         // broadcast the bucket borders
-        logger << "Broadcasting bucket borders" << endl;
         Comm->broadcast(bucket_borders.data(), bucket_borders.size(), 0);
-        logger << "Broadcasted bucket borders" << endl;
 
-        // view of views for the buckets
-        Kokkos::View<Kokkos::View<morton_code*>*> buckets_octants("buckets_octants", world_size);
-        Kokkos::View<Kokkos::View<size_t*>*> buckets_particle_ids("buckets_particle_ids", world_size);
-
-        // allocate the guesstimated space for the buckets
-        logger << "Allocating space for the buckets" << endl;
-        for(size_t i = 0; i < world_size; ++i) {
-            buckets_octants(i) = Kokkos::View<morton_code*>("bucket_octants_" + std::to_string(i), n_particles/world_size);
-            buckets_particle_ids(i) = Kokkos::View<size_t*>("bucket_particle_ids_" + std::to_string(i), n_particles/world_size);
-        }
-        logger << "Allocated space for the buckets" << endl;
 
         //vector storing the actual sizes of the buckets initially 0
         Kokkos::View<size_t*> bucket_sizes("bucket_sizes", world_size);
@@ -157,59 +142,40 @@ namespace ippl {
         };
         // fill the buckets
 
-        logger << "Filling buckets" << endl;
-        /*Kokkos::parallel_for("Fill buckets", n_particles, KOKKOS_LAMBDA(const size_t i) {
-            const morton_code octant = octants(i);
-            const size_t target_rank = get_target_rank(octant);
-            const size_t idx = Kokkos::atomic_fetch_add(&bucket_sizes(target_rank), 1);
-            //if the bucket is full, we need to resize it
-            if(idx >= buckets_octants(target_rank).extent(0)) {
-                size_t new_size = RESIZE_FACTOR * idx;
-                Kokkos::resize(buckets_octants(target_rank), new_size);
-                Kokkos::resize(buckets_particle_ids(target_rank), new_size);
-            }
-            buckets_octants(target_rank)(idx-1) = octant;
-            buckets_particle_ids(target_rank)(idx-1) = particle_ids(i);
-        });*/
         for (unsigned i = 0; i < n_particles; i++) {
             const morton_code octant = octants(i);
             const size_t target_rank = get_target_rank(octant);
-            const size_t idx = bucket_sizes(target_rank);
-            //if the bucket is full, we need to resize it
-            if(idx >= buckets_octants(target_rank).size()) {
-                size_t new_size = RESIZE_FACTOR * idx;
-                Kokkos::resize(buckets_octants(target_rank), new_size);
-                Kokkos::resize(buckets_particle_ids(target_rank), new_size);
-            }
-            buckets_octants(target_rank)(idx) = octant;
-            buckets_particle_ids(target_rank)(idx) = particle_ids(i);
-            assert(buckets_octants(target_rank)(idx) == octant);
-            if (target_rank > 0) {
-              assert(buckets_octants(target_rank)(idx) >= bucket_borders(target_rank - 1));
-            }
-            if (target_rank < world_size - 1) {
-              assert(octant < bucket_borders(target_rank));
-            }
             bucket_sizes(target_rank)++;
         }
-        logger << "Filled buckets" << endl;
-        for (unsigned i = 0; i < world_size; i++) {
-            Kokkos::resize(buckets_octants(i), bucket_sizes(i));
-        }
-        for (unsigned rank = 0; rank < world_size; ++rank) {
-            for (unsigned int i = 0; i < buckets_octants(rank).size(); i++) {
-                if (world_rank > 0) {
-                  assert(buckets_octants(rank)(i) >= bucket_borders(rank - 1));
-                }
-                if (world_rank < world_size - 1) {
-                  assert(buckets_octants(rank)(i) < bucket_borders(rank));
-                }
+        size_t local_total = 0;
+        Kokkos::View<size_t*> sizes_prefix_sum("sizes_prefix_sum", world_size);
+        Kokkos::parallel_scan("prefix_sum", world_size, KOKKOS_LAMBDA(const size_t i, size_t& sum,
+                                                                         const bool final) {
+            sum += bucket_sizes(i);
+            if (final) {
+                sizes_prefix_sum(i) = sum;
             }
+        }, local_total);
+
+        Kokkos::View<size_t*> buckets_particle_ids("buckets_particle_ids", n_particles);
+        Kokkos::View<morton_code*> buckets_octants("buckets_octants", n_particles);
+        Kokkos::View<size_t*> bucket_indices("bucket_indices", world_size);
+        Kokkos::deep_copy(bucket_indices, 0);
+
+        for (unsigned i = 0; i < n_particles; i++) {
+            const morton_code octant = octants(i);
+            const size_t target_rank = get_target_rank(octant);
+            const size_t target_index = sizes_prefix_sum(target_rank) 
+                  - bucket_sizes(target_rank) + bucket_indices(target_rank);
+
+            assert(bucket_indices(target_rank) < bucket_sizes(target_rank));
+
+            buckets_octants(target_index) = octant;
+            
+            bucket_indices(target_rank)++;
         }
-        // send the buckets
 
-        logger << "Sending buckets" << endl;
-
+        size_t index = 0;
         // log the bucket sizes
         if(world_rank == 0) {
             for(size_t i = 0; i < world_size; ++i) {
@@ -218,19 +184,20 @@ namespace ippl {
         }
         for(size_t i = 1; i < world_size; ++i) {
             Comm->send(bucket_sizes(i),1, i, 1);
+            const size_t start_index = sizes_prefix_sum(i) - bucket_sizes(i);
             if(bucket_sizes(i) > 0){
-                Comm->send(*buckets_octants(i).data(), bucket_sizes(i), i, 0);
-                Comm->send(*buckets_particle_ids(i).data(), bucket_sizes(i), i, 1);
+                Comm->send(*(buckets_octants.data() + start_index), bucket_sizes(i), i, 0);
+                Comm->send(*(buckets_particle_ids.data() + start_index), bucket_sizes(i), i, 1);
             }
         }
-        logger << "Sent buckets" << endl;
 
-        Kokkos::resize(buckets_octants(0), bucket_sizes(0));
-        Kokkos::resize(buckets_particle_ids(0), bucket_sizes(0));
+        Kokkos::resize(octants, bucket_sizes(0));
+        Kokkos::resize(particle_ids, bucket_sizes(0));
 
+        auto index_pair = std::make_pair((size_t)0, bucket_sizes(0));
         // set the local bucket
-        octants = buckets_octants(0);
-        particle_ids = buckets_particle_ids(0);
+        Kokkos::deep_copy(octants, Kokkos::subview(buckets_octants, index_pair));
+        Kokkos::deep_copy(particle_ids, Kokkos::subview(buckets_particle_ids, index_pair));
         return;
     }
 
@@ -362,18 +329,6 @@ namespace ippl {
         size_t size_buff;
         morton_code min_max_buff[2];
 
-        for (unsigned int i = 0; i < octants.size(); i++) {
-          if (world_rank > 0) {
-            assert(octants(i) > bucket_borders(world_rank - 1));
-          }
-          if (world_rank < world_size - 1) {
-            assert(octants(i) < bucket_borders(world_rank));
-          }
-          if (i > 0) {
-            assert(octants(i) >= octants(i - 1));
-          }
-        }
-
         logger << "initializing from octants " << min_octant << ", " << max_octant << endl;
         mpi::rma::Window<mpi::rma::Active> range_window;
 
@@ -499,7 +454,7 @@ namespace ippl {
             if (rank == world_rank) {
                 std::copy(octants_begin + recv_indices(2*rank), octants_begin + recv_indices(2*rank + 1), start_it_octants);
                 std::copy(particle_ids_begin + recv_indices(2*rank), particle_ids_begin + recv_indices(2*rank + 1), start_it_particle_ids);
-                logger << "received octants " << *start_it_octants << " until " << *(end_it_octants - 1) << " from " << rank << endl;
+                logger << "received octants " << octants(recv_indices(2*rank)) << " until " << *(end_it_octants - 1) << " from " << rank << endl;
                 continue;
             }
             
@@ -534,9 +489,26 @@ namespace ippl {
                logger << "Bucket border " << i << ": " << bucket_borders(i) << endl;
            }
         }
+        for (unsigned int i = 0; i < octants.size(); i++) {
+          if (world_rank > 0) {
+            if (octants(i) < bucket_borders(world_rank - 1)) {
+              logger << "octant " << octants(i) << " is in bucket " << world_rank
+                     << " that only starts at " << bucket_borders(world_rank -1)
+                     << " at index " << i << endl;
+            }
+            assert(octants(i) >= bucket_borders(world_rank - 1));
+          }
+          if (world_rank < world_size - 1) {
+            assert(octants(i) < bucket_borders(world_rank));
+          }
+          if (i > 0) {
+            assert(octants(i) >= octants(i - 1));
+          }
+        }
         bucket_window.fence(0);
         assert(octants(0) >= min_octant);
         assert(octants(octants.size() - 1) < max_octant);
+
     }
 
     template <size_t Dim>
