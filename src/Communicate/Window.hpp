@@ -112,9 +112,10 @@ namespace ippl {
                                      Request* request) {
                 MPI_Datatype datatype = get_mpi_datatype<typename Iter::value_type>(*first);
                 auto count            = std::distance(first, last);
-                if (count > count_m) {
+                /*if (count > count_m) {
+                    std::cerr << "count vs max " << count << " " << count_m << std::endl;
                     throw IpplException("Window::put", "Count exceeds RMA window size.");
-                }
+                }*/
                 if (request == nullptr) {
                     MPI_Get(&(*first), count, datatype, source, (MPI_Aint)pos, count, datatype,
                             win_m);
