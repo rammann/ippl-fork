@@ -22,9 +22,7 @@ namespace ippl {
         Kokkos::parallel_reduce(
             "CountUniqueElements", input_size - 1,
             KOKKOS_LAMBDA(const size_t i, size_t& local_count) {
-                if (input_view(i) != input_view(i + 1)) {
-                    local_count++;
-                }
+                local_count += static_cast<size_t>(input_view(i) != input_view(i + 1));
             },
             unique_count);
 
@@ -54,8 +52,8 @@ namespace ippl {
         Kokkos::View<morton_code*> input_octants) {
         auto deduplicated_octants = remove_duplicates(input_octants);
         auto linearised_octants   = linearise_octants(deduplicated_octants);
-        auto partitioned_octants  = partition(linearised_octants);
 
+        auto partitioned_octants      = partition(linearised_octants);
         const size_t partitioned_size = partitioned_octants.extent(0);
 
         morton_code push_front_buff;
@@ -84,56 +82,46 @@ namespace ippl {
             Comm->recv(&push_back_buff, 1, world_rank + 1, 0, status);
         }
 
-        size_t R_base_size = 100;
-        size_t R_index     = 0;
+        const size_t R_base_size = 100;
         Kokkos::View<morton_code*> R_view("R_view", R_base_size);
 
+        size_t R_index = 0;
+
         auto insert_into_R = [&](morton_code octant_a, morton_code octant_b) {
-            auto complete_region_view       = complete_region(octant_a, octant_b);
-            const size_t additional_octants = complete_region_view.extent(0) + 1;
-            size_t remaining_space          = R_view.extent(0) - R_index;
+            const auto complete_region        = this->complete_region(octant_a, octant_b);
+            const size_t complete_region_size = complete_region.extent(0);
+            const size_t additional_octants   = complete_region_size + 1;
+            const size_t remaining_space      = R_view.extent(0) - R_index;
 
-            while (remaining_space <= additional_octants) {
-                Kokkos::resize(R_view, R_view.size() + R_base_size);
-                remaining_space = R_view.size() - R_index;
+            if (remaining_space <= additional_octants) {
+                const size_t new_size =
+                    R_view.extent(0) + (additional_octants - remaining_space) + R_base_size;
+                Kokkos::resize(R_view, new_size);
             }
 
-            R_view[R_index] = octant_a;
-            R_index++;
+            R_view(R_index) = octant_a;
+            R_index += 1;
 
-            for (morton_code elem :
-                 std::span(complete_region_view.data(), complete_region_view.size())) {
-                R_view[R_index] = elem;
-                R_index++;
-            }
+            Kokkos::parallel_for(
+                complete_region_size,
+                KOKKOS_LAMBDA(const size_t i) { R_view(R_index + i) = complete_region(i); });
+
+            R_index += complete_region_size;
         };
 
         if (world_rank == 0) {
-            // special case for rank 0, as we push_front'ed earlier
             insert_into_R(push_front_buff, partitioned_octants(0));
         }
 
         for (size_t i = 0; i < partitioned_size - 1; ++i) {
-            insert_into_R(partitioned_octants[i], partitioned_octants[i + 1]);
+            insert_into_R(partitioned_octants(i), partitioned_octants(i + 1));
         }
 
-        insert_into_R(partitioned_octants[partitioned_size - 1], push_back_buff);
+        insert_into_R(partitioned_octants(partitioned_size - 1), push_back_buff);
 
         if (world_rank == world_size - 1) {
-            const size_t R_size = R_view.size();
-            // we can either be smaller or have a perfect fit, larger (should) not be possible
-            if (R_index + 1 < R_size) {
-                // shrink
-                Kokkos::resize(R_view, R_index + 1);
-            } else if (R_index + 1 > R_size) {
-                // this is not possible
-                assert(false && "how the fuck did we get here?");
-            }
-
-            // insert to the back
-            R_view[R_index] = push_back_buff;
-            R_index++;
-
+            Kokkos::resize(R_view, R_index + 1);
+            R_view(R_index) = push_back_buff;
         } else {
             Kokkos::resize(R_view, R_index);
         }
