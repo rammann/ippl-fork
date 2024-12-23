@@ -50,32 +50,33 @@ namespace ippl {
     }
 
     template <size_t Dim>
-    Kokkos::View<morton_code*> OrthoTree<Dim>::complete_tree(Kokkos::View<morton_code*> octants) {
-        octants = remove_duplicates(octants);
-        octants = linearise_octants(octants);
+    Kokkos::View<morton_code*> OrthoTree<Dim>::complete_tree(
+        Kokkos::View<morton_code*> input_octants) {
+        auto deduplicated_octants = remove_duplicates(input_octants);
+        auto linearised_octants   = linearise_octants(deduplicated_octants);
+        auto partitioned_octants  = partition(linearised_octants);
 
-        octants = partition(octants);
-
-        Kokkos::resize(octants, octants.size() + 1);
+        const size_t partitioned_octants_size = partitioned_octants.extent(0) + 1;
+        Kokkos::resize(partitioned_octants, partitioned_octants_size);
 
         morton_code first_rank0;
         if (world_rank == 0) {
             const morton_code dfd_root = morton_helper.get_deepest_first_descendant(morton_code(0));
             const morton_code A_finest =
-                morton_helper.get_nearest_common_ancestor(dfd_root, octants[0]);
+                morton_helper.get_nearest_common_ancestor(dfd_root, partitioned_octants(0));
 
             first_rank0 = morton_helper.get_first_child(A_finest);
         } else if (world_rank == world_size - 1) {
             const morton_code dld_root = morton_helper.get_deepest_last_descendant(morton_code(0));
-            const morton_code A_finest =
-                morton_helper.get_nearest_common_ancestor(dld_root, octants[octants.size() - 2]);
+            const morton_code A_finest = morton_helper.get_nearest_common_ancestor(
+                dld_root, partitioned_octants(partitioned_octants_size - 2));
             const morton_code last_child = morton_helper.get_last_child(A_finest);
 
-            octants[octants.size() - 1] = last_child;
+            partitioned_octants(partitioned_octants_size - 1) = last_child;
         }
 
         if (world_rank > 0) {
-            Comm->send(*octants.data(), 1, world_rank - 1, 0);
+            Comm->send(*partitioned_octants.data(), 1, world_rank - 1, 0);
         }
 
         morton_code buff;
@@ -84,7 +85,7 @@ namespace ippl {
             Comm->recv(&buff, 1, world_rank + 1, 0, status);
 
             // do we need a status check here or not?
-            octants[octants.size() - 1] = buff;
+            partitioned_octants(partitioned_octants_size - 1) = buff;
         }
 
         size_t R_base_size = 100;
@@ -113,11 +114,11 @@ namespace ippl {
 
         if (world_rank == 0) {
             // special case for rank 0, as we push_front'ed earlier
-            insert_into_R(first_rank0, octants[0]);
+            insert_into_R(first_rank0, partitioned_octants(0));
         }
 
-        for (size_t i = 0; i < octants.size() - 1; ++i) {
-            insert_into_R(octants[i], octants[i + 1]);
+        for (size_t i = 0; i < partitioned_octants.size() - 1; ++i) {
+            insert_into_R(partitioned_octants[i], partitioned_octants[i + 1]);
         }
 
         if (world_rank == world_size - 1) {
@@ -132,7 +133,7 @@ namespace ippl {
             }
 
             // insert to the back
-            R_view[R_index] = octants[octants.size() - 1];
+            R_view[R_index] = partitioned_octants[partitioned_octants.size() - 1];
             R_index++;
 
         } else {
