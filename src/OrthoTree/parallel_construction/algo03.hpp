@@ -56,36 +56,32 @@ namespace ippl {
         auto linearised_octants   = linearise_octants(deduplicated_octants);
         auto partitioned_octants  = partition(linearised_octants);
 
-        const size_t partitioned_octants_size = partitioned_octants.extent(0) + 1;
-        Kokkos::resize(partitioned_octants, partitioned_octants_size);
+        const size_t partitioned_size = partitioned_octants.extent(0);
 
-        morton_code first_rank0;
+        morton_code push_front_buff;
+        morton_code push_back_buff;
         if (world_rank == 0) {
             const morton_code dfd_root = morton_helper.get_deepest_first_descendant(morton_code(0));
             const morton_code A_finest =
                 morton_helper.get_nearest_common_ancestor(dfd_root, partitioned_octants(0));
 
-            first_rank0 = morton_helper.get_first_child(A_finest);
+            push_front_buff = morton_helper.get_first_child(A_finest);
         } else if (world_rank == world_size - 1) {
             const morton_code dld_root = morton_helper.get_deepest_last_descendant(morton_code(0));
             const morton_code A_finest = morton_helper.get_nearest_common_ancestor(
-                dld_root, partitioned_octants(partitioned_octants_size - 2));
+                dld_root, partitioned_octants(partitioned_size - 1));
             const morton_code last_child = morton_helper.get_last_child(A_finest);
 
-            partitioned_octants(partitioned_octants_size - 1) = last_child;
+            push_back_buff = last_child;
         }
 
         if (world_rank > 0) {
             Comm->send(*partitioned_octants.data(), 1, world_rank - 1, 0);
         }
 
-        morton_code buff;
         if (world_rank < world_size - 1) {
             mpi::Status status;
-            Comm->recv(&buff, 1, world_rank + 1, 0, status);
-
-            // do we need a status check here or not?
-            partitioned_octants(partitioned_octants_size - 1) = buff;
+            Comm->recv(&push_back_buff, 1, world_rank + 1, 0, status);
         }
 
         size_t R_base_size = 100;
@@ -114,12 +110,14 @@ namespace ippl {
 
         if (world_rank == 0) {
             // special case for rank 0, as we push_front'ed earlier
-            insert_into_R(first_rank0, partitioned_octants(0));
+            insert_into_R(push_front_buff, partitioned_octants(0));
         }
 
-        for (size_t i = 0; i < partitioned_octants.size() - 1; ++i) {
+        for (size_t i = 0; i < partitioned_size - 1; ++i) {
             insert_into_R(partitioned_octants[i], partitioned_octants[i + 1]);
         }
+
+        insert_into_R(partitioned_octants[partitioned_size - 1], push_back_buff);
 
         if (world_rank == world_size - 1) {
             const size_t R_size = R_view.size();
@@ -133,7 +131,7 @@ namespace ippl {
             }
 
             // insert to the back
-            R_view[R_index] = partitioned_octants[partitioned_octants.size() - 1];
+            R_view[R_index] = push_back_buff;
             R_index++;
 
         } else {
