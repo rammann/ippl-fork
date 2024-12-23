@@ -83,11 +83,12 @@ namespace ippl {
         }
 
         const size_t R_base_size = 100;
-        Kokkos::View<morton_code*> R_view("R_view", R_base_size);
+        Kokkos::View<morton_code*> R_view("R_view");
 
         size_t R_index = 0;
-
-        auto insert_into_R = [&](morton_code octant_a, morton_code octant_b) {
+        auto insert_into_R = KOKKOS_LAMBDA(Kokkos::View<morton_code*> R_view, size_t R_index,
+                                           morton_code octant_a, morton_code octant_b)
+                                 ->size_t {
             const auto complete_region        = this->complete_region(octant_a, octant_b);
             const size_t complete_region_size = complete_region.extent(0);
             const size_t additional_octants   = complete_region_size + 1;
@@ -106,18 +107,20 @@ namespace ippl {
                 complete_region_size,
                 KOKKOS_LAMBDA(const size_t i) { R_view(R_index + i) = complete_region(i); });
 
-            R_index += complete_region_size;
+            return complete_region_size + 1;
         };
 
         if (world_rank == 0) {
-            insert_into_R(push_front_buff, partitioned_octants(0));
+            R_index += insert_into_R(R_view, R_index, push_front_buff, partitioned_octants(0));
         }
 
         for (size_t i = 0; i < partitioned_size - 1; ++i) {
-            insert_into_R(partitioned_octants(i), partitioned_octants(i + 1));
+            R_index +=
+                insert_into_R(R_view, R_index, partitioned_octants(i), partitioned_octants(i + 1));
         }
 
-        insert_into_R(partitioned_octants(partitioned_size - 1), push_back_buff);
+        R_index += insert_into_R(R_view, R_index, partitioned_octants(partitioned_size - 1),
+                                 push_back_buff);
 
         if (world_rank == world_size - 1) {
             Kokkos::resize(R_view, R_index + 1);
