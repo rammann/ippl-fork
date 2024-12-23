@@ -40,14 +40,6 @@ namespace ippl {
 
             Comm->broadcast(bucket_borders.data(), bucket_borders.size(), 0);
 
-            //print received bucket borders on rank 1
-            if(world_rank == 1){
-                for(size_t i = 0; i < world_size - 1; ++i){
-                    break;
-                    logger << "Bucket border " << i << ": " << bucket_borders(i) << endl;
-                }
-            }
-
             //receive the bucket size
             size_t bucket_size;
             Comm->recv(&bucket_size, 1, 0, 1, stat);
@@ -67,7 +59,7 @@ namespace ippl {
         sort_local_aidlist();
         for (unsigned int i = 0; i < octants.size(); i++) {
           if (world_rank > 0) {
-            if (octants(i) <= bucket_borders(world_rank - 1)) {
+            if (octants(i) < bucket_borders(world_rank - 1)) {
               logger << "octant " << octants(i) << " is in bucket " << world_rank
                      << " that only starts at " << bucket_borders(world_rank -1)
                      << " at index " << i << endl;
@@ -389,7 +381,7 @@ namespace ippl {
         idx_window.create(*Comm, recv_indices_begin, recv_indices_begin + recv_indices.size());
         idx_window.fence(0);
         for (unsigned rank = 0; rank < world_size; ++rank) {
-            if (ranges(2*rank) == 0 && ranges(2*rank + 1) == 0) {
+            if (ranges(2*rank) == ranges(2*rank + 1)) {
                 continue;
             }
             send_indices(2*rank) = getLowerBoundIndex(ranges(2*rank));
@@ -397,11 +389,6 @@ namespace ippl {
 
             size_t send_size = send_indices(2*rank + 1) - send_indices(2*rank);
 
-            logger << "sending indices " << send_indices(2*rank) << " until "
-                   << send_indices(2*rank + 1) << " to " << rank << endl;
-            logger << "sending octants " << octants(send_indices(2*rank)) << " until "
-                   << octants(send_indices(2*rank + 1) - 1) << " to " << rank << endl;
-            
             // no need to communicate with ourselves 
             if (rank == world_rank) {
                 recv_indices(2*rank) = send_indices(2*rank);
@@ -432,7 +419,7 @@ namespace ippl {
         mpi::rma::Window<mpi::rma::Active> particle_ids_window;
         octants_window.create(*Comm, octants_begin, octants_begin + octants.size());
         particle_ids_window.create(*Comm, particle_ids_begin, particle_ids_begin + particle_ids.size());
-        octants_window.fence(0);
+        octants_window.fence(MPI_MODE_NOPUT | MPI_MODE_NOSTORE | MPI_MODE_NOPRECEDE);
         particle_ids_window.fence(0);
         size_t last_insert_idx = 0;
         for (unsigned rank = 0; rank < world_size; ++rank) {
@@ -452,9 +439,13 @@ namespace ippl {
             logger << "reading into index " << last_insert_idx << endl;
             last_insert_idx += recv_size;
             if (rank == world_rank) {
-                std::copy(octants_begin + recv_indices(2*rank), octants_begin + recv_indices(2*rank + 1), start_it_octants);
-                std::copy(particle_ids_begin + recv_indices(2*rank), particle_ids_begin + recv_indices(2*rank + 1), start_it_particle_ids);
-                logger << "received octants " << octants(recv_indices(2*rank)) << " until " << *(end_it_octants - 1) << " from " << rank << endl;
+                auto source_index_pair = std::make_pair(recv_indices(2*rank), recv_indices(2*rank + 1));
+                auto source_subview = Kokkos::subview(octants, source_index_pair);
+
+                auto dest_index_pair = std::make_pair(last_insert_idx - recv_size, last_insert_idx);
+                auto dest_subview = Kokkos::subview(new_octants, dest_index_pair);
+
+                Kokkos::deep_copy(dest_subview, source_subview);
                 continue;
             }
             
@@ -463,7 +454,7 @@ namespace ippl {
             logger << "received octants " << *start_it_octants << " until " << *(end_it_octants - 1) << " from " << rank << endl;
         }
         particle_ids_window.fence(0);
-        octants_window.fence(0);
+        octants_window.fence(MPI_MODE_NOSUCCEED);
 
         logger << "min octant " << new_octants(0) << endl;
         octants = new_octants;
@@ -482,13 +473,12 @@ namespace ippl {
         if (world_rank != 0) {
             bucket_window.get(bucket_borders_begin
                 , bucket_borders_begin + bucket_borders.size()
-                , 0, 0);
-        }
-        if (world_rank == 0) {
+                , 0, 0); } bucket_window.fence(0);
+        /*if (world_rank == 0) {
            for (size_t i = 0; i < bucket_borders.size(); ++i) {
                logger << "Bucket border " << i << ": " << bucket_borders(i) << endl;
            }
-        }
+        }*/
         for (unsigned int i = 0; i < octants.size(); i++) {
           if (world_rank > 0) {
             if (octants(i) < bucket_borders(world_rank - 1)) {
@@ -505,7 +495,6 @@ namespace ippl {
             assert(octants(i) >= octants(i - 1));
           }
         }
-        bucket_window.fence(0);
         assert(octants(0) >= min_octant);
         assert(octants(octants.size() - 1) < max_octant);
 
