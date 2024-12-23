@@ -14,28 +14,48 @@ namespace ippl {
 */
 
 namespace ippl {
+
+    Kokkos::View<morton_code*> remove_duplicates(Kokkos::View<morton_code*> input_view) {
+        const size_t input_size = input_view.extent(0);
+
+        size_t unique_count = 0;
+        Kokkos::parallel_reduce(
+            "CountUniqueElements", input_size - 1,
+            KOKKOS_LAMBDA(const size_t i, size_t& local_count) {
+                if (input_view(i) != input_view(i + 1)) {
+                    local_count++;
+                }
+            },
+            unique_count);
+
+        const size_t output_size = unique_count + 1;
+        Kokkos::View<morton_code*> output_view("deduplicated_view", output_size);
+
+        Kokkos::View<size_t> index("index");
+        Kokkos::deep_copy(index, size_t(0));
+        Kokkos::parallel_for(
+            "PopulateUniqueElements", input_size - 1, KOKKOS_LAMBDA(const size_t i) {
+                if (input_view(i) != input_view(i + 1)) {
+                    const size_t current_index = Kokkos::atomic_fetch_add(&index(), size_t(1));
+                    output_view(current_index) = input_view(i);
+                }
+            });
+
+        Kokkos::parallel_for(
+            "AddLastElement", 1, KOKKOS_LAMBDA(const int) {
+                output_view(output_size - 1) = input_view(input_view.extent(0) - 1);
+            });
+
+        return output_view;
+    }
+
     template <size_t Dim>
     Kokkos::View<morton_code*> OrthoTree<Dim>::complete_tree(Kokkos::View<morton_code*> octants) {
-        // this removes duplicates, inefficient as of now
-        std::map<morton_code, int> m;
-        for (auto octant : std::span(octants.data(), octants.size())) {
-            ++m[octant];
-        }
-
-        Kokkos::resize(octants, m.size());  // shrink
-        size_t octants_idx = 0;
-        for (const auto [octant, count] : m) {
-            octants[octants_idx] = octant;
-            octants_idx++;
-        }
-
+        octants = remove_duplicates(octants);
         octants = linearise_octants(octants);
 
         Kokkos::View<size_t*> weights_view("weights_view", octants.size());
-        for (size_t i = 0; i < octants.size(); ++i) {
-            weights_view[i] = 1;
-        }
-
+        Kokkos::deep_copy(weights_view, size_t(1));
         octants = partition(octants, weights_view);
 
         Kokkos::resize(octants, octants.size() + 1);
@@ -75,8 +95,8 @@ namespace ippl {
 
         auto insert_into_R = [&](morton_code octant_a, morton_code octant_b) {
             auto complete_region_view       = complete_region(octant_a, octant_b);
-            const size_t additional_octants = complete_region_view.size() + 1;
-            size_t remaining_space          = R_view.size() - R_index;
+            const size_t additional_octants = complete_region_view.extent(0) + 1;
+            size_t remaining_space          = R_view.extent(0) - R_index;
 
             while (remaining_space <= additional_octants) {
                 Kokkos::resize(R_view, R_view.size() + R_base_size);
