@@ -54,9 +54,7 @@ namespace ippl {
         octants = remove_duplicates(octants);
         octants = linearise_octants(octants);
 
-        Kokkos::View<size_t*> weights_view("weights_view", octants.size());
-        Kokkos::deep_copy(weights_view, size_t(1));
-        octants = partition(octants, weights_view);
+        octants = partition(octants);
 
         Kokkos::resize(octants, octants.size() + 1);
 

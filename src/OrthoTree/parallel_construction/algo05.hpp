@@ -174,4 +174,12 @@ namespace ippl {
         Comm->barrier();
         return partitioned_octants;
     }
+
+    template <size_t Dim>
+    Kokkos::View<morton_code*> OrthoTree<Dim>::partition(Kokkos::View<morton_code*> octants) {
+        Kokkos::View<size_t*> weights_view("weights_view", octants.size());
+        Kokkos::deep_copy(weights_view, size_t(1));
+        return partition(octants, weights_view);
+    }
+
 }  // namespace ippl
