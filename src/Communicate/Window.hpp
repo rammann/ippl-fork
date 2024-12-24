@@ -28,7 +28,11 @@ namespace ippl {
                 count_m       = std::distance(first, last);
                 int dispUnit  = sizeof(typename Iter::value_type);
                 MPI_Aint size = (MPI_Aint)count_m * dispUnit;
-                MPI_Win_create(&(*first), size, dispUnit, MPI_INFO_NULL, comm, &win_m);
+                int err = MPI_Win_create(&(*first), size, dispUnit, MPI_INFO_NULL, comm, &win_m);
+
+                if (err != MPI_SUCCESS) {
+                  std::cerr << "error in create" << std::endl;
+                }
 
                 return allocated_m;
             }
@@ -68,7 +72,10 @@ namespace ippl {
             void Window<Target>::fence(int asrt) {
                 static_assert(isActiveTarget<Target>::value,
                               "No active target communication window");
-                MPI_Win_fence(asrt, win_m);
+                int err = MPI_Win_fence(asrt, win_m);
+                if (err != MPI_SUCCESS) {
+                    std::cerr << "error in fence" << std::endl;
+                }
             }
 
             template <TargetComm Target>
@@ -117,8 +124,11 @@ namespace ippl {
                     throw IpplException("Window::put", "Count exceeds RMA window size.");
                 }*/
                 if (request == nullptr) {
-                    MPI_Get(&(*first), count, datatype, source, (MPI_Aint)pos, count, datatype,
+                    int err = MPI_Get(&(*first), count, datatype, source, (MPI_Aint)pos, count, datatype,
                             win_m);
+                    if (err != MPI_SUCCESS) {
+                        std::cerr << "error in get" << std::endl;
+                    }
                 } else {
                     MPI_Rget(&(*first), count, datatype, source, (MPI_Aint)pos, count, datatype,
                              win_m, *request);
