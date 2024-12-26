@@ -402,17 +402,9 @@ namespace ippl {
         }
         idx_window.fence(0);
 
-        /*Kokkos::parallel_reduce("compute new size", world_size, KOKKOS_LAMBDA(const size_t i, size_t& local_new_size) {
+        Kokkos::parallel_reduce("compute new size", world_size, KOKKOS_LAMBDA(const size_t i, size_t& local_new_size) {
             local_new_size += recv_indices(2*i + 1) - recv_indices(2*i);
         }, new_size);
-        */
-        for (unsigned rank = 0; rank < world_size; ++rank) {
-            if (recv_indices(2*rank) == recv_indices(2*rank + 1)) {
-                continue;
-            }
-            size_t recv_size = recv_indices(2*rank + 1) - recv_indices(2*rank);
-            new_size += recv_size;
-        }
 
         Kokkos::View<morton_code*> new_octants("new_octants", new_size);
         Kokkos::View<size_t*> new_particle_ids("new_particle_ids", new_size);
@@ -513,35 +505,6 @@ namespace ippl {
                logger << "Bucket border " << i << ": " << bucket_borders(i) << endl;
            }
         }
-        for (unsigned int i = 0; i < octants.size(); i++) {
-          if (world_rank > 0) {
-            if (octants(i) < bucket_borders(world_rank - 1)) {
-              logger << "octant " << octants(i) << " is in bucket " << world_rank
-                     << " that only starts at " << bucket_borders(world_rank -1)
-                     << " at index " << i << endl;
-            }
-            assert(octants(i) >= bucket_borders(world_rank - 1));
-          }
-          if (world_rank < world_size - 1) {
-            if (octants(i) >= bucket_borders(world_rank)) {
-              logger << "octant " << octants(i) << " is in bucket " << world_rank
-                     << " that ends at " << bucket_borders(world_rank)
-                     << " at index " << i << endl;
-            }
-            assert(octants(i) < bucket_borders(world_rank));
-          }
-          if (i > 0) {
-            assert(octants(i) >= octants(i - 1));
-          }
-        }
-        assert(octants(0) >= min_octant);
-        if (octants(0) < min_octant) {
-          logger << "octant " << octants(0) << " is in bucket " << world_rank << endl;
-        }
-        if (octants(octants.size() - 1) >= max_octant) {
-          logger << "octant " << octants(octants.size() - 1) << " is in bucket " << world_rank << endl;
-        }
-        assert(octants(octants.size() - 1) < max_octant);
 
     }
 
