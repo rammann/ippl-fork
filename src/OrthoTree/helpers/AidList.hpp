@@ -323,7 +323,6 @@ namespace ippl {
         size_t size_buff;
         morton_code min_max_buff[2];
 
-        logger << "initializing from octants " << min_octant << ", " << max_octant << endl;
         mpi::rma::Window<mpi::rma::Active> range_window;
 
 
@@ -415,18 +414,17 @@ namespace ippl {
             new_size += recv_size;
         }
 
-        logger << "new size: " << new_size << endl;
         Kokkos::View<morton_code*> new_octants("new_octants", new_size);
         Kokkos::View<size_t*> new_particle_ids("new_particle_ids", new_size);
 
         auto new_octants_start_it = std::span(new_octants.data(), new_size).begin();
-        auto new_particles_start_it = std::span(new_octants.data(), new_size).begin();
+        auto new_particles_start_it = std::span(new_particle_ids.data(), new_size).begin();
         auto octants_begin = std::span(octants.data(), octants.size()).begin();
         auto particle_ids_begin = std::span(particle_ids.data(), particle_ids.size()).begin();
 
         mpi::rma::Window<mpi::rma::Active> octants_window;
         octants_window.create(*Comm, octants_begin, octants_begin + octants.size());
-        octants_window.fence(MPI_MODE_NOPUT | MPI_MODE_NOSTORE | MPI_MODE_NOPRECEDE);
+        octants_window.fence(0);
         size_t last_insert_idx = 0;
         for (unsigned rank = 0; rank < world_size; ++rank) {
             if (recv_indices(2*rank) == recv_indices(2*rank + 1)){
@@ -453,16 +451,13 @@ namespace ippl {
                 continue;
             }
             
-            logger << "reading from index " << recv_indices(2*rank) << endl;
-            logger << "writing to index " << last_insert_idx << endl;
-            logger << "writing " << recv_size << " octants from rank " << rank << endl;
             last_insert_idx += recv_size;
             octants_window.get(start_it_octants, end_it_octants, rank, recv_indices(2*rank));
 
         }
-        octants_window.fence(MPI_MODE_NOSUCCEED);
+        octants_window.fence(0);
 
-        /*mpi::rma::Window<mpi::rma::Active> particle_ids_window;
+        mpi::rma::Window<mpi::rma::Active> particle_ids_window;
         particle_ids_window.create(*Comm, particle_ids_begin, particle_ids_begin + particle_ids.size());
         particle_ids_window.fence(0);
         last_insert_idx = 0;
@@ -493,10 +488,7 @@ namespace ippl {
 
         }
         particle_ids_window.fence(0);
-        */
-
-        logger << "min octant original " << octants(0) << endl;
-        logger << "min octant " << new_octants(0) << endl;
+        
         octants = new_octants;
         particle_ids = new_particle_ids;
 
@@ -543,6 +535,9 @@ namespace ippl {
           }
         }
         assert(octants(0) >= min_octant);
+        if (octants(0) < min_octant) {
+          logger << "octant " << octants(0) << " is in bucket " << world_rank << endl;
+        }
         if (octants(octants.size() - 1) >= max_octant) {
           logger << "octant " << octants(octants.size() - 1) << " is in bucket " << world_rank << endl;
         }
@@ -554,16 +549,19 @@ namespace ippl {
     template <typename Container>
     Kokkos::View<size_t*> AidList<Dim>::getNumParticlesInOctantsParallel(
         const Container& octant_container) {
-        logger << "getNumParticlesInOctantsParallel" << endl;
+        morton_code min_step = morton_helper.get_step_size(max_depth);
         morton_code min_octant = morton_helper.get_deepest_first_descendant(octant_container[0]);
-        morton_code max_octant = morton_helper.get_deepest_last_descendant(octant_container[octant_container.size() - 1]) + 1;
+        morton_code max_octant = morton_helper.get_deepest_last_descendant(octant_container[octant_container.size() - 1]) + min_step;
         innitFromOctants(min_octant, max_octant);
 
         
         Kokkos::View<size_t*> result("result", octant_container.size());
+        size_t total_weight = 0;
         for (size_t i = 0; i < octant_container.size(); ++i) {
             result(i) = getNumParticlesInOctant(octant_container[i]);
+            total_weight += result(i);
         }
+
 
         return result;
 
