@@ -416,6 +416,9 @@ namespace ippl {
 
         mpi::rma::Window<mpi::rma::Active> octants_window;
         octants_window.create(*Comm, octants_begin, octants_begin + octants.size());
+        mpi::rma::Window<mpi::rma::Active> particle_ids_window;
+        particle_ids_window.create(*Comm, particle_ids_begin, particle_ids_begin + particle_ids.size());
+        particle_ids_window.fence(0);
         octants_window.fence(0);
         size_t last_insert_idx = 0;
         for (unsigned rank = 0; rank < world_size; ++rank) {
@@ -427,6 +430,8 @@ namespace ippl {
             assert(recv_size > 0);
             auto start_it_octants = new_octants_start_it + last_insert_idx;
             auto end_it_octants = start_it_octants + recv_size;
+            auto start_it_particle_ids = new_particles_start_it + last_insert_idx;
+            auto end_it_particle_ids = start_it_particle_ids + recv_size;
 
             static_assert(std::contiguous_iterator<decltype(start_it_octants)>,
                           "Iterator does not satisfy contiguous_iterator");
@@ -440,45 +445,24 @@ namespace ippl {
                 auto dest_subview = Kokkos::subview(new_octants, dest_index_pair);
 
                 Kokkos::deep_copy(dest_subview, source_subview);
+                
+                auto source_index_pair_particles = std::make_pair(recv_indices(2*rank), recv_indices(2*rank + 1));
+                auto source_subview_particles = Kokkos::subview(particle_ids, source_index_pair_particles);
+
+                auto dest_index_pair_particles = std::make_pair(last_insert_idx - recv_size, last_insert_idx);
+                auto dest_subview_particles = Kokkos::subview(new_particle_ids, dest_index_pair_particles);
+
+                Kokkos::deep_copy(dest_subview_particles, source_subview_particles);
                 continue;
             }
             
             last_insert_idx += recv_size;
             octants_window.get(start_it_octants, end_it_octants, rank, recv_indices(2*rank));
+            particle_ids_window.get(start_it_particle_ids, end_it_particle_ids, rank, recv_indices(2*rank));
 
         }
         octants_window.fence(0);
 
-        mpi::rma::Window<mpi::rma::Active> particle_ids_window;
-        particle_ids_window.create(*Comm, particle_ids_begin, particle_ids_begin + particle_ids.size());
-        particle_ids_window.fence(0);
-        last_insert_idx = 0;
-        for (unsigned rank = 0; rank < world_size; ++rank) {
-            if (recv_indices(2*rank) == recv_indices(2*rank + 1)){
-                continue;
-            }
-            
-            size_t recv_size = recv_indices(2*rank + 1) - recv_indices(2*rank);
-            assert(recv_size > 0);
-            auto start_it_particle_ids = new_particles_start_it + last_insert_idx;
-            auto end_it_particle_ids = start_it_particle_ids + recv_size;
-
-            if (rank == world_rank) {
-                last_insert_idx += recv_size;
-                auto source_index_pair = std::make_pair(recv_indices(2*rank), recv_indices(2*rank + 1));
-                auto source_subview = Kokkos::subview(particle_ids, source_index_pair);
-
-                auto dest_index_pair = std::make_pair(last_insert_idx - recv_size, last_insert_idx);
-                auto dest_subview = Kokkos::subview(new_particle_ids, dest_index_pair);
-
-                Kokkos::deep_copy(dest_subview, source_subview);
-                continue;
-            }
-            
-            last_insert_idx += recv_size;
-            particle_ids_window.get(start_it_particle_ids, end_it_particle_ids, rank, recv_indices(2*rank));
-
-        }
         particle_ids_window.fence(0);
         
         octants = new_octants;
