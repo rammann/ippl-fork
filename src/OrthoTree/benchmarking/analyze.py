@@ -1,6 +1,11 @@
 import os
 import pandas as pd
 import matplotlib.pyplot as plt
+plt.rcParams['axes.titlesize'] = 24
+plt.rcParams['legend.fontsize'] = 18
+plt.rcParams['axes.labelsize'] = 18
+plt.rcParams['xtick.labelsize'] = 16
+plt.rcParams['ytick.labelsize'] = 16
 import seaborn as sns
 from pathlib import Path
 
@@ -89,7 +94,7 @@ def collect_all_timing_data(base_path, iterations=1):
     all_data = []
     
     # Walk through all N1_* and N2_* directories
-    for directory in sorted(Path(base_path).glob('N[12]_n*')):
+    for directory in sorted(Path(base_path).glob('N[123456789]_n*')):
         timing_file = directory / 'timings.dat'
         if timing_file.exists():
             data = parse_timing_file(timing_file, iterations)
@@ -538,11 +543,11 @@ def main():
 
     plot_operation_with_breakdown(df, sim_params, 'block_partition', operations=['innitfromoctants'])
 
-    plot_operation_breakdown(df, sim_params, operations=['orthotree_build'])
+    # plot_operation_breakdown(df, sim_params, operations=['orthotree_build'])
     plot_operation_breakdown(df, sim_params, operations=['build_tree'])
-    plot_operation_breakdown(df, sim_params, operations=['block_partition'])
-    plot_operation_breakdown(df, sim_params, operations=['partition'])
-    plot_operation_breakdown(df, sim_params, operations=['getNumParticlesInOc'])
+    # plot_operation_breakdown(df, sim_params, operations=['block_partition'])
+    # plot_operation_breakdown(df, sim_params, operations=['partition'])
+    # plot_operation_breakdown(df, sim_params, operations=['getNumParticlesInOc'])
 
     # plot_scaling_analysis(df, sim_params, operations=['orthotree_build'])
     # plot_scaling_analysis(df, sim_params, operations=['build_tree'])
@@ -551,7 +556,7 @@ def main():
     # plot_scaling_analysis(df, sim_params, operations=['partition'])
 
     # plot_operation_speedup(df, sim_params, operations=['orthotree_build'])
-    plot_operation_speedup(df, sim_params, operations=['build_tree'])
+    # plot_operation_speedup(df, sim_params, operations=['build_tree'])
     # plot_operation_speedup(df, sim_params, operations=['getNumParticlesInOc'])
     # plot_operation_speedup(df, sim_params, operations=['block_partition'])
     # plot_operation_speedup(df, sim_params, operations=['partition'])
