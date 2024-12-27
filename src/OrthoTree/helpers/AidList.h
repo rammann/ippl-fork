@@ -2,6 +2,7 @@
 #define AID_LIST_GUARD
 
 #include <Kokkos_Vector.hpp>
+#include <span>
 
 #include "OrthoTree/helpers/BoundingBox.h"
 #include "OrthoTree/helpers/MortonHelper.h"
