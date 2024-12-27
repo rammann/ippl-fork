@@ -144,7 +144,7 @@ def compare_operation(operation, df1, df2, df1_label="Old", df2_label="New", tit
     plt.plot(data2['nodes'], data2['wall_tot'], 's-', label=df2_label, linewidth=2, markersize=10)
     
     # Customize the plot
-    plt.xlabel('Number of Nodes')
+    plt.xlabel('Number of CPUs')
     plt.ylabel('Wall Time (s)')
     plt.title(title if title else f'Comparison of {operation}')
     plt.grid(True, linestyle='--', alpha=0.7)

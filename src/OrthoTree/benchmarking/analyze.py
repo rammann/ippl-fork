@@ -217,7 +217,7 @@ def plot_scaling_analysis(df, sim_params, operations=None, figsize=(12, 8), dpi=
                 f'dist={sim_params["dist"]})')
     
     plt.title(title)
-    plt.xlabel('Number of Nodes', fontsize=12)
+    plt.xlabel('Number of CPUs', fontsize=12)
     plt.ylabel('Wall Time [s]', fontsize=12)
     
     # Customize legend
@@ -290,7 +290,7 @@ def plot_operation_breakdown(df, sim_params, operations=None):
                 f'dist={sim_params["dist"]})')
     
     plt.title(title)
-    plt.xlabel('Number of Nodes')
+    plt.xlabel('Number of CPUs')
     plt.ylabel('Wall Time (s)')
     plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.tight_layout()
@@ -357,7 +357,7 @@ def plot_operation_grouped(df, sim_params, operations=None, exclude_operations=N
                 f'dist={sim_params["dist"]})')
     
     plt.title(title)
-    plt.xlabel('Number of Nodes')
+    plt.xlabel('Number of CPUs')
     plt.ylabel('Wall Time (s)')
     plt.xticks(rotation=0)
     plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
@@ -437,7 +437,7 @@ def plot_operation_with_breakdown(df, sim_params, main_operation, operations=Non
                 f'dist={sim_params["dist"]})')
     
     plt.title(title)
-    plt.xlabel('Number of Nodes')
+    plt.xlabel('Number of CPUs')
     plt.ylabel('Wall Time (s)')
     plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.tight_layout()
@@ -497,7 +497,7 @@ def plot_operation_speedup(df, sim_params, operations=None):
                 f'dist={sim_params["dist"]})')
     
     plt.title(title)
-    plt.xlabel('Number of Nodes')
+    plt.xlabel('Number of CPUs')
     plt.ylabel(f'Speedup (relative to {base_nodes} nodes)')
     plt.grid(True, which='both', linestyle='--', alpha=0.3)
     plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
