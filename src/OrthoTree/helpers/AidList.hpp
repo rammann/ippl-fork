@@ -361,11 +361,9 @@ namespace ippl {
           }
 
           // find the range of octants that are in the current bucket
-          range_window.put<size_t>(&lower_range, i, 2 * world_rank);
-          range_window.put<size_t>(&upper_range, i, 2 * world_rank + 1);
-          
+          range_window.put(lower_range, i, 2 * world_rank);
+          range_window.put(upper_range, i, 2 * world_rank + 1);
         }
-
 
         range_window.fence(0);
 
@@ -397,8 +395,10 @@ namespace ippl {
                 continue;
             }
 
-            idx_window.put<size_t>(&send_indices(2*rank), rank, 2*world_rank);
-            idx_window.put<size_t>(&send_indices(2*rank + 1), rank, 2*world_rank + 1);
+            auto indices_a = send_indices(2 * rank);
+            auto indices_b = send_indices(2 * rank + 1);
+            idx_window.put(indices_a, rank, 2 * world_rank);
+            idx_window.put(indices_b, rank, 2 * world_rank + 1);
         }
         idx_window.fence(0);
 
@@ -475,7 +475,7 @@ namespace ippl {
         bucket_window.fence(0);
         // update buckets
         if (world_rank != 0) {
-            bucket_window.put<size_t>(&min_octant, 0, world_rank-1);
+            bucket_window.put(min_octant, 0, world_rank - 1);
         }
         bucket_window.fence(0);
         if (world_rank != 0) {
