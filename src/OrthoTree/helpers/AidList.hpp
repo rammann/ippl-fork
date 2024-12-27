@@ -161,10 +161,12 @@ namespace ippl {
             const size_t target_rank = get_target_rank(octant);
             const size_t target_index = sizes_prefix_sum(target_rank) 
                   - bucket_sizes(target_rank) + bucket_indices(target_rank);
+            const size_t particle_id = particle_ids(i);
 
             assert(bucket_indices(target_rank) < bucket_sizes(target_rank));
 
             buckets_octants(target_index) = octant;
+            buckets_particle_ids(target_index) = particle_id;
             
             bucket_indices(target_rank)++;
         }
