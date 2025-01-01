@@ -91,23 +91,14 @@ namespace ippl {
         std::uniform_int_distribution<size_t> unif(0, n_particles-1);
         
 
-        for(size_t i = 0; i < world_size - 1; ++i) {
+        for(size_t i = 1; i < world_size; ++i) {
 
-            bool is_unique = true;
-            size_t index = unif(eng);
-            size_t count = 0;
-            do{
-                index = unif(eng);
-                is_unique = true;
-                for(size_t j = 0; j < i; ++j) {
-                    if(bucket_borders(j) == octants(index)) {
-                        is_unique = false;
-                        logger << "Bucket border " << i << " is not unique, trying again" << endl;
-                        break;
-                    }
-                }
-            }while(!is_unique && ++count < BORDER_MAX_ITER);
-            bucket_borders(i) = octants(index); 
+            morton_code max_octant = morton_helper.get_deepest_last_descendant(0);
+            size_t avg_bucket_size = max_octant / world_size;
+            size_t k = max_octant % world_size;
+            size_t offset = i < k ? i : k;
+
+            bucket_borders(i-1)  = i * avg_bucket_size + offset;
             logger << "actual Bucket border " << i << ": " << bucket_borders(i) << endl;
         }
 
