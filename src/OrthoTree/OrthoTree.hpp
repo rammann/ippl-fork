@@ -41,7 +41,14 @@ namespace ippl {
     template <size_t Dim>
     Kokkos::View<morton_code*> OrthoTree<Dim>::build_tree_naive(particle_t const& particles) {
         // this needs to be initialized before constructing the tree
-        this->aid_list_m.initialize(root_bounds_m, particles);
+        Kokkos::View<morton_code*> empty_dummy;
+        if (world_rank != 0) {
+            return empty_dummy;
+        }
+
+        this->aid_list_m.initialize_from_rank(max_depth_m, root_bounds_m, particles);
+        aid_list_m.sort_local_aidlist();
+        logger << "builduing tree sequentially" << endl;
 
         // without the step below the parallel/sequential trees can never be identical, as the
         // parallel version never contains the root node
