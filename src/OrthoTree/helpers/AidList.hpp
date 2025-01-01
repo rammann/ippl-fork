@@ -386,7 +386,7 @@ namespace ippl {
                 continue;
             }
             send_indices(2*rank) = getLowerBoundIndex(ranges(2*rank));
-            send_indices(2*rank + 1) = getUpperBoundIndexExclusive(ranges(2*rank + 1));
+            send_indices(2*rank + 1) = getLowerBoundIndex(ranges(2*rank + 1));
 
             size_t send_size = send_indices(2*rank + 1) - send_indices(2*rank);
 
