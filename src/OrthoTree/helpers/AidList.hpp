@@ -237,10 +237,10 @@ namespace ippl {
                 "can only initialize if all particles are gathered on one rank!");
         }
 
-        const size_t n_particles               = particles.getTotalNum();
-        const size_t grid_size                 = (size_t(1) << max_depth);
-        using real_coordinate                  = real_coordinate_template<Dim>;
-        using grid_coordinate                  = grid_coordinate_template<Dim>;
+        const size_t n_particles = particles.getTotalNum();
+        const size_t grid_size = (size_t(1) << max_depth);
+        using real_coordinate = real_coordinate_template<Dim>;
+        using grid_coordinate = grid_coordinate_template<Dim>;
         const real_coordinate root_bounds_size = root_bounds.get_max() - root_bounds.get_min();
 
         // allocate the space for the octants and the particle ids
@@ -265,9 +265,9 @@ namespace ippl {
     size_t AidList<Dim>::getLowerBoundIndex(morton_code target_octant) const {
         const auto lower_bound_it =
             std::lower_bound(octants.data(), octants.data() + octants.extent(0), target_octant,
-                             [](const morton_code& octants_entry, const morton_code& target) {
-                                 return octants_entry < target;
-                             });
+                [](const morton_code& octants_entry, const morton_code& target) {
+                    return octants_entry < target;
+                });
 
         return static_cast<size_t>(lower_bound_it - this->octants.data());
     }
@@ -276,9 +276,9 @@ namespace ippl {
     size_t AidList<Dim>::getUpperBoundIndexExclusive(morton_code target_octant) const {
         const auto upper_bound_it =
             std::upper_bound(octants.data(), octants.data() + octants.extent(0), target_octant,
-                             [](const morton_code& target, const morton_code& octants_entry) {
-                                 return target < octants_entry;
-                             });
+                [](const morton_code& target, const morton_code& octants_entry) {
+                    return target < octants_entry;
+                });
 
         return static_cast<size_t>(upper_bound_it - this->octants.data());
     }
@@ -489,6 +489,9 @@ namespace ippl {
     template <typename Container>
     Kokkos::View<size_t*> AidList<Dim>::getNumParticlesInOctantsParallel(
         const Container& octant_container) {
+        IpplTimings::TimerRef timer = IpplTimings::getTimer("getNumParticlesInOctantsParallel");
+        IpplTimings::startTimer(timer);
+
         morton_code min_step = morton_helper.get_step_size(max_depth);
         morton_code min_octant = morton_helper.get_deepest_first_descendant(octant_container[0]);
         morton_code max_octant = morton_helper.get_deepest_last_descendant(octant_container[octant_container.size() - 1]) + min_step;
@@ -502,8 +505,8 @@ namespace ippl {
             total_weight += result(i);
         }
 
+        IpplTimings::stopTimer(timer);
 
         return result;
-
     }
 }  // namespace ippl
