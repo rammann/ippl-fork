@@ -306,6 +306,12 @@ namespace ippl {
     std::pair<morton_code, morton_code> AidList<Dim>::getMinReqOctants() {
         morton_code min_max_octants[2];
 
+        if (octants.size() == 0) {
+            min_max_octants[0] = 0;
+            min_max_octants[1] = 0;
+            return std::make_pair(min_max_octants[0], min_max_octants[1]);
+        }
+
         min_max_octants[0] = octants(0);
         min_max_octants[1] = octants(octants.size() - 1);
         return std::make_pair(min_max_octants[0], min_max_octants[1]);
