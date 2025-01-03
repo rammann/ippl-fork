@@ -46,35 +46,25 @@ namespace ippl {
             size_t bucket_size;
             Comm->recv(&bucket_size, 1, 0, 1, stat);
 
+            IpplTimings::TimerRef bucket_distribution = IpplTimings::getTimer("Bucket Distribution Timer");
+            IpplTimings::startTimer(bucket_distribution);
             //allocate the space for the bucket in the aid list
             octants = Kokkos::View<morton_code*>("octants", bucket_size);
             particle_ids = Kokkos::View<size_t*>("particle_ids", bucket_size);
-
+            
             //receive the octants and the particle ids
             logger << "Receiving octants and particle ids on rank " << world_rank << endl;
             if(bucket_size > 0){
                 Comm->recv(octants.data(), bucket_size, 0, 0, stat);
                 Comm->recv(particle_ids.data(), bucket_size, 0, 1, stat);
             }
+            IpplTimings::stopTimer(bucket_distribution);
 
         }
+        IpplTimings::TimerRef sort_aidlist = IpplTimings::getTimer("Sort AidList Timer");
+        IpplTimings::startTimer(sort_aidlist);
         sort_local_aidlist();
-        for (unsigned int i = 0; i < octants.size(); i++) {
-          if (world_rank > 0) {
-            if (octants(i) < bucket_borders(world_rank - 1)) {
-              logger << "octant " << octants(i) << " is in bucket " << world_rank
-                     << " that only starts at " << bucket_borders(world_rank -1)
-                     << " at index " << i << endl;
-            }
-            assert(octants(i) >= bucket_borders(world_rank - 1));
-          }
-          if (world_rank < world_size - 1) {
-            assert(octants(i) < bucket_borders(world_rank));
-          }
-          if (i > 0) {
-            assert(octants(i) >= octants(i - 1));
-          }
-        }
+        IpplTimings::stopTimer(sort_aidlist);
         logger << "AidList initialized with size: " << octants.size() << endl;
     }
 
@@ -113,6 +103,8 @@ namespace ippl {
         Kokkos::View<size_t*> bucket_sizes("bucket_sizes", world_size);
         Kokkos::deep_copy(bucket_sizes, 0);
 
+        IpplTimings::TimerRef bucket_distribution = IpplTimings::getTimer("Bucket Distribution Timer");
+        IpplTimings::startTimer(bucket_distribution);
 
         //get the target rank for a given octant
         auto get_target_rank = [&](morton_code octant) {
@@ -180,6 +172,9 @@ namespace ippl {
 
         Kokkos::resize(octants, bucket_sizes(0));
         Kokkos::resize(particle_ids, bucket_sizes(0));
+        IpplTimings::stopTimer(bucket_distribution);
+        Kokkos::resize(buckets_octants, bucket_sizes(0));
+        Kokkos::resize(buckets_particle_ids, bucket_sizes(0));
 
         auto index_pair = std::make_pair((size_t)0, bucket_sizes(0));
         // set the local bucket
