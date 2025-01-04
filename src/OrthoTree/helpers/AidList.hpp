@@ -242,16 +242,17 @@ namespace ippl {
         octants = Kokkos::View<morton_code *> ("octants", n_particles);
         particle_ids = Kokkos::View<size_t *> ("particle_ids", n_particles);
 
-        for (size_t i = 0; i < n_particles; ++i) {
-            // this gets rid of cancellation, thank you @NumCSE script
-            const grid_coordinate grid_coord = static_cast<grid_coordinate>(
-                (particles.R(i) - root_bounds.get_min()) * (grid_size - 1) / root_bounds_size);
+        Kokkos::parallel_for(
+            "InitializeAidList", Kokkos::RangePolicy<>(0, n_particles),
+            KOKKOS_LAMBDA(const size_t i) {
+                // Calculate grid coordinate
+                const grid_coordinate grid_coord = static_cast<grid_coordinate>(
+                    (particles.R(i) - root_bounds.get_min()) * (grid_size - 1) / root_bounds_size);
 
-            // encode the grid coordinate and store it
-            octants(i) = morton_helper.encode(grid_coord,max_depth);
-            // store the particle id
-            particle_ids(i) = i;
-        }
+                octants(i)      = morton_helper.encode(grid_coord, max_depth);
+                particle_ids(i) = i;
+            });
+
         //log size of aid list
         logger << "Size of aid list: " << octants.size() << endl;
     }
