@@ -13,7 +13,11 @@ namespace ippl {
 
         IpplTimings::TimerRef completeRegionTimer = IpplTimings::getTimer("complete_region");
         IpplTimings::startTimer(completeRegionTimer);
-        
+       
+        if (code_a >= code_b) {
+            Kokkos::View<morton_code*> min_lin_tree_empty("empty min_lin_tree", 0);
+            return min_lin_tree_empty;
+        }
         assert(code_a < code_b);
 
         // special case (not specified in the paper): 
