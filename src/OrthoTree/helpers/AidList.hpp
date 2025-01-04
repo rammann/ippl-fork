@@ -1,8 +1,5 @@
 #include "AidList.h"
-#include <cstdint>
 #include <mpi.h>
-#include <random>
-#include <chrono>
 
 #include "Communicate/Window.h"
 
@@ -353,11 +350,11 @@ namespace ippl {
          * Populate the ranges view with the min/max octant for each rank.
          */
         {
-            auto ranges_begin = std::span(ranges.data(), ranges.size()).begin();
+            auto ranges_span = std::span(ranges.data(), ranges.size());
             Kokkos::deep_copy(ranges, 0);
 
             mpi::rma::Window<mpi::rma::Active> range_window;
-            range_window.create(*Comm, ranges_begin, ranges_begin + ranges.size());
+            range_window.create(*Comm, ranges_span.begin(), ranges_span.end());
             range_window.fence(0);
 
             const morton_code dld_root     = morton_helper.get_deepest_last_descendant(0);
@@ -404,11 +401,11 @@ namespace ippl {
          * receive
          */
         {
-            auto recv_indices_begin = std::span(recv_indices.data(), recv_indices.size()).begin();
+            auto recv_indices_span = std::span(recv_indices.data(), recv_indices.size());
             Kokkos::deep_copy(recv_indices, 0);
 
             mpi::rma::Window<mpi::rma::Active> idx_window;
-            idx_window.create(*Comm, recv_indices_begin, recv_indices_begin + recv_indices.size());
+            idx_window.create(*Comm, recv_indices_span.begin(), recv_indices_span.end());
             idx_window.fence(0);
 
             for (unsigned rank = 0; rank < world_size; ++rank) {
@@ -455,19 +452,20 @@ namespace ippl {
             Kokkos::View<morton_code*> new_octants("new_octants", new_size_after_exchange);
             Kokkos::View<size_t*> new_particle_ids("new_particle_ids", new_size_after_exchange);
 
-            auto new_octants_start_it =
-                std::span(new_octants.data(), new_size_after_exchange).begin();
-            auto new_particles_start_it =
-                std::span(new_particle_ids.data(), new_size_after_exchange).begin();
-            auto octants_begin          = std::span(octants.data(), octants.size()).begin();
-            auto particle_ids_begin = std::span(particle_ids.data(), particle_ids.size()).begin();
+            auto new_octants_span = std::span(new_octants.data(), new_octants.size());
+            auto new_particle_ids_span = std::span(new_particle_ids.data(), new_particle_ids.size());
+
+            auto new_octants_start_it = new_octants_span.begin();
+            auto new_particles_start_it = new_particle_ids_span.begin();
+
+            auto octants_span = std::span(octants.data(), octants.size());
+            auto particle_ids_span = std::span(particle_ids.data(), particle_ids.size());
 
             mpi::rma::Window<mpi::rma::Active> octants_window;
             mpi::rma::Window<mpi::rma::Active> particle_ids_window;
 
-            octants_window.create(*Comm, octants_begin, octants_begin + octants.size());
-            particle_ids_window.create(*Comm, particle_ids_begin,
-                                       particle_ids_begin + particle_ids.size());
+            octants_window.create(*Comm, octants_span.begin(), octants_span.end());
+            particle_ids_window.create(*Comm, particle_ids_span.begin(), particle_ids_span.end());
 
             particle_ids_window.fence(0);
             octants_window.fence(0);
@@ -480,6 +478,9 @@ namespace ippl {
 
                 size_t recv_size = recv_indices(2 * rank + 1) - recv_indices(2 * rank);
                 assert(recv_size > 0);
+
+                // get the iterators inbetween which the new octants from this 
+                // rank will be inserted
                 auto start_it_octants      = new_octants_start_it + last_insert_idx;
                 auto end_it_octants        = start_it_octants + recv_size;
                 auto start_it_particle_ids = new_particles_start_it + last_insert_idx;
@@ -488,6 +489,10 @@ namespace ippl {
                 static_assert(std::contiguous_iterator<decltype(start_it_octants)>,
                               "Iterator does not satisfy contiguous_iterator");
 
+                // we don't need to communicate with ourselves
+                // This piece of spaghetti code is the Kokkos compatible way 
+                // I found to copy subarrays from one view to another
+                // improvements are welcome :)
                 if (rank == world_rank) {
                     last_insert_idx += recv_size;
                     auto source_index_pair =
@@ -534,21 +539,22 @@ namespace ippl {
             auto bucket_borders_begin =
                 std::span(bucket_borders.data(), bucket_borders.size()).begin();
 
+            auto bucket_borders_span = std::span(bucket_borders.data(), bucket_borders.size());
+
             mpi::rma::Window<mpi::rma::Active> bucket_window;
-            bucket_window.create(*Comm, bucket_borders_begin,
-                                 bucket_borders_begin + bucket_borders.size());
+            bucket_window.create(*Comm, bucket_borders_span.begin(), bucket_borders_span.end());
             bucket_window.fence(0);
 
-            // update buckets
+            // update buckets on rank 0
             if (world_rank != 0) {
                 bucket_window.put(min_octant, 0, world_rank - 1);
             }
+
             bucket_window.fence(0);
-            if (world_rank != 0) {
-                bucket_window.get(bucket_borders_begin,
-                                  bucket_borders_begin + bucket_borders.size(), 0, 0);
-            }
-            bucket_window.fence(0);
+
+            // broadcast the updated bucket borders
+            Comm->broadcast(bucket_borders.data(), bucket_borders.size(), 0);
+
             if (world_rank == 0) {
                 for (size_t i = 0; i < bucket_borders.size(); ++i) {
                     logger << "Bucket border " << i << ": " << bucket_borders(i) << endl;
