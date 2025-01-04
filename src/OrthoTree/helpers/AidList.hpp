@@ -320,171 +320,208 @@ namespace ippl {
 
         mpi::rma::Window<mpi::rma::Active> range_window;
 
-
-        Kokkos::View<size_t*> ranges("ranges", 2*world_size);
-        auto ranges_begin = std::span(ranges.data(), ranges.size()).begin();
-        Kokkos::deep_copy(ranges, 0);
-        range_window.create(*Comm, ranges_begin, ranges_begin + ranges.size());
-        range_window.fence(0);
-
-        morton_code lower_bound_octant = 0; 
-        morton_code upper_bound_octant = 0;
-        for (size_t i = 0; i < world_size; ++i) {
-          upper_bound_octant = morton_helper.get_deepest_last_descendant(0);
-          if (i < world_size - 1) {
-              upper_bound_octant = bucket_borders(i);
-          }
-
-          if (i > 0) {
-            lower_bound_octant = bucket_borders(i - 1);
-          }
-
-          // skip processor if no interesting octants are there
-          if (upper_bound_octant < min_octant
-              || lower_bound_octant >= max_octant) {
-              continue;
-          }
-
-          morton_code lower_range = std::max(min_octant, lower_bound_octant);
-          morton_code upper_range = std::min(max_octant, upper_bound_octant);
-
-          // no need to send to ourselves
-          if (i == world_rank) {
-              ranges(2*i) = lower_range;
-              ranges(2*i + 1) = upper_range;
-              continue;
-          }
-
-          // find the range of octants that are in the current bucket
-          range_window.put(lower_range, i, 2 * world_rank);
-          range_window.put(upper_range, i, 2 * world_rank + 1);
-        }
-
-        range_window.fence(0);
-
-        Kokkos::View<size_t*> send_indices("send_indices", 2*world_size);
-        Kokkos::View<size_t*> recv_indices("recv_indices",  2*world_size);
-        Kokkos::deep_copy(recv_indices, 0);
-
-        auto recv_indices_begin = std::span(recv_indices.data(), recv_indices.size()).begin();
+        Kokkos::View<size_t*> ranges("ranges", 2 * world_size);
+        Kokkos::View<size_t*> send_indices("send_indices", 2 * world_size);
+        Kokkos::View<size_t*> recv_indices("recv_indices", 2 * world_size);
 
         size_t new_size = 0;
 
+        /**
+         * Populate the ranges view with the min/max octant for each rank.
+         */
+        {
+            auto ranges_begin = std::span(ranges.data(), ranges.size()).begin();
+            Kokkos::deep_copy(ranges, 0);
+            range_window.create(*Comm, ranges_begin, ranges_begin + ranges.size());
+            range_window.fence(0);
 
-        mpi::rma::Window<mpi::rma::Active> idx_window;
-        idx_window.create(*Comm, recv_indices_begin, recv_indices_begin + recv_indices.size());
-        idx_window.fence(0);
-        for (unsigned rank = 0; rank < world_size; ++rank) {
-            if (ranges(2*rank) == ranges(2*rank + 1)) {
-                continue;
+            const morton_code dld_root     = morton_helper.get_deepest_last_descendant(0);
+            morton_code lower_bound_octant = 0;
+            morton_code upper_bound_octant = 0;
+            for (size_t i = 0; i < world_size; ++i) {
+                upper_bound_octant = dld_root;
+                if (i < world_size - 1) {
+                    upper_bound_octant = bucket_borders(i);
+                }
+
+                if (i > 0) {
+                    lower_bound_octant = bucket_borders(i - 1);
+                }
+
+                // skip processor if no interesting octants are there
+                if (upper_bound_octant < min_octant || lower_bound_octant >= max_octant) {
+                    continue;
+                }
+
+                morton_code lower_range = std::max(min_octant, lower_bound_octant);
+                morton_code upper_range = std::min(max_octant, upper_bound_octant);
+
+                // no need to send to ourselves
+                if (i == world_rank) {
+                    ranges(2 * i)     = lower_range;
+                    ranges(2 * i + 1) = upper_range;
+                    continue;
+                }
+
+                // find the range of octants that are in the current bucket
+                range_window.put(lower_range, i, 2 * world_rank);
+                range_window.put(upper_range, i, 2 * world_rank + 1);
             }
-            send_indices(2*rank) = getLowerBoundIndex(ranges(2*rank));
-            send_indices(2*rank + 1) = getLowerBoundIndex(ranges(2*rank + 1));
 
-            size_t send_size = send_indices(2*rank + 1) - send_indices(2*rank);
-
-            // no need to communicate with ourselves 
-            if (rank == world_rank) {
-                recv_indices(2*rank) = send_indices(2*rank);
-                recv_indices(2*rank + 1) = send_indices(2*rank + 1);
-                continue;
-            }
-
-            auto indices_a = send_indices(2 * rank);
-            auto indices_b = send_indices(2 * rank + 1);
-            idx_window.put(indices_a, rank, 2 * world_rank);
-            idx_window.put(indices_b, rank, 2 * world_rank + 1);
+            range_window.fence(0);
         }
-        idx_window.fence(0);
 
-        Kokkos::parallel_reduce("compute new size", world_size, KOKKOS_LAMBDA(const size_t i, size_t& local_new_size) {
-            local_new_size += recv_indices(2*i + 1) - recv_indices(2*i);
-        }, new_size);
+        /**
+         * Calculate the amount of octants we send and receive to/from each rank.
+         * - populate: send_indices
+         * - populate: recv_indices
+         * - calcualte: new_size = total number of octants/P_ids this rank will receive
+         */
+        {
+            auto recv_indices_begin = std::span(recv_indices.data(), recv_indices.size()).begin();
+            Kokkos::deep_copy(recv_indices, 0);
 
-        Kokkos::View<morton_code*> new_octants("new_octants", new_size);
-        Kokkos::View<size_t*> new_particle_ids("new_particle_ids", new_size);
+            mpi::rma::Window<mpi::rma::Active> idx_window;
+            idx_window.create(*Comm, recv_indices_begin, recv_indices_begin + recv_indices.size());
+            idx_window.fence(0);
 
-        auto new_octants_start_it = std::span(new_octants.data(), new_size).begin();
-        auto new_particles_start_it = std::span(new_particle_ids.data(), new_size).begin();
-        auto octants_begin = std::span(octants.data(), octants.size()).begin();
-        auto particle_ids_begin = std::span(particle_ids.data(), particle_ids.size()).begin();
+            for (unsigned rank = 0; rank < world_size; ++rank) {
+                if (ranges(2 * rank) == ranges(2 * rank + 1)) {
+                    continue;
+                }
+                send_indices(2 * rank)     = getLowerBoundIndex(ranges(2 * rank));
+                send_indices(2 * rank + 1) = getLowerBoundIndex(ranges(2 * rank + 1));
 
-        mpi::rma::Window<mpi::rma::Active> octants_window;
-        octants_window.create(*Comm, octants_begin, octants_begin + octants.size());
-        mpi::rma::Window<mpi::rma::Active> particle_ids_window;
-        particle_ids_window.create(*Comm, particle_ids_begin, particle_ids_begin + particle_ids.size());
-        particle_ids_window.fence(0);
-        octants_window.fence(0);
-        size_t last_insert_idx = 0;
-        for (unsigned rank = 0; rank < world_size; ++rank) {
-            if (recv_indices(2*rank) == recv_indices(2*rank + 1)){
-                continue;
+                size_t send_size = send_indices(2 * rank + 1) - send_indices(2 * rank);
+
+                // no need to communicate with ourselves
+                if (rank == world_rank) {
+                    recv_indices(2 * rank)     = send_indices(2 * rank);
+                    recv_indices(2 * rank + 1) = send_indices(2 * rank + 1);
+                    continue;
+                }
+
+                auto indices_a = send_indices(2 * rank);
+                auto indices_b = send_indices(2 * rank + 1);
+                idx_window.put(indices_a, rank, 2 * world_rank);
+                idx_window.put(indices_b, rank, 2 * world_rank + 1);
             }
-            
-            size_t recv_size = recv_indices(2*rank + 1) - recv_indices(2*rank);
-            assert(recv_size > 0);
-            auto start_it_octants = new_octants_start_it + last_insert_idx;
-            auto end_it_octants = start_it_octants + recv_size;
-            auto start_it_particle_ids = new_particles_start_it + last_insert_idx;
-            auto end_it_particle_ids = start_it_particle_ids + recv_size;
 
-            static_assert(std::contiguous_iterator<decltype(start_it_octants)>,
-                          "Iterator does not satisfy contiguous_iterator");
+            idx_window.fence(0);
 
-            if (rank == world_rank) {
+            Kokkos::parallel_reduce(
+                "compute new size", world_size,
+                KOKKOS_LAMBDA(const size_t i, size_t& local_new_size) {
+                    local_new_size += recv_indices(2 * i + 1) - recv_indices(2 * i);
+                },
+                new_size);
+        }
+
+        /**
+         * Exchange the octants between ranks.
+         */
+        {
+            Kokkos::View<morton_code*> new_octants("new_octants", new_size);
+            Kokkos::View<size_t*> new_particle_ids("new_particle_ids", new_size);
+
+            auto new_octants_start_it   = std::span(new_octants.data(), new_size).begin();
+            auto new_particles_start_it = std::span(new_particle_ids.data(), new_size).begin();
+            auto octants_begin          = std::span(octants.data(), octants.size()).begin();
+            auto particle_ids_begin = std::span(particle_ids.data(), particle_ids.size()).begin();
+
+            mpi::rma::Window<mpi::rma::Active> octants_window;
+            mpi::rma::Window<mpi::rma::Active> particle_ids_window;
+
+            octants_window.create(*Comm, octants_begin, octants_begin + octants.size());
+            particle_ids_window.create(*Comm, particle_ids_begin,
+                                       particle_ids_begin + particle_ids.size());
+
+            particle_ids_window.fence(0);
+            octants_window.fence(0);
+
+            size_t last_insert_idx = 0;
+            for (unsigned rank = 0; rank < world_size; ++rank) {
+                if (recv_indices(2 * rank) == recv_indices(2 * rank + 1)) {
+                    continue;
+                }
+
+                size_t recv_size = recv_indices(2 * rank + 1) - recv_indices(2 * rank);
+                assert(recv_size > 0);
+                auto start_it_octants      = new_octants_start_it + last_insert_idx;
+                auto end_it_octants        = start_it_octants + recv_size;
+                auto start_it_particle_ids = new_particles_start_it + last_insert_idx;
+                auto end_it_particle_ids   = start_it_particle_ids + recv_size;
+
+                static_assert(std::contiguous_iterator<decltype(start_it_octants)>,
+                              "Iterator does not satisfy contiguous_iterator");
+
+                if (rank == world_rank) {
+                    last_insert_idx += recv_size;
+                    auto source_index_pair =
+                        std::make_pair(recv_indices(2 * rank), recv_indices(2 * rank + 1));
+                    auto source_subview = Kokkos::subview(octants, source_index_pair);
+
+                    auto dest_index_pair =
+                        std::make_pair(last_insert_idx - recv_size, last_insert_idx);
+                    auto dest_subview = Kokkos::subview(new_octants, dest_index_pair);
+
+                    Kokkos::deep_copy(dest_subview, source_subview);
+
+                    auto source_index_pair_particles =
+                        std::make_pair(recv_indices(2 * rank), recv_indices(2 * rank + 1));
+                    auto source_subview_particles =
+                        Kokkos::subview(particle_ids, source_index_pair_particles);
+
+                    auto dest_index_pair_particles =
+                        std::make_pair(last_insert_idx - recv_size, last_insert_idx);
+                    auto dest_subview_particles =
+                        Kokkos::subview(new_particle_ids, dest_index_pair_particles);
+
+                    Kokkos::deep_copy(dest_subview_particles, source_subview_particles);
+                    continue;
+                }
+
                 last_insert_idx += recv_size;
-                auto source_index_pair = std::make_pair(recv_indices(2*rank), recv_indices(2*rank + 1));
-                auto source_subview = Kokkos::subview(octants, source_index_pair);
-
-                auto dest_index_pair = std::make_pair(last_insert_idx - recv_size, last_insert_idx);
-                auto dest_subview = Kokkos::subview(new_octants, dest_index_pair);
-
-                Kokkos::deep_copy(dest_subview, source_subview);
-                
-                auto source_index_pair_particles = std::make_pair(recv_indices(2*rank), recv_indices(2*rank + 1));
-                auto source_subview_particles = Kokkos::subview(particle_ids, source_index_pair_particles);
-
-                auto dest_index_pair_particles = std::make_pair(last_insert_idx - recv_size, last_insert_idx);
-                auto dest_subview_particles = Kokkos::subview(new_particle_ids, dest_index_pair_particles);
-
-                Kokkos::deep_copy(dest_subview_particles, source_subview_particles);
-                continue;
+                octants_window.get(start_it_octants, end_it_octants, rank, recv_indices(2 * rank));
+                particle_ids_window.get(start_it_particle_ids, end_it_particle_ids, rank,
+                                        recv_indices(2 * rank));
             }
-            
-            last_insert_idx += recv_size;
-            octants_window.get(start_it_octants, end_it_octants, rank, recv_indices(2*rank));
-            particle_ids_window.get(start_it_particle_ids, end_it_particle_ids, rank, recv_indices(2*rank));
 
-        }
-        octants_window.fence(0);
+            octants_window.fence(0);
+            particle_ids_window.fence(0);
 
-        particle_ids_window.fence(0);
-        
-        octants = new_octants;
-        particle_ids = new_particle_ids;
-
-        auto bucket_borders_begin = std::span(bucket_borders.data(), bucket_borders.size()).begin();
-
-        mpi::rma::Window<mpi::rma::Active> bucket_window;
-        bucket_window.create(*Comm, bucket_borders_begin, bucket_borders_begin + bucket_borders.size());
-        bucket_window.fence(0);
-        // update buckets
-        if (world_rank != 0) {
-            bucket_window.put(min_octant, 0, world_rank - 1);
-        }
-        bucket_window.fence(0);
-        if (world_rank != 0) {
-            bucket_window.get(bucket_borders_begin
-                , bucket_borders_begin + bucket_borders.size()
-                , 0, 0); 
-        } 
-        bucket_window.fence(0);
-        if (world_rank == 0) {
-           for (size_t i = 0; i < bucket_borders.size(); ++i) {
-               logger << "Bucket border " << i << ": " << bucket_borders(i) << endl;
-           }
+            octants      = new_octants;
+            particle_ids = new_particle_ids;
         }
 
+        /**
+         * Update the bucket borders on each rank.
+         */
+        {
+            auto bucket_borders_begin =
+                std::span(bucket_borders.data(), bucket_borders.size()).begin();
+
+            mpi::rma::Window<mpi::rma::Active> bucket_window;
+            bucket_window.create(*Comm, bucket_borders_begin,
+                                 bucket_borders_begin + bucket_borders.size());
+            bucket_window.fence(0);
+
+            // update buckets
+            if (world_rank != 0) {
+                bucket_window.put(min_octant, 0, world_rank - 1);
+            }
+            bucket_window.fence(0);
+            if (world_rank != 0) {
+                bucket_window.get(bucket_borders_begin,
+                                  bucket_borders_begin + bucket_borders.size(), 0, 0);
+            }
+            bucket_window.fence(0);
+            if (world_rank == 0) {
+                for (size_t i = 0; i < bucket_borders.size(); ++i) {
+                    logger << "Bucket border " << i << ": " << bucket_borders(i) << endl;
+                }
+            }
+        }
     }
 
     template <size_t Dim>
@@ -499,7 +536,6 @@ namespace ippl {
         morton_code max_octant = morton_helper.get_deepest_last_descendant(octant_container[octant_container.size() - 1]) + min_step;
         innitFromOctants(min_octant, max_octant);
 
-        
         Kokkos::View<size_t*> result("result", octant_container.size());
         size_t total_weight = 0;
         for (size_t i = 0; i < octant_container.size(); ++i) {
