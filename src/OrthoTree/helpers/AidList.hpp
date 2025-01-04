@@ -315,16 +315,15 @@ namespace ippl {
 
     template <size_t Dim>
     void AidList<Dim>::innitFromOctants(morton_code min_octant, morton_code max_octant) {
-        size_t size_buff;
-        morton_code min_max_buff[2];
-
-        mpi::rma::Window<mpi::rma::Active> range_window;
-
+        // holds min/max octant from each rank
         Kokkos::View<size_t*> ranges("ranges", 2 * world_size);
+        // min/max indices of data we will send to other ranks
         Kokkos::View<size_t*> send_indices("send_indices", 2 * world_size);
+        // min/max indices of octants we receive from each rank
         Kokkos::View<size_t*> recv_indices("recv_indices", 2 * world_size);
 
-        size_t new_size = 0;
+        // number of octants this rank will receive
+        size_t new_size_after_exchange = 0;
 
         /**
          * Populate the ranges view with the min/max octant for each rank.
@@ -332,6 +331,8 @@ namespace ippl {
         {
             auto ranges_begin = std::span(ranges.data(), ranges.size()).begin();
             Kokkos::deep_copy(ranges, 0);
+
+            mpi::rma::Window<mpi::rma::Active> range_window;
             range_window.create(*Comm, ranges_begin, ranges_begin + ranges.size());
             range_window.fence(0);
 
@@ -375,7 +376,8 @@ namespace ippl {
          * Calculate the amount of octants we send and receive to/from each rank.
          * - populate: send_indices
          * - populate: recv_indices
-         * - calcualte: new_size = total number of octants/P_ids this rank will receive
+         * - calcualte: new_size_after_exchange = total number of octants/P_ids this rank will
+         * receive
          */
         {
             auto recv_indices_begin = std::span(recv_indices.data(), recv_indices.size()).begin();
@@ -414,18 +416,20 @@ namespace ippl {
                 KOKKOS_LAMBDA(const size_t i, size_t& local_new_size) {
                     local_new_size += recv_indices(2 * i + 1) - recv_indices(2 * i);
                 },
-                new_size);
+                new_size_after_exchange);
         }
 
         /**
          * Exchange the octants between ranks.
          */
         {
-            Kokkos::View<morton_code*> new_octants("new_octants", new_size);
-            Kokkos::View<size_t*> new_particle_ids("new_particle_ids", new_size);
+            Kokkos::View<morton_code*> new_octants("new_octants", new_size_after_exchange);
+            Kokkos::View<size_t*> new_particle_ids("new_particle_ids", new_size_after_exchange);
 
-            auto new_octants_start_it   = std::span(new_octants.data(), new_size).begin();
-            auto new_particles_start_it = std::span(new_particle_ids.data(), new_size).begin();
+            auto new_octants_start_it =
+                std::span(new_octants.data(), new_size_after_exchange).begin();
+            auto new_particles_start_it =
+                std::span(new_particle_ids.data(), new_size_after_exchange).begin();
             auto octants_begin          = std::span(octants.data(), octants.size()).begin();
             auto particle_ids_begin = std::span(particle_ids.data(), particle_ids.size()).begin();
 
