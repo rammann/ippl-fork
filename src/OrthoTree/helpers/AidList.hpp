@@ -6,11 +6,6 @@
 
 #include "Communicate/Window.h"
 
-//define resize  factor
-#define RESIZE_FACTOR 1.05
-
-#define BORDER_MAX_ITER 10
-
 
 namespace ippl {
     template <size_t Dim>
@@ -103,6 +98,10 @@ namespace ippl {
             const size_t avg_bucket_size = max_octant / world_size;
             const size_t k               = max_octant % world_size;
 
+            // distribute ranges of possible octants equally among the ranks
+            // the first k ranks get a range one larger than the rest 
+            // !!! These might not be valid morton_codes but it doesn't matter since
+            // they are only used to distribute the octants
             for (size_t i = 1; i < world_size; ++i) {
                 const size_t offset = i < k ? i : k;
 
@@ -413,6 +412,11 @@ namespace ippl {
             idx_window.fence(0);
 
             for (unsigned rank = 0; rank < world_size; ++rank) {
+                /*
+                 * Skip ranks where min_octant == max_octant
+                 * this works since ranks whose octants are for example way 
+                 * bigger than the ones here will have set min_octant = max_octant = 0
+                 */
                 if (ranges(2 * rank) == ranges(2 * rank + 1)) {
                     continue;
                 }
