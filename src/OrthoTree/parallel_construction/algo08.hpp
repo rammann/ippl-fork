@@ -9,6 +9,9 @@ namespace ippl {
     template <size_t Dim>
     Kokkos::View<morton_code*> OrthoTree<Dim>::linearise_octants(
         const Kokkos::View<morton_code*>& input_view) {
+        IpplTimings::TimerRef lineariseOctantsTimer = IpplTimings::getTimer("linearise_octants");
+        IpplTimings::startTimer(lineariseOctantsTimer);
+
         /**
          * Idea:
          * 1. we count how many elements we have to copy into our linearised view
@@ -58,7 +61,8 @@ namespace ippl {
                 output_view(output_size - 1) = input_view(input_size - 1);
             });
 
-        // i checked and this is always sorted, idk why though
+        IpplTimings::stopTimer(lineariseOctantsTimer);
+
         return output_view;
     }
 }  // namespace ippl

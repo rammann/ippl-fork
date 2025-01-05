@@ -50,6 +50,9 @@ namespace ippl {
     template <size_t Dim>
     Kokkos::View<morton_code*> OrthoTree<Dim>::complete_tree(
         Kokkos::View<morton_code*> input_octants) {
+        IpplTimings::TimerRef completeTreeTimer = IpplTimings::getTimer("complete_tree");
+        IpplTimings::startTimer(completeTreeTimer);
+
         auto deduplicated_octants = remove_duplicates(input_octants);
         auto linearised_octants   = linearise_octants(deduplicated_octants);
 
@@ -85,7 +88,7 @@ namespace ippl {
         const size_t R_base_size = 100;
         Kokkos::View<morton_code*> R_view("R_view", R_base_size);
 
-        size_t R_index = 0;
+        size_t R_index     = 0;
         auto insert_into_R = KOKKOS_LAMBDA(Kokkos::View<morton_code*> R_view, size_t R_index,
                                            morton_code octant_a, morton_code octant_b)
                                  ->size_t {
@@ -128,6 +131,8 @@ namespace ippl {
         } else {
             Kokkos::resize(R_view, R_index);
         }
+
+        IpplTimings::stopTimer(completeTreeTimer);
 
         return R_view;
     }
