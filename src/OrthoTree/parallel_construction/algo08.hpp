@@ -13,10 +13,13 @@ namespace ippl {
         IpplTimings::TimerRef lineariseOctantsTimer = IpplTimings::getTimer("linearise_octants");
         IpplTimings::startTimer(lineariseOctantsTimer);
 
-        assert(octants.size() > 0
-            && "Octants.size() is zero, dont call this function with an empty list!");
 
         Kokkos::View<morton_code*> linearised("linearised", octants.size());
+
+        if (octants.size() == 0) {
+            IpplTimings::stopTimer(lineariseOctantsTimer);
+            return linearised;
+        }
 
         size_t j = 0;
         for (size_t i = 0; i < octants.size() - 1; ++i) {

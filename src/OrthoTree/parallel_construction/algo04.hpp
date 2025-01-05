@@ -12,6 +12,7 @@ namespace ippl {
         IpplTimings::TimerRef blockPartitionTimer = IpplTimings::getTimer("block_partition");
         IpplTimings::startTimer(blockPartitionTimer);
 
+
         Kokkos::View<morton_code*> T = complete_region(min_octant, max_octant);
 
         // the lowest level is actually the 'highest' (closest to root) node in our tree
