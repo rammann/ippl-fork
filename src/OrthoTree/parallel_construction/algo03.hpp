@@ -83,7 +83,7 @@ namespace ippl {
         }
 
         const size_t R_base_size = 100;
-        Kokkos::View<morton_code*> R_view("R_view");
+        Kokkos::View<morton_code*> R_view("R_view", R_base_size);
 
         size_t R_index = 0;
         auto insert_into_R = KOKKOS_LAMBDA(Kokkos::View<morton_code*> R_view, size_t R_index,
