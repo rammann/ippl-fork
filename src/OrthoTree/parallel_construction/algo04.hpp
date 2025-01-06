@@ -53,7 +53,7 @@ namespace ippl {
         IpplTimings::startTimer(innitfromoctants);
 
         this->aid_list_m.innitFromOctants(new_min_octant, new_max_octant);
-
+        n_particles = this->aid_list_m.size();
         IpplTimings::stopTimer(innitfromoctants);
 
         IpplTimings::stopTimer(blockPartitionTimer);
