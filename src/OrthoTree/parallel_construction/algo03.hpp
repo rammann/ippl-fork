@@ -105,7 +105,8 @@ namespace ippl {
 
             R_view(R_index) = octant_a;
             R_index += 1;
-            //TODO: maybe look at complete region - now will replace with normal for
+            //cuda compilation failed using the parallel for - replaced with for loop
+            //TODO (optional): look at complete region and see if hierarchical parallelism can be used
             //Kokkos::parallel_for(
             //    complete_region_size,
             //    KOKKOS_LAMBDA(const size_t i) { R_view(R_index + i) = complete_region(i); });
