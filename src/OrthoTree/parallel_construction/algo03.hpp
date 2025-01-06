@@ -20,19 +20,19 @@ namespace ippl {
 
         size_t unique_count = 0;
         Kokkos::parallel_reduce(
-            "CountUniqueElements", input_size - 1,
+            "algo3::CountUniqueElements", input_size - 1,
             KOKKOS_LAMBDA(const size_t i, size_t& local_count) {
                 local_count += static_cast<size_t>(input_view(i) != input_view(i + 1));
             },
             unique_count);
 
         const size_t output_size = unique_count + 1;
-        Kokkos::View<morton_code*> output_view("deduplicated_view", output_size);
+        Kokkos::View<morton_code*> output_view("algo3::deduplicated_view", output_size);
 
-        Kokkos::View<size_t> index("index");
+        Kokkos::View<size_t> index("algo3::index");
         Kokkos::deep_copy(index, size_t(0));
         Kokkos::parallel_for(
-            "PopulateUniqueElements", input_size - 1, KOKKOS_LAMBDA(const size_t i) {
+            "algo3::PopulateUniqueElements", input_size - 1, KOKKOS_LAMBDA(const size_t i) {
                 if (input_view(i) != input_view(i + 1)) {
                     const size_t current_index = Kokkos::atomic_fetch_add(&index(), size_t(1));
                     output_view(current_index) = input_view(i);
@@ -40,7 +40,7 @@ namespace ippl {
             });
 
         Kokkos::parallel_for(
-            "AddLastElement", 1, KOKKOS_LAMBDA(const int) {
+            "algo3::AddLastElement", 1, KOKKOS_LAMBDA(const int) {
                 output_view(output_size - 1) = input_view(input_view.extent(0) - 1);
             });
 
@@ -86,7 +86,7 @@ namespace ippl {
         }
 
         const size_t R_base_size = 100;
-        Kokkos::View<morton_code*> R_view("R_view", R_base_size);
+        Kokkos::View<morton_code*> R_view("algo3::R_view", R_base_size);
 
         size_t R_index     = 0;
         auto insert_into_R = KOKKOS_LAMBDA(Kokkos::View<morton_code*> R_view, size_t R_index,
@@ -105,10 +105,14 @@ namespace ippl {
 
             R_view(R_index) = octant_a;
             R_index += 1;
+            //TODO: maybe look at complete region - now will replace with normal for
+            //Kokkos::parallel_for(
+            //    complete_region_size,
+            //    KOKKOS_LAMBDA(const size_t i) { R_view(R_index + i) = complete_region(i); });
+            for (size_t i = 0; i < complete_region_size; ++i) {
+                R_view(R_index + i) = complete_region(i);
+            }
 
-            Kokkos::parallel_for(
-                complete_region_size,
-                KOKKOS_LAMBDA(const size_t i) { R_view(R_index + i) = complete_region(i); });
 
             return complete_region_size + 1;
         };

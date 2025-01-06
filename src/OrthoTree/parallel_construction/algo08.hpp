@@ -32,7 +32,7 @@ namespace ippl {
         const auto local_morton_helper = this->morton_helper;
         size_t count                   = 0;
         Kokkos::parallel_reduce(
-            "CountValidOctants", input_size - 1,
+            "algo8::CountValidOctants", input_size - 1,
             KOKKOS_LAMBDA(const size_t i, size_t& local_count) {
                 // no branching this way
                 local_count += static_cast<size_t>(
@@ -42,13 +42,13 @@ namespace ippl {
 
         // last element will always be inserted, hence the 'count + 1'
         const size_t output_size = count + 1;
-        Kokkos::View<morton_code*> output_view("linearised_view", output_size);
+        Kokkos::View<morton_code*> output_view("algo8::linearised_view", output_size);
 
-        Kokkos::View<size_t> index("index");
+        Kokkos::View<size_t> index("algo8::index");
         Kokkos::deep_copy(index, size_t(0));
 
         Kokkos::parallel_for(
-            "AddRelevantOctants", input_size - 1, KOKKOS_LAMBDA(const size_t i) {
+            "algo8::AddRelevantOctants", input_size - 1, KOKKOS_LAMBDA(const size_t i) {
                 if (!local_morton_helper.is_ancestor(input_view(i + 1), input_view(i))) {
                     const size_t cur_index = Kokkos::atomic_fetch_add(&index(), size_t(1));
                     output_view(cur_index) = input_view(i);
@@ -57,7 +57,7 @@ namespace ippl {
 
         // deep copy didnt compile, so we use this georgeous thing lol
         Kokkos::parallel_for(
-            "AddLastElement", 1, KOKKOS_LAMBDA(const int) {
+            "algo8::AddLastElement", 1, KOKKOS_LAMBDA(const int) {
                 output_view(output_size - 1) = input_view(input_size - 1);
             });
 
