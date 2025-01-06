@@ -49,10 +49,13 @@ namespace ippl {
             const size_t octant_depth = this->morton_helper.get_depth(octant);
             const size_t remaining_depth = this->max_depth_m - octant_depth;
 
-            // worst_case: we use all available octants
-            const size_t max_possible_size = 1024;
-
-            return max_possible_size;
+            // empirical guess this could be improved if it was constructed in some 
+            // more clever way
+            // But a good guess depends a lot on the distribution here.
+            // This is more of an upper limit for a good guess probably
+            const size_t guess = 2* this->n_particles 
+                                  / this->max_particles_per_node_m;
+            return guess;
             };
 
         const size_t old_size = tree_view.size();
