@@ -44,16 +44,15 @@ namespace ippl {
         const size_t output_size = count + 1;
         Kokkos::View<morton_code*> output_view("algo8::linearised_view", output_size);
 
-        Kokkos::View<size_t> index("algo8::index");
-        Kokkos::deep_copy(index, size_t(0));
-
-        Kokkos::parallel_for(
-            "algo8::AddRelevantOctants", input_size - 1, KOKKOS_LAMBDA(const size_t i) {
-                if (!local_morton_helper.is_ancestor(input_view(i + 1), input_view(i))) {
-                    const size_t cur_index = Kokkos::atomic_fetch_add(&index(), size_t(1));
-                    output_view(cur_index) = input_view(i);
-                }
-            });
+        Kokkos::parallel_scan(
+                "algo8:AddRelevantOctants", input_size - 1, KOKKOS_LAMBDA(const size_t i, size_t& index, bool final) {
+                    if (!local_morton_helper.is_ancestor(input_view(i+1), input_view(i))) {
+                        if (final) {
+                            output_view(index) = input_view(i);
+                        }
+                        index++;
+                    }
+                });
 
         // deep copy didnt compile, so we use this georgeous thing lol
         Kokkos::parallel_for(
