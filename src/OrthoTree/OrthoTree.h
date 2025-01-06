@@ -78,6 +78,8 @@ namespace ippl {
             aid_list_m.setLogLevel(level);
         }
 
+        size_t getMaxDepth() const { return max_depth_m; }
+
         /**
          * @brief This is the most basic way to build a tree. Its inefficien, but it (should) be
          * correct. Can be used to compare against parallel implementations later on.
