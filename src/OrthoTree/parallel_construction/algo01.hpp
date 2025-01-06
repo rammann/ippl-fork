@@ -50,7 +50,7 @@ namespace ippl {
             const size_t remaining_depth = this->max_depth_m - octant_depth;
 
             // worst_case: we use all available octants
-            const size_t max_possible_size = (size_t(1) << (Dim * remaining_depth));
+            const size_t max_possible_size = 1024;
 
             return max_possible_size;
             };
