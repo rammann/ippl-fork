@@ -29,6 +29,7 @@ namespace ippl {
         const size_t output_size = unique_count + 1;
         Kokkos::View<morton_code*> output_view("algo3::deduplicated_view", output_size);
 
+        /*
         Kokkos::View<size_t> index("algo3::index");
         Kokkos::deep_copy(index, size_t(0));
         Kokkos::parallel_for(
@@ -38,7 +39,19 @@ namespace ippl {
                     output_view(current_index) = input_view(i);
                 }
             });
+        */
 
+        Kokkos::parallel_scan(
+                "algo3::PopulateUniqueElements", input_size - 1, 
+                KOKKOS_LAMBDA(const size_t i, size_t& index, bool final) {
+                    if (input_view(i) != input_view(i+1)) {
+                        if (final) {
+                            output_view(index) = input_view(i);
+                        }
+                        ++index;
+                    }
+                });
+int a;
         Kokkos::parallel_for(
             "algo3::AddLastElement", 1, KOKKOS_LAMBDA(const int) {
                 output_view(output_size - 1) = input_view(input_view.extent(0) - 1);
@@ -59,8 +72,8 @@ namespace ippl {
         auto partitioned_octants      = partition(linearised_octants);
         const size_t partitioned_size = partitioned_octants.extent(0);
 
-        morton_code push_front_buff;
-        morton_code push_back_buff;
+        morton_code push_front_buff = 0;
+        morton_code push_back_buff  = 0; 
         if (world_rank == 0) {
             const morton_code dfd_root = morton_helper.get_deepest_first_descendant(morton_code(0));
             const morton_code A_finest =
