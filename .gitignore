@@ -17,3 +17,4 @@ manual/ippl_user_guide.pdf
 .vscode/
 
 build_cuda/
+build_openmp/
