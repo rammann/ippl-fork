@@ -40,7 +40,7 @@ namespace ippl {
 
         // fast computation of the prefix sum
         Kokkos::parallel_scan(
-            "prefix_sum", octants.size(),
+            "algo5::prefix_sum", octants.size(),
             KOKKOS_LAMBDA(const size_t i, size_t& sum, const bool final) {
                 sum += weights(i);
                 if (final) {
@@ -60,7 +60,7 @@ namespace ippl {
 
         // adjust prefix_sum to be the global prefix sum
         Kokkos::parallel_for(
-            "prefix_sum", octants.size(),
+            "algo5::adjust prefix_sum", octants.size(),
             KOKKOS_LAMBDA(const size_t i) { prefix_sum(i) += local_prefix - local_total; });
 
         // initialize the average weight and the remainder
@@ -74,7 +74,7 @@ namespace ippl {
 
         std::vector<mpi::Request> request;
         request.reserve(2 * world_size);
-        Kokkos::View<size_t*> sizes("sizes", world_size);
+        Kokkos::View<size_t*> sizes("algo5::sizes", world_size);
         for (unsigned rank_iter = 0; rank_iter < world_size; rank_iter++) {
             // this will take care of the remainder
             size_t offset = rank_iter < k ? rank_iter : k;
@@ -120,7 +120,7 @@ namespace ippl {
             }
         }
 
-        Kokkos::View<size_t*> received_sizes("received_sizes", world_size);
+        Kokkos::View<size_t*> received_sizes("algo5::received_sizes", world_size);
         // first we receive all sizes. This let's us prepare a Kokkos::view
         // of the right size to receive the octants
         for (unsigned rank_iter = 0; rank_iter < world_size; rank_iter++) {
@@ -136,9 +136,9 @@ namespace ippl {
 
         // compute the prefix sum of the received sizes
         // This will allow easy computation of starting indices
-        Kokkos::View<size_t*> received_prefix_sum("received_prefix_sum", world_size);
+        Kokkos::View<size_t*> received_prefix_sum("algo5::received_prefix_sum", world_size);
         Kokkos::parallel_scan(
-            "received_prefix_sum", world_size,
+            "algo5::received_prefix_sum", world_size,
             KOKKOS_LAMBDA(const size_t i, size_t& sum, const bool final) {
                 sum += received_sizes(i);
                 if (final) {
@@ -147,7 +147,7 @@ namespace ippl {
             });
 
         // receive buffer that is big enough to fit the sum of all received sizes
-        Kokkos::View<morton_code*> partitioned_octants("partitioned_octants",
+        Kokkos::View<morton_code*> partitioned_octants("algo5::partitioned_octants",
                                                        received_prefix_sum(world_size - 1));
 
         for (unsigned rank_iter = 0; rank_iter < world_size; rank_iter++) {
@@ -170,7 +170,7 @@ namespace ippl {
 
         // insert the octants that stay on this rank fast
         Kokkos::parallel_for(
-            "partitioned_octants", local_end_idx - local_start_idx, KOKKOS_LAMBDA(const size_t i) {
+            "algo5::insert partitioned_octants", local_end_idx - local_start_idx, KOKKOS_LAMBDA(const size_t i) {
                 unsigned insert_start_idx =
                     received_prefix_sum(world_rank) - received_sizes(world_rank);
                 partitioned_octants(insert_start_idx + i) = octants(local_start_idx + i);
@@ -189,7 +189,7 @@ namespace ippl {
 
     template <size_t Dim>
     Kokkos::View<morton_code*> OrthoTree<Dim>::partition(Kokkos::View<morton_code*> octants) {
-        Kokkos::View<size_t*> weights_view("weights_view", octants.size());
+        Kokkos::View<size_t*> weights_view("algo5::weights_view", octants.size());
         Kokkos::deep_copy(weights_view, size_t(1));
         return partition(octants, weights_view);
     }
