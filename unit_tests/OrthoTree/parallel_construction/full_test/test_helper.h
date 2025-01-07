@@ -133,7 +133,10 @@ std::string executeTestRun(BoundingBox<Dim>& root_bounds, OrthoTree<Dim>& tree,
             morton_code seq_octant = sequential_tree[i];
             if (par_octant != seq_octant) {
                 oss << "octants dont match at index=" << i << " par=" << morton_helper.decode(par_octant)
-                    << " seq=" << morton_helper.decode(seq_octant) << std::endl;
+                    << " | " << morton_helper.get_depth(par_octant) 
+                    << " seq=" << morton_helper.decode(seq_octant)
+                    << " | " << morton_helper.get_depth(seq_octant) << std::endl;
+
             }
         }
     }
