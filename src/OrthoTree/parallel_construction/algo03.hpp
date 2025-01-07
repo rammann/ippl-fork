@@ -58,7 +58,9 @@ namespace ippl {
                 morton_helper.get_nearest_common_ancestor(dld_root, octants[octants.size() - 2]);
             const morton_code last_child = morton_helper.get_last_child(A_finest);
 
-            octants[octants.size() - 1] = last_child;
+            if (last_child != octants[octants.size() - 2]) {
+                octants[octants.size() - 1] = last_child;
+            }
         }
 
         if (world_rank > 0) {
@@ -98,7 +100,7 @@ namespace ippl {
             }
             };
 
-        if (world_rank == 0) {
+        if (world_rank == 0 && first_rank0 != octants[0]) {
             // special case for rank 0, as we push_front'ed earlier
             insert_into_R(first_rank0, octants[0]);
         }
