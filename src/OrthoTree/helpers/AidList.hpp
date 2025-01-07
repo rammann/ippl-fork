@@ -240,6 +240,8 @@ namespace ippl {
         return;
     }
 
+//implemented this function to sort the local aid list using Kokkos::sort, is slower for some reason
+// would be cool to try again using cuda
     template <size_t Dim>
     void AidList<Dim>::sort_local_aidlist_kokkos() {
         Kokkos::Profiling::pushRegion("aid_list::sort_local_aidlist");
