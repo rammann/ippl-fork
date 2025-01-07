@@ -53,13 +53,14 @@ namespace ippl {
             // more clever way
             // But a good guess depends a lot on the distribution here.
             // This is more of an upper limit for a good guess probably
-            const size_t guess = 2* this->n_particles 
-                                  / this->max_particles_per_node_m;
+            const size_t guess = std::max(2* this->aid_list_m.getNumParticlesInOctant(octant)
+                                  / this->max_particles_per_node_m, (size_t)10);
             return guess;
             };
 
         const size_t old_size = tree_view.size();
         const size_t size_increase = guesstimate_subtree_size(root_octant);
+        logger << "size_increase by " << size_increase << endl;
 
         Kokkos::resize(tree_view, old_size + size_increase);
         size_t new_size = tree_view.size();
