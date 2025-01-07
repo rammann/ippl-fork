@@ -3,6 +3,10 @@
 
 #include "Communicate/Window.h"
 
+#include "Kokkos_UnorderedMap.hpp"
+#include "Kokkos_Sort.hpp"
+
+
 
 namespace ippl {
     template <size_t Dim>
@@ -206,35 +210,110 @@ namespace ippl {
 
     template <size_t Dim>
     void AidList<Dim>::sort_local_aidlist() {
-        Kokkos::Profiling::pushRegion("Sort Local AidList");
-        // sort the local aid list
-        Kokkos::View<size_t*> indices("indices", octants.size());
-        Kokkos::parallel_for("Sort indices", octants.size(), KOKKOS_LAMBDA(const size_t i) {
-            indices(i) = i;
-        });
-        Kokkos::Profiling::pushRegion("aidlist::std::sort Sort indices");
-        std::sort(indices.data(), indices.data() + indices.extent(0), [&](size_t a, size_t b) {
-            return octants(a) < octants(b);
-        });
-        Kokkos::Profiling::popRegion();
 
-        Kokkos::Profiling::pushRegion("aidlist::sort_local_aidlist::Fill sorted aid list");
-        // allocate the space for the sorted aid list
-        Kokkos::View<morton_code*> sorted_octants("aid_list::sort_local_aidlist::sorted_octants", octants.size());
-        Kokkos::View<size_t*> sorted_particle_ids("aid_list::sort_local_aidlist::sorted_particle_ids", octants.size());
+        Kokkos::Profiling::pushRegion("aid_list::sort_local_aidlist");
+        Kokkos::UnorderedMap<morton_code, int> map(size());
+        using map_op_type = Kokkos::UnorderedMapInsertOpTypes<Kokkos::View<int*>, morton_code>;
+        using atomic_add_type = typename map_op_type::AtomicAdd;
+        atomic_add_type atomic_add;
 
-        // fill the sorted aid list
-        Kokkos::parallel_for("aid_list::sort_local_aidlist::Fill sorted aid list", octants.size(), KOKKOS_LAMBDA(const size_t i) {
-            sorted_octants(i) = octants(indices(i));
-            sorted_particle_ids(i) = particle_ids(indices(i));
+      //fill p_ids, m_cs and map
+        Kokkos::parallel_for("aid_list::fill map", size(), KOKKOS_LAMBDA(const int i) {
+            morton_code key = octants(i);
+            map.insert(key, 1, atomic_add);
         });
-        Kokkos::Profiling::popRegion();
 
-        // swap the sorted aid list with the original one
-        octants = sorted_octants;
-        particle_ids = sorted_particle_ids;
-        Kokkos::Profiling::popRegion();
-        return;
+      // get the number of unique keys
+      int num_unique_keys = map.size();
+
+      // copy keys to a view
+      Kokkos::View<morton_code*> keys("aid_list::sort_local_aidlist::unique_keys", num_unique_keys);
+
+      int total_size;
+      Kokkos::parallel_scan("aid:list::sort_local_aidlist::extract keys to view", map.capacity(), KOKKOS_LAMBDA(const u_int32_t i, int& update, const bool final) {
+          if(map.valid_at(i)) {
+            if(final){
+              keys(update) = map.key_at(i);
+            }
+            update++;
+          }
+      }, total_size);
+      Kokkos::fence();
+
+
+      //print keys
+      Kokkos::Profiling::pushRegion("aid_list::sort_local_aidlist::sort keys");
+      Kokkos::sort(keys);
+      Kokkos::Profiling::popRegion();
+      //Kokkos::View<int*>::HostMirror keys_host = Kokkos::create_mirror_view(keys);
+      //Kokkos::deep_copy(keys_host, keys);
+
+      //Kokkos::UnorderedMap<int, int, Kokkos::HostSpace> map_host(size);
+      //Kokkos::deep_copy(map_host, map);
+
+/*
+      std::cout << "Unique keys: ";
+      for(int i = 0; i < num_unique_keys; ++i) {
+            std::cout << keys_host(i) << " ";
+      }
+      std::cout << std::endl;
+*/
+
+      // sort keys
+
+      // scan to get the sizes of bins in the sorted keys into the map
+      //Kokkos::View<int*> indices("Indices", num_unique_keys);
+      Kokkos::UnorderedMap<morton_code, int> start_indices_map(num_unique_keys);
+      Kokkos::UnorderedMap<morton_code, int> num_add_map(num_unique_keys);
+      Kokkos::parallel_scan("aid_list::sort_local_aidlist::prefix sum for indices", num_unique_keys, KOKKOS_LAMBDA(const int i, int& update, const bool final) {
+          if(final) {
+              //printf("map value at %d: %d\n", i, map.value_at(map.find(keys(i))));
+              //printf("update: %d\n", update);
+              start_indices_map.insert(keys(i), update);
+              num_add_map.insert(keys(i), i);
+          }
+          update += map.value_at(map.find(keys(i)));  
+      });
+
+
+      //Kokkos::View<int*>::HostMirror indices_host = Kokkos::create_mirror_view(indices);
+      //Kokkos::deep_copy(indices_host, indices);
+      //Kokkos::deep_copy(keys_host, keys);
+      //Kokkos::deep_copy(map_host, map);
+/*
+      for(int i = 0; i < num_unique_keys; ++i) {
+          std::cout << keys_host(i) << " " << indices_host(i) << std::endl;
+      }
+      
+      for(int i = 0; i < map_host.capacity(); ++i) {
+          if(map_host.valid_at(i)) {
+              std::cout << map_host.key_at(i) << " " << map_host.value_at(i) << std::endl;
+          }
+      }
+*/
+
+      //refill p_ids and m_cs
+
+      Kokkos::View<size_t *> p_ids_sorted("aid_list::sort_local_octants::Particle Ids Sorted", size());
+      Kokkos::View<morton_code* > m_cs_sorted("aid_//list::sort_local_octants::Morton codes Sorted", size());
+
+      Kokkos::View<int*> num_added = Kokkos::View<int*>("aid_lits::sort_local_octants::Num Added refill counter", num_unique_keys);
+
+      Kokkos::parallel_for("aid_list::sort_local_octants::Refill p_ids and m_cs",size(), KOKKOS_LAMBDA(const int i) {
+          //printf("i: %d size %d\n", i, size());
+          morton_code key = octants(i);
+          //printf("key: %d\n", key);
+          int num_add = Kokkos::atomic_add_fetch(&num_added(num_add_map.value_at(num_add_map.find(key))), 1);
+          //printf("num_add: %d\n", num_add);
+          int index = start_indices_map.value_at(start_indices_map.find(key)) + num_add - 1;
+          //printf("index: %d\n", index);
+          //printf("index: %d i: %d\n", index, i);
+          p_ids_sorted(index) = particle_ids(i);
+          m_cs_sorted(index) = octants(i);
+      });
+      octants = m_cs_sorted;
+      particle_ids = p_ids_sorted;
+      Kokkos::Profiling::popRegion();
     }
 
 
