@@ -143,8 +143,6 @@ int a;
             R_index += insert_into_R(R_view, R_index, partitioned_octants(partitioned_size - 1),
                                      push_back_buff);
         }
-        R_index += insert_into_R(R_view, R_index, partitioned_octants(partitioned_size - 1),
-                                 push_back_buff);
 
         if (world_rank == world_size - 1) {
             Kokkos::resize(R_view, R_index + 1);
