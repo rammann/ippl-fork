@@ -21,16 +21,13 @@ namespace ippl {
         logger.setPrintNode(INFORM_ALL_NODES);
         bucket_borders = Kokkos::View<morton_code*>("bucket_borders", world_size - 1);
 
-        // logger << "Initialized AidList" << endl;
     }
 
     template <size_t Dim>
     template <typename PLayout>
     void AidList<Dim>::initialize(const BoundingBox<Dim>& root_bounds, PLayout const& particles) {
-        logger << "Initializing AidList" << endl;
         if (world_rank == 0) {
             initialize_from_rank(max_depth, root_bounds, particles);
-            logger << "initial Aid list is initialized with size: " << octants.size() << endl;
             distribute_buckets();
         } else {
             mpi::Status stat;
@@ -50,7 +47,6 @@ namespace ippl {
             particle_ids = Kokkos::View<size_t*>("aid_list::particle_ids", bucket_size);
 
             // receive the octants and the particle ids
-            logger << "Receiving octants and particle ids on rank " << world_rank << endl;
             if (bucket_size > 0) {
                 Comm->recv(octants.data(), bucket_size, 0, 0, stat);
                 Comm->recv(particle_ids.data(), bucket_size, 0, 1, stat);
@@ -61,12 +57,10 @@ namespace ippl {
         IpplTimings::startTimer(sort_aidlist);
         sort_local_aidlist();
         IpplTimings::stopTimer(sort_aidlist);
-        logger << "AidList initialized with size: " << octants.size() << endl;
     }
 
     template <size_t Dim>
     void AidList<Dim>::distribute_buckets() {
-        logger << "Distributing buckets" << endl;
 
         const size_t n_particles = octants.size();
 
@@ -117,7 +111,6 @@ namespace ippl {
                     for(size_t j = 0; j < i; ++j) {
                         if(bucket_borders(j) == octants(index)) {
                             is_unique = false;
-                            logger << "Bucket border " << i << " is not unique, trying again" << endl;
                             break;
                         }
                     }
@@ -137,7 +130,6 @@ namespace ippl {
                     bucket_borders(min_index) = octants(index);
                   } 
                 }
-                logger << "actual Bucket border " << i << ": " << bucket_borders(i) << endl;
                 if (count >= BORDER_MAX_ITER) {
                     throw std::runtime_error("Could not find unique bucket border");
                 }
@@ -208,7 +200,6 @@ namespace ippl {
         {
             if (world_rank == 0) {
                 for (size_t i = 0; i < world_size; ++i) {
-                    logger << "Bucket " << i << " has size: " << bucket_sizes(i) << endl;
                     if (bucket_sizes(i) == 0) {
 
                        throw std::runtime_error("Bucket size is 0");
@@ -398,9 +389,6 @@ namespace ippl {
                 octants(i)      = morton_helper.encode(grid_coord, max_depth);
                 particle_ids(i) = i;
             });
-
-        // log size of aid list
-        logger << "Size of aid list: " << octants.size() << endl;
     }
 
     template <size_t Dim>
@@ -486,7 +474,7 @@ namespace ippl {
             morton_code lower_bound_octant = 0;
             morton_code upper_bound_octant = 0;
             for (size_t i = 0; i < world_size; ++i) {
-                upper_bound_octant = dld_root;
+                upper_bound_octant = dld_root + 1;
                 if (i < world_size - 1) {
                     upper_bound_octant = bucket_borders(i);
                 }
@@ -683,11 +671,6 @@ namespace ippl {
             // broadcast the updated bucket borders
             Comm->broadcast(bucket_borders.data(), bucket_borders.size(), 0);
 
-            if (world_rank == 0) {
-                for (size_t i = 0; i < bucket_borders.size(); ++i) {
-                    logger << "Bucket border " << i << ": " << bucket_borders(i) << endl;
-                }
-            }
         }
     }
 
@@ -703,6 +686,8 @@ namespace ippl {
         morton_code max_octant =
             morton_helper.get_deepest_last_descendant(octant_container[octant_container.size() - 1])
             + min_step;
+
+        
         innitFromOctants(min_octant, max_octant);
 
         Kokkos::View<size_t*> result("result", octant_container.size());
