@@ -7,7 +7,7 @@
 #include "Kokkos_Sort.hpp"
 #include "Kokkos_UnorderedMap.hpp"
 
-constexpr size_t BORDER_MAX_ITER = 100;
+constexpr size_t BORDER_MAX_ITER = 10000;
 
 namespace ippl {
     template <size_t Dim>
@@ -106,7 +106,7 @@ namespace ippl {
 
             // sample sort routine selecting buckets based on random samples 
             // from the octants
-            for(size_t i = 0; i < world_size - 1; ++i) {
+            for(size_t i = 0; i < world_size; ++i) {
 
                 bool is_unique = true;
                 size_t index = unif(eng);
@@ -122,12 +122,30 @@ namespace ippl {
                         }
                     }
                 }while(!is_unique && ++count < BORDER_MAX_ITER);
-                bucket_borders(i) = octants(index); 
+                if (i < world_size - 1) {
+                    bucket_borders(i) = octants(index); 
+                } else {
+                  // We take one more sample than necessary to ensure that the first bucket 
+                  // contains some particles
+                  size_t min_index = 0;
+                  for (unsigned j = 0; j < world_size-1; j++) {
+                    if (bucket_borders(j) < bucket_borders(min_index)) {
+                      min_index = j;
+                    }
+                  }
+                  if (octants(index) > bucket_borders(min_index)) {
+                    bucket_borders(min_index) = octants(index);
+                  } 
+                }
                 logger << "actual Bucket border " << i << ": " << bucket_borders(i) << endl;
+                if (count >= BORDER_MAX_ITER) {
+                    throw std::runtime_error("Could not find unique bucket border");
+                }
             }
-
+            
             // sort the bucket borders
             std::sort(bucket_borders.data(), bucket_borders.data() + bucket_borders.extent(0));
+
 
             // broadcast the bucket borders
             Comm->broadcast(bucket_borders.data(), bucket_borders.size(), 0);
@@ -191,6 +209,10 @@ namespace ippl {
             if (world_rank == 0) {
                 for (size_t i = 0; i < world_size; ++i) {
                     logger << "Bucket " << i << " has size: " << bucket_sizes(i) << endl;
+                    if (bucket_sizes(i) == 0) {
+
+                       throw std::runtime_error("Bucket size is 0");
+                    }
                 }
             }
         }

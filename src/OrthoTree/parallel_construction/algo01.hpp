@@ -13,6 +13,10 @@ namespace ippl {
         IpplTimings::startTimer(aidListTimer);
 
         this->aid_list_m.initialize(root_bounds_m, particles);
+        if (aid_list_m.size() == 0) {
+            END_FUNC;
+            throw std::runtime_error("No particles on rank algo1");
+        }
         auto [min_octant, max_octant] = this->aid_list_m.getMinReqOctants();
 
         IpplTimings::stopTimer(aidListTimer);

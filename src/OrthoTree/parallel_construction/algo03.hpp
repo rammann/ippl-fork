@@ -18,6 +18,10 @@ namespace ippl {
     Kokkos::View<morton_code*> remove_duplicates(Kokkos::View<morton_code*> input_view) {
         const size_t input_size = input_view.extent(0);
 
+        if (input_size == 0) {
+            return Kokkos::View<morton_code*>("algo3::deduplicated_view", 0);
+        }
+
         size_t unique_count = 0;
         Kokkos::parallel_reduce(
             "algo3::CountUniqueElements", input_size - 1,
@@ -65,6 +69,11 @@ int a;
         Kokkos::View<morton_code*> input_octants) {
         IpplTimings::TimerRef completeTreeTimer = IpplTimings::getTimer("complete_tree");
         IpplTimings::startTimer(completeTreeTimer);
+
+        if (input_octants.extent(0) == 0) {
+            logger << "This looks like trouble" << endl;
+            throw std::runtime_error("complete_tree called with empty input");
+        }
 
         auto deduplicated_octants = remove_duplicates(input_octants);
         auto linearised_octants   = linearise_octants(deduplicated_octants);
