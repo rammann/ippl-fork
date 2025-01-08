@@ -59,15 +59,15 @@ TEST(ParallelConstruction4, ActualTest) {
         R_host(4) = ippl::Vector<double, Dim>{0.962, 0.080};
         R_host(5) = ippl::Vector<double, Dim>{0.963, 0.080};
     } else if(Comm->rank() == 2){
-        R_host(0) = ippl::Vector<double, Dim>{0.810, 0.300};
-        R_host(1) = ippl::Vector<double, Dim>{0.811, 0.300};
+        R_host(0) = ippl::Vector<double, Dim>{0.800, 0.300};
+        R_host(1) = ippl::Vector<double, Dim>{0.801, 0.300};
         R_host(2) = ippl::Vector<double, Dim>{0.960, 0.300};
         R_host(3) = ippl::Vector<double, Dim>{0.961, 0.300};
-        R_host(4) = ippl::Vector<double, Dim>{0.810, 0.700};
-        R_host(5) = ippl::Vector<double, Dim>{0.811, 0.700};
+        R_host(4) = ippl::Vector<double, Dim>{0.800, 0.700};
+        R_host(5) = ippl::Vector<double, Dim>{0.801, 0.700};
     } else if(Comm->rank() == 3){
-        R_host(0) = ippl::Vector<double, Dim>{0.812, 0.700};
-        R_host(1) = ippl::Vector<double, Dim>{0.813, 0.700};
+        R_host(0) = ippl::Vector<double, Dim>{0.802, 0.700};
+        R_host(1) = ippl::Vector<double, Dim>{0.803, 0.700};
         R_host(2) = ippl::Vector<double, Dim>{0.960, 0.960};
         R_host(3) = ippl::Vector<double, Dim>{0.961, 0.960};
         R_host(4) = ippl::Vector<double, Dim>{0.962, 0.960};
