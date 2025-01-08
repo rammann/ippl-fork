@@ -371,7 +371,7 @@ namespace ippl {
             Kokkos::RangePolicy<>(0, n_particles), KOKKOS_LAMBDA(const size_t i) {
                 // Calculate grid coordinate
                 const grid_coordinate grid_coord = static_cast<grid_coordinate>(
-                    (particles.R(i) - root_bounds.get_min()) * (grid_size - 1) / root_bounds_size);
+                    (particles.R(i) - root_bounds.get_min()) * grid_size / root_bounds_size);
 
                 octants(i)      = morton_helper.encode(grid_coord, max_depth);
                 particle_ids(i) = i;
