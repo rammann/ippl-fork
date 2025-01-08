@@ -64,7 +64,6 @@ namespace ippl {
 
         const size_t old_size = tree_view.size();
         const size_t size_increase = guesstimate_subtree_size(root_octant);
-        logger << "size_increase by " << size_increase << endl;
 
         Kokkos::resize(tree_view, old_size + size_increase);
         size_t new_size = tree_view.size();
