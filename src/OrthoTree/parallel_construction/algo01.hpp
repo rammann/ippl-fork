@@ -19,14 +19,6 @@ namespace ippl {
         }
         auto [min_octant, max_octant] = this->aid_list_m.getMinReqOctants();
 
-        std::string log_str = "Rank " + std::to_string(Comm->rank()) + ": aid_list = {";
-        for(size_t i = 0; i < this->aid_list_m.getOctants().size(); i++){
-            log_str += std::to_string(this->aid_list_m.getOctants()(i));
-            if(i != this->aid_list_m.getOctants().size()-1) log_str += ", ";
-        }
-        log_str += "}\n";
-        std::cerr << log_str;
-
         IpplTimings::stopTimer(aidListTimer);
 
         IpplTimings::TimerRef buildTreeTimer = IpplTimings::getTimer("build_tree");

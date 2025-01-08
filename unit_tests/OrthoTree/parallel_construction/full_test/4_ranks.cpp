@@ -25,9 +25,8 @@ TEST(ParallelConstruction4, AssertWorldSize) {
 }
 
 TEST(ParallelConstruction4, ActualTest) {
-    /*
     runTests();
-    */
+    /*
     const size_t num_particles = 6;
     const size_t max_depth = 4;
     const size_t max_particles = 3;
@@ -88,6 +87,7 @@ TEST(ParallelConstruction4, ActualTest) {
     }
     log_str += "}\n";
     std::cerr << log_str;
+    */
 
 }
 
