@@ -168,16 +168,6 @@ namespace ippl {
             }
             window_m.put<size_type>(rankSendCount_hview(rank), rank, Comm->rank());
         }
-        /*Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace> policy(0, nDestinationRanks);
-        Kokkos::parallel_for("MPI Put", policy,
-            [&](const size_type ridx){
-                int rank = destinationRanks_hview[ridx];
-                if (rank != Comm->rank()) {
-                    window_m.put<size_type>(rankSendCount_hview(rank), rank, Comm->rank()); 
-                }
-            }
-        );*/
-
         window_m.fence(0);
 
         IpplTimings::stopTimer(preprocTimer);
@@ -205,7 +195,7 @@ namespace ippl {
         IpplTimings::stopTimer(sendTimer);
 
 
-        // 3. Internal destruction of invalid particlesi ======================================= //
+        // 3. Internal destruction of invalid particles ======================================= //
         
         static IpplTimings::TimerRef destroyTimer = IpplTimings::getTimer("particleDestroy");
         IpplTimings::startTimer(destroyTimer);
@@ -262,6 +252,23 @@ namespace ippl {
         return totalSize;
     }
 
+
+    /**
+     * @brief This function determines to which rank particles need to be sent after the iteration step.
+     *        It starts by first scanning direct rank neighbors, and only does a global scan if there are still 
+     *        unfound particles. It then calculates how many particles need to be sent to each rank and how many 
+     *        ranks are sent to in total.
+     *
+     * @param pc           Particle Container
+     * @param ranks        A vector the length of the number of particles on the current rank, where each value refers
+     *                      to the new rank of the particle
+     * @param invalid      A vector marking the particles that need to be sent away, and thus locally deleted
+     * @param nSends_dview Device view the length of number of ranks, where each value determines the number 
+     *                      of particles sent to that rank from the current rank
+     * @param sends_dview  Device view for the number of ranks that are sent to from current rank
+     *
+     * @return tuple with the number of particles sent away and the number of ranks sent to
+     */
     template <typename T, unsigned Dim, class Mesh, typename... Properties>
     template <typename ParticleContainer>
     std::pair<detail::size_type, detail::size_type> ParticleSpatialLayout<T, Dim, Mesh, Properties...>::locateParticles(
