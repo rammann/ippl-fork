@@ -249,6 +249,7 @@ public:
         size_type totalP        = this->totalP_m;
         int it                  = this->it_m;
         bool isFirstRepartition = false;
+        /* Only for benachmarking 
         if (this->loadbalancer_m->balance(totalP, it + 1)) {
                 IpplTimings::startTimer(domainDecomposition);
                 auto* mesh = &fc->getRho().get_mesh();
@@ -256,7 +257,7 @@ public:
                 this->loadbalancer_m->repartition(FL, mesh, isFirstRepartition);
                 IpplTimings::stopTimer(domainDecomposition);
         }
-
+        */
         // scatter the charge onto the underlying grid
         this->par2grid();
 
