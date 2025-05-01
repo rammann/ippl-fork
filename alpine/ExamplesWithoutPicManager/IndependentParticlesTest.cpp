@@ -51,6 +51,21 @@ struct generate_random {
     }
 };
 
+template <typename T, unsigned Dim, typename... PositionProperties>
+class ParticleTreeLayout : public detail::ParticleLayout<T, Dim, PositionProperties...> {
+
+public:
+    using Base = detail::ParticleLayout<T, Dim, PositionProperties...>;
+
+public:
+    ParticleTreeLayout()
+            : detail::ParticleLayout<T, Dim, PositionProperties...>() {}
+
+protected:
+    size_type parent_m;
+
+}
+
 template <class PLayout, typename T, unsigned Dim = 3>
 class IndependentParticles : public ippl::ParticleBase<PLayout> {
     using Base = ippl::ParticleBase<PLayout>;
