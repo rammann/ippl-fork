@@ -51,6 +51,22 @@ struct generate_random {
     }
 };
 
+template <unsigned NumChildren=3>
+class Node {
+public:
+    Node(){
+
+    }
+
+private:
+    size_t order_m;
+    size_t parent_m;
+    size_t depth_m;
+    size_t numLeaves_m;
+    std::array<size_t,NumChildren> children_m;
+
+};
+
 template <typename T, unsigned Dim, typename... PositionProperties>
 class ParticleTreeLayout : public detail::ParticleLayout<T, Dim, PositionProperties...> {
 
@@ -64,7 +80,7 @@ public:
 protected:
     size_type parent_m;
 
-}
+};
 
 template <class PLayout, typename T, unsigned Dim = 3>
 class IndependentParticles : public ippl::ParticleBase<PLayout> {
@@ -106,7 +122,7 @@ public:
         }
     }
 private:
-    size_type newParticles_m
+    size_type newParticles_m;
 };
 
 int main(int argc, char* argv[]) {
@@ -171,7 +187,7 @@ int main(int argc, char* argv[]) {
                 for (int w = 0; w < steps; ++w) {
                     dummy_result += Kokkos::sin(static_cast<double>(w) * 0.01 + i * 0.001);
                 }
-                rand_pool.free_state(generator);
+                rand_pool.free_state(steps_generator);
             }
         );
         
