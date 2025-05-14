@@ -9,11 +9,15 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <cassert>
+#include <array>
+#include <fstream>    
+#include <set> 
 
 #include "Utility/IpplTimings.h"
 
 #include "ChargedParticles.hpp"
-// #include "Utility/TypeUtils.h"
+#include "Utility/TypeUtils.h"
 
 constexpr unsigned Dim = 3;
 
@@ -51,31 +55,136 @@ struct generate_random {
     }
 };
 
-template <unsigned NumChildren=3>
+template <typename size_type>
 class Node {
 public:
-    Node(){
+    Node() = default; 
+    Node(size_type depth, Node<size_type>* parent, size_type numleaves): 
+        depth_m(depth), 
+        numLeaves_m(numleaves){
+            if(depth!=0){
+                parent_m=std::make_shared<Node<size_type>>(*parent);
+            }
+            else{
+                parent_m=nullptr;
+            }
+            numChildren_m=0;
+            for (size_type i = 0; i < 3; i++){
+                children_m[i]=nullptr;
+            }
+            
+        } 
+private:
+    size_type order_m;
+    size_type depth_m;
+    size_type numLeaves_m;
+    std::shared_ptr<Node<size_type>> parent_m;
+    std::array<std::shared_ptr<Node<size_type>>, 3> children_m;
+    size_type numChildren_m;
+public:
+    size_type getDepth(){
+        return this->depth_m;
+    }
+    size_type getNumLeaves(){
+        return this->numLeaves_m;
+    }
+    void addChild(Node<size_type>* child_ptr){
+        this->children_m[numChildren_m]=child_ptr;
+        this->numChildren_m++;
+    }
+    void setOrder(size_type order){
+        this->order_m=order;
+    }
+    size_type getNumChildren(){
+        return this->numChildren_m;
+    }
+    std::array<Node<size_type>*,3> getChildren(){
+        return this->children_m;
+    }
+    size_type getOrder() const {
+        return this->order_m;
+    }
+    Node<size_type>* getParent() const { 
+        return this->parent_m;
+    }
+};
 
+template <typename size_type=size_t>
+class Tree{
+public: // constructors
+    Tree() = default;
+    Tree(size_type numNodes): numNodes_m(numNodes){
+        determineBinDepth();
+        determineNumLeaves();    
+        std::cout << "Calculated binDepth = " << binDepth_m << std::endl;
+        std::cout << "Calculated numLeafNodes_to_distribute for root = " << numLeafNodes_m << std::endl;
+        root_m = std::make_unique<Node<size_type>>(0, nullptr, numLeafNodes_m);
     }
 
-private:
-    size_t order_m;
-    size_t parent_m;
-    size_t depth_m;
-    size_t numLeaves_m;
-    std::array<size_t,NumChildren> children_m;
-
+public: // member functions
+    void determineBinDepth(){
+        size_type depth=0;
+        size_type count=0;
+        while(count<this->numNodes_m){
+            depth++;
+            count=(2<<(depth-1))-1+(3<<(depth-1));
+        }
+        this->binDepth_m = depth-1;
+    }
+    void determineNumLeaves(){
+        this->numLeafNodes_m=this->numNodes_m-(2<<this->binDepth_m)+1;
+    }
+    void createChildren(Node<size_type>* parent){
+        if(parent->getDepth()<this->binDepth_m){
+            Node<size_type>* rChild_ptr;
+            Node<size_type>* lChild_ptr;
+            size_type temp=3<<(this->binDepth_m-parent->getDepth()-1);
+            if(temp >= parent->getNumLeaves()){
+                rChild_ptr = new Node<size_type>(parent->getDepth()+1, parent, parent->getNumLeaves());
+                lChild_ptr = new Node<size_type>(parent->getDepth()+1, parent, 0);
+            }
+            else if(temp < parent->getNumLeaves()){
+                rChild_ptr = new Node<size_type>(parent->getDepth()+1, parent, temp);
+                lChild_ptr = new Node<size_type>(parent->getDepth()+1, parent, parent->getNumLeaves()-temp);
+            }
+            else{
+                assert(false && "error");
+            }
+            parent->addChild(lChild_ptr);
+            parent->addChild(rChild_ptr);
+            createChildren(lChild_ptr, this->binDepth_m);    
+            createChildren(rChild_ptr, this->binDepth_m);    
+            return;
+        }
+        else if(parent->getDepth()==this->binDepth_m){
+            for (size_type i = 0; i < parent->getNumLeaves(); i++){
+                Node<size_type>* leafNode_ptr=new Node<size_type>(parent->getDepth()+1, parent, 0);
+                std::cout<<leafNode_ptr->getDepth()<<std::endl;
+                parent->addChild(leafNode_ptr);
+            }
+            return;
+        }
+        else{
+            assert(false && "ERROR");
+        }
+    }
+private: // tree variables
+    std::unique_ptr<Node<size_type>>root_m;
+    size_type numNodes_m;
+    size_type binDepth_m;
+    size_type numLeafNodes_m;
+    size_type currentOrder_m;
 };
 
 template <typename T, unsigned Dim, typename... PositionProperties>
-class ParticleTreeLayout : public detail::ParticleLayout<T, Dim, PositionProperties...> {
+class ParticleTreeLayout : public ippl::detail::ParticleLayout<T, Dim, PositionProperties...> {
 
 public:
-    using Base = detail::ParticleLayout<T, Dim, PositionProperties...>;
+    using Base = ippl::detail::ParticleLayout<T, Dim, PositionProperties...>;
 
 public:
     ParticleTreeLayout()
-            : detail::ParticleLayout<T, Dim, PositionProperties...>() {}
+            : ippl::detail::ParticleLayout<T, Dim, PositionProperties...>() {}
 
 protected:
     size_type parent_m;
@@ -138,7 +247,10 @@ int main(int argc, char* argv[]) {
         static IpplTimings::TimerRef mainTimer = IpplTimings::getTimer("total");
         IpplTimings::startTimer(mainTimer);
         msg << "Independent Particles Test" << endl;
+        
+        Tree tree(100);
 
+        /*
         // Particle Bunch Type
         using bunch_type =
             IndependentParticles<ippl::detail::ParticleLayout<double, Dim>, double, Dim>;
@@ -150,11 +262,10 @@ int main(int argc, char* argv[]) {
 
         const double t_0 = 0.0;
 
-        /* TODO: Define Proper Particle Layout
-            Mesh_t<Dim> mesh(domain, hr, origin);
-            FieldLayout_t<Dim> FL(MPI_COMM_WORLD, domain, isParallel, isAllPeriodic);
-            PLayout_t<double, Dim> PL(FL, mesh);
-        */
+        // TODO: Define Proper Particle Layout
+        //    Mesh_t<Dim> mesh(domain, hr, origin);
+        //    FieldLayout_t<Dim> FL(MPI_COMM_WORLD, domain, isParallel, isAllPeriodic);
+        //    PLayout_t<double, Dim> PL(FL, mesh);
 
         // Initialize Particle Bunch
         ippl::detail::ParticleLayout<double, Dim> PL;
@@ -194,7 +305,7 @@ int main(int argc, char* argv[]) {
         // TODO: MPI WaitAll
         // TODO: Load Balancing
         // TODO: Restart Loop with new Particles
-
+        */
         msg << "Independent Particles Test: End." << endl;
         IpplTimings::stopTimer(mainTimer);
         IpplTimings::print();
