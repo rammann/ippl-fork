@@ -59,11 +59,12 @@ template <typename size_type>
 class Node {
 public:
     Node() = default; 
-    Node(size_type depth, Node<size_type>* parent, size_type numleaves): 
+    Node(size_type depth, std::shared_ptr<Node<size_type>> parent, size_type numleaves): 
         depth_m(depth), 
         numLeaves_m(numleaves){
             if(depth!=0){
-                parent_m=std::make_shared<Node<size_type>>(*parent);
+                //parent_m=std::make_shared<Node<size_type>>(*parent);
+                parent_m=parent;
             }
             else{
                 parent_m=nullptr;
@@ -88,7 +89,7 @@ public:
     size_type getNumLeaves(){
         return this->numLeaves_m;
     }
-    void addChild(Node<size_type>* child_ptr){
+    void addChild(std::shared_ptr<Node<size_type>> child_ptr){
         this->children_m[numChildren_m]=child_ptr;
         this->numChildren_m++;
     }
@@ -98,13 +99,13 @@ public:
     size_type getNumChildren(){
         return this->numChildren_m;
     }
-    std::array<Node<size_type>*,3> getChildren(){
+    std::array<std::shared_ptr<Node<size_type>>,3> getChildren(){
         return this->children_m;
     }
     size_type getOrder() const {
         return this->order_m;
     }
-    Node<size_type>* getParent() const { 
+    std::shared_ptr<Node<size_type>> getParent() const { 
         return this->parent_m;
     }
 };
@@ -118,7 +119,8 @@ public: // constructors
         determineNumLeaves();    
         std::cout << "Calculated binDepth = " << binDepth_m << std::endl;
         std::cout << "Calculated numLeafNodes_to_distribute for root = " << numLeafNodes_m << std::endl;
-        root_m = std::make_unique<Node<size_type>>(0, nullptr, numLeafNodes_m);
+        root_m = std::make_shared<Node<size_type>>(0, nullptr, numLeafNodes_m);
+        createChildren(root_m);
     }
 
 public: // member functions
@@ -134,32 +136,31 @@ public: // member functions
     void determineNumLeaves(){
         this->numLeafNodes_m=this->numNodes_m-(2<<this->binDepth_m)+1;
     }
-    void createChildren(Node<size_type>* parent){
+    void createChildren(std::shared_ptr<Node<size_type>> parent){
         if(parent->getDepth()<this->binDepth_m){
-            Node<size_type>* rChild_ptr;
-            Node<size_type>* lChild_ptr;
+            std::shared_ptr<Node<size_type>> rChild_ptr;
+            std::shared_ptr<Node<size_type>> lChild_ptr;
             size_type temp=3<<(this->binDepth_m-parent->getDepth()-1);
             if(temp >= parent->getNumLeaves()){
-                rChild_ptr = new Node<size_type>(parent->getDepth()+1, parent, parent->getNumLeaves());
-                lChild_ptr = new Node<size_type>(parent->getDepth()+1, parent, 0);
+                rChild_ptr = std::make_shared<Node<size_type>>(parent->getDepth()+1, parent, parent->getNumLeaves());
+                lChild_ptr = std::make_shared<Node<size_type>>(parent->getDepth()+1, parent, 0);
             }
             else if(temp < parent->getNumLeaves()){
-                rChild_ptr = new Node<size_type>(parent->getDepth()+1, parent, temp);
-                lChild_ptr = new Node<size_type>(parent->getDepth()+1, parent, parent->getNumLeaves()-temp);
+                rChild_ptr = std::make_shared<Node<size_type>>(parent->getDepth()+1, parent, temp);
+                lChild_ptr = std::make_shared<Node<size_type>>(parent->getDepth()+1, parent, parent->getNumLeaves()-temp);
             }
             else{
                 assert(false && "error");
             }
             parent->addChild(lChild_ptr);
             parent->addChild(rChild_ptr);
-            createChildren(lChild_ptr, this->binDepth_m);    
-            createChildren(rChild_ptr, this->binDepth_m);    
+            createChildren(lChild_ptr);    
+            createChildren(rChild_ptr);    
             return;
         }
         else if(parent->getDepth()==this->binDepth_m){
             for (size_type i = 0; i < parent->getNumLeaves(); i++){
-                Node<size_type>* leafNode_ptr=new Node<size_type>(parent->getDepth()+1, parent, 0);
-                std::cout<<leafNode_ptr->getDepth()<<std::endl;
+                std::shared_ptr<Node<size_type>> leafNode_ptr=std::make_shared<Node<size_type>>(parent->getDepth()+1, parent, 0);
                 parent->addChild(leafNode_ptr);
             }
             return;
@@ -168,8 +169,9 @@ public: // member functions
             assert(false && "ERROR");
         }
     }
+
 private: // tree variables
-    std::unique_ptr<Node<size_type>>root_m;
+    std::shared_ptr<Node<size_type>>root_m;
     size_type numNodes_m;
     size_type binDepth_m;
     size_type numLeafNodes_m;
