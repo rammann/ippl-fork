@@ -121,6 +121,7 @@ public: // constructors
         std::cout << "Calculated numLeafNodes_to_distribute for root = " << numLeafNodes_m << std::endl;
         root_m = std::make_shared<Node<size_type>>(0, nullptr, numLeafNodes_m);
         createChildren(root_m);
+        determineOrder(root_m); 
     }
 
 public: // member functions
@@ -169,6 +170,112 @@ public: // member functions
             assert(false && "ERROR");
         }
     }
+    
+    void determineOrder(std::shared_ptr<Node<size_type>> node, size_type prev=0){
+        static size_type current=0;
+        size_type prevOrder=current;
+        node->setOrder(current);
+        bool isCurrent=false;
+        if(ippl::Comm->rank()==current){
+            globalParent_m=prev;
+            isCurrent=true;
+        }
+        current++;
+        for(size_type i=0; i<node->getNumChildren();++i){
+            determineOrder(node->getChildren()[i], prevOrder);
+            if(isCurrent){
+                globalChildren_m[i]=current;
+            }
+        }
+        return;
+    }
+
+public: // getters & setters
+std::shared_ptr<Node<size_type>> getRoot(){
+    return root_m;
+}
+size_type getGlobalParent(){
+    return globalParent_m;
+}
+std::array<size_type,3> getGlobalChildren(){
+    return globalChildren_m;
+}
+public: // visualization
+
+// --- Graphviz Visualization Functions ---
+// Color based on groups of 4 by order
+void generateGraphvizRecursive(std::shared_ptr<Node<size_type>>node, std::ofstream& dotFile, std::set<std::shared_ptr<Node<size_type>>>& visitedNodes, const std::vector<std::string>& colorPalette) {
+    if (!node || visitedNodes.count(node)) {
+        return;
+    }
+    visitedNodes.insert(node);
+
+    // Determine fill color based on node order (groups of 4)
+    std::string fillColor = "lightgray"; // Default if palette is empty
+    if (!colorPalette.empty()) {
+        // Group nodes by their order / 4
+        // Nodes with order 0,1,2,3 get group 0
+        // Nodes with order 4,5,6,7 get group 1
+        // ...and so on.
+        size_t colorGroupIndex = node->getOrder() / 4;
+        fillColor = colorPalette[colorGroupIndex % colorPalette.size()];
+    }
+
+    // Define the node in DOT format
+    dotFile << "  node" << node->getOrder() // Use order for unique node ID in DOT
+            << " [label=\"Order: " << node->getOrder()
+            << "\\nDepth: " << node->getDepth()
+            << "\\nLeavesToDist: " << node->getNumLeaves();
+    if (node->getParent()) {
+        // Check if parent has an order assigned (it should if orderTree was called properly)
+        dotFile << "\\nParentOrder: " << node->getParent()->getOrder();
+    }
+    // Apply the chosen fill color
+    dotFile << "\", fillcolor=\"" << fillColor << "\"];\n";
+
+
+    // Define edges to children and recurse
+    std::array<std::shared_ptr<Node<size_type>>, 3> children = node->getChildren(); // Gets a copy
+    for (size_type i = 0; i < node->getNumChildren(); ++i) {
+        std::shared_ptr<Node<size_type>>child = children[i];
+        if (child) {
+            // Ensure child also has an order for its ID
+            dotFile << "  node" << node->getOrder() << " -> node" << child->getOrder() << ";\n";
+            // Pass the colorPalette down
+            generateGraphvizRecursive(child, dotFile, visitedNodes, colorPalette);
+        }
+    }
+}
+
+void generateGraphvizOutput(std::shared_ptr<Node<size_type>>rootNode, const std::string& filename) {
+    std::ofstream dotFile(filename);
+    if (!dotFile.is_open()) {
+        std::cerr << "Error: Could not open " << filename << " for writing." << std::endl;
+        return;
+    }
+
+    const std::vector<std::string> colorPalette = {
+        "skyblue", "palegreen", "khaki", "lightcoral", "mediumpurple",
+        "gold", "aquamarine", "salmon", "orchid", "sandybrown"
+    };
+
+    dotFile << "digraph Tree {\n";
+    dotFile << "  graph [rankdir=TB];\n";
+    dotFile << "  node [shape=box, style=filled, fillcolor=lightgray]; // Default node style\n";
+    dotFile << "  edge [arrowhead=vee];\n";
+
+    std::set<std::shared_ptr<Node<size_type>>> visitedNodes;
+    if (rootNode) {
+        generateGraphvizRecursive(rootNode, dotFile, visitedNodes, colorPalette);
+    }
+
+    dotFile << "}\n";
+    dotFile.close();
+
+    std::cout << "\nGraphviz DOT file generated: " << filename << std::endl;
+    std::cout << "To generate a PNG image, run: dot -Tpng " << filename << " -o tree.png" << std::endl;
+}
+// --- End Graphviz Visualization Functions ---
 
 private: // tree variables
     std::shared_ptr<Node<size_type>>root_m;
@@ -176,6 +283,8 @@ private: // tree variables
     size_type binDepth_m;
     size_type numLeafNodes_m;
     size_type currentOrder_m;
+    size_type globalParent_m;
+    std::array<size_type, 3> globalChildren_m;
 };
 
 template <typename T, unsigned Dim, typename... PositionProperties>
@@ -186,10 +295,19 @@ public:
 
 public:
     ParticleTreeLayout()
-            : ippl::detail::ParticleLayout<T, Dim, PositionProperties...>() {}
+            : ippl::detail::ParticleLayout<T, Dim, PositionProperties...>() 
+            {
+                Tree commTree(ippl::Comm->size());
+                commTree.generateGraphvizOutput(commTree.getRoot(), "tree.dot");
+                parentRank_m=commTree.getGlobalParent();
+                childrenRanks_m=commTree.getGlobalChildren();
+                std::cout<<"Rank "<<ippl::Comm->rank()<<" has parent "<<parentRank_m
+                <<" and children "<< childrenRanks_m[0] << std::endl;
+            }
 
 protected:
-    size_type parent_m;
+    size_type parentRank_m;
+    std::array<size_type,3> childrenRanks_m;
 
 };
 
@@ -250,8 +368,7 @@ int main(int argc, char* argv[]) {
         IpplTimings::startTimer(mainTimer);
         msg << "Independent Particles Test" << endl;
         
-        Tree tree(100);
-
+        ParticleTreeLayout<double, 3> pl;
         /*
         // Particle Bunch Type
         using bunch_type =
