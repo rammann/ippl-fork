@@ -110,7 +110,7 @@ public:
     }
 };
 
-template <typename size_type=size_t>
+//template <typename size_type=size_type>
 class Tree{
 public: // constructors
     Tree() = default;
@@ -177,15 +177,18 @@ public: // member functions
         node->setOrder(current);
         bool isCurrent=false;
         if(ippl::Comm->rank()==current){
-            globalParent_m=prev;
+            if(current != 0){
+                globalParent_m=node->getParent()->getOrder();
+            }
             isCurrent=true;
+            globalNumChildren_m=node->getNumChildren();
         }
         current++;
         for(size_type i=0; i<node->getNumChildren();++i){
-            determineOrder(node->getChildren()[i], prevOrder);
             if(isCurrent){
                 globalChildren_m[i]=current;
             }
+            determineOrder(node->getChildren()[i], prevOrder);
         }
         return;
     }
@@ -199,6 +202,9 @@ size_type getGlobalParent(){
 }
 std::array<size_type,3> getGlobalChildren(){
     return globalChildren_m;
+}
+size_type getGlobalNumChildren(){
+    return globalNumChildren_m;
 }
 public: // visualization
 
@@ -285,6 +291,7 @@ private: // tree variables
     size_type currentOrder_m;
     size_type globalParent_m;
     std::array<size_type, 3> globalChildren_m;
+    size_type globalNumChildren_m;
 };
 
 template <typename T, unsigned Dim, typename... PositionProperties>
@@ -301,13 +308,19 @@ public:
                 commTree.generateGraphvizOutput(commTree.getRoot(), "tree.dot");
                 parentRank_m=commTree.getGlobalParent();
                 childrenRanks_m=commTree.getGlobalChildren();
+                numChildren_m=commTree.getGlobalNumChildren();
                 std::cout<<"Rank "<<ippl::Comm->rank()<<" has parent "<<parentRank_m
-                <<" and children "<< childrenRanks_m[0] << std::endl;
+                <<" and children ";
+                for(size_type i=0; i<numChildren_m;++i){
+                    std::cout<<childrenRanks_m[i]<<" ";
+                }
+                std::cout<<std::endl;
             }
 
-protected:
+private:
     size_type parentRank_m;
     std::array<size_type,3> childrenRanks_m;
+    size_type numChildren_m;
 
 };
 
