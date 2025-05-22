@@ -171,9 +171,8 @@ public: // member functions
         }
     }
     
-    void determineOrder(std::shared_ptr<Node<size_type>> node, size_type prev=0){
+    void determineOrder(std::shared_ptr<Node<size_type>> node){
         static size_type current=0;
-        size_type prevOrder=current;
         node->setOrder(current);
         bool isCurrent=false;
         if(ippl::Comm->rank()==current){
@@ -188,7 +187,7 @@ public: // member functions
             if(isCurrent){
                 globalChildren_m[i]=current;
             }
-            determineOrder(node->getChildren()[i], prevOrder);
+            determineOrder(node->getChildren()[i]);
         }
         return;
     }
@@ -288,7 +287,6 @@ private: // tree variables
     size_type numNodes_m;
     size_type binDepth_m;
     size_type numLeafNodes_m;
-    size_type currentOrder_m;
     size_type globalParent_m;
     std::array<size_type, 3> globalChildren_m;
     size_type globalNumChildren_m;
@@ -300,7 +298,7 @@ class ParticleTreeLayout : public ippl::detail::ParticleLayout<T, Dim, PositionP
 public:
     using Base = ippl::detail::ParticleLayout<T, Dim, PositionProperties...>;
 
-public:
+public: // constructor
     ParticleTreeLayout()
             : ippl::detail::ParticleLayout<T, Dim, PositionProperties...>() 
             {
@@ -317,11 +315,84 @@ public:
                 std::cout<<std::endl;
             }
 
+public: // member functions
+   
+    template <class ParticleContainer>
+    void loadbalance(ParticleContainer& pc){
+        
+        // global work reduction
+        int subtreework = 0;
+        std::array<int, 3> childrensubtreework;
+        reduceWorkLoad(pc.getLocalNum(), subtreework, childrensubtreework);
+        
+        // w_avg = data[0]
+        // R     = data[1]
+        std::array<int,2> data;
+        
+        if(ippl::Comm->rank()==0){
+            data[0]=subtreework/ippl::Comm->size();
+            data[1]=subtreework%ippl::Comm->size();
+            MPI_Bcast(&data[0], 2, MPI_INT, 0, MPI_COMM_WORLD);
+        }
+        else{
+            MPI_Status status;
+            MPI_Recv(&data[0],2,MPI_INT,0,0, MPI_COMM_WORLD, &status);
+        }
+       
+        // calculate quotas
+        int quota; // q_i
+        int subtreeQuota; // Q_i
+        std::array<int, 3> childrenSubtreeQuotas; // Q_j where j is child of i
+        computeQuota(quota, subtreeQuota, childrenSubtreeQuotas, data); 
+        
+        // distribute work
+    }
+
+    void reduceWorkLoad(int localparticles, int& subtreework, auto& childrensubtreework){
+        subtreework=localparticles;
+        for(size_type i=0;i<numChildren_m;++i){
+            int temp;
+            MPI_Status status;
+            MPI_Recv(&temp, 1, MPI_INT,childrenRanks_m[i], childrenRanks_m[i], MPI_COMM_WORLD, &status);
+            subtreework += temp;
+            childrensubtreework[i]=temp;
+        }
+        if(ippl::Comm->rank() != 0){
+            MPI_Request request;
+            MPI_Isend(&subtreework, 1, MPI_INT,parentRank_m,ippl::Comm->rank(),MPI_COMM_WORLD, &request);
+        }
+    }
+    void computeQuota(int& quota, int& subtreeQuota, auto& childrenSubtreeQuotas, auto& data){
+        if(ippl::Comm->rank()<data[1]){
+            quota=data[0]+1;
+        }
+        else{
+            quota=data[0];
+        }       
+        subtreeQuota=quota;
+        /*
+        if(numChildren_m==0){
+            MPI_Request request;
+            MPI_Isend(&subtreeQuota, 1, MPI_INT, parentRank_m, ippl::Comm->rank(),MPI_COMM_WORLD, &request);
+        }
+        */
+        if(numChildren_m>0){
+            for(size_type i=0;i<numChildren_m;++i){
+                MPI_Status status;
+                MPI_Recv(&childrenSubtreeQuotas[i], 1, MPI_INT, childrenRanks_m[i], childrenRanks_m[i], MPI_COMM_WORLD, &status);
+                subtreeQuota += childrenSubtreeQuotas[i];
+            }
+        }
+        if(ippl::Comm->rank()!=0){
+            MPI_Request request;
+            MPI_Isend(&subtreeQuota, 1, MPI_INT, parentRank_m, ippl::Comm->rank(),MPI_COMM_WORLD, &request);
+        }
+
+    }
 private:
     size_type parentRank_m;
     std::array<size_type,3> childrenRanks_m;
     size_type numChildren_m;
-
 };
 
 template <class PLayout, typename T, unsigned Dim = 3>
@@ -333,13 +404,10 @@ public:
     Vector_t<double, Dim> rmin_m;
     Vector_t<double, Dim> rmax_m;
 
-    // Charge Attribute
+    // Charge, Mass, Time, Velocity Attributes
     ParticleAttrib<double> q;
-    // Mass Attribute
     ParticleAttrib<double> m;
-    // Time Attribute
     ParticleAttrib<double> t;
-    // Velocity Attribute
     ParticleAttrib<double> v;
 
     // Constructor
@@ -347,7 +415,7 @@ public:
         : Base(pl)
         , rmin_m(rmin)
         , rmax_m(rmax)
-        , newParticles_m(0) {
+    {
         // Register Attributes
         this->addAttribute(q);
         this->addAttribute(m);
@@ -355,16 +423,6 @@ public:
         this->addAttribute(v);
     }
 
-    void spawnParticles(size_type nLocal) {
-        if (nLocal > 0) {
-            forAllAttributes([&]<typename Attribute>(Attribute& attribute) {
-                attribute->create(nLocal);
-            });
-            atomic_add(this->localNum_m, nLocal);
-        }
-    }
-private:
-    size_type newParticles_m;
 };
 
 int main(int argc, char* argv[]) {
@@ -381,11 +439,10 @@ int main(int argc, char* argv[]) {
         IpplTimings::startTimer(mainTimer);
         msg << "Independent Particles Test" << endl;
         
-        ParticleTreeLayout<double, 3> pl;
-        /*
+        
         // Particle Bunch Type
         using bunch_type =
-            IndependentParticles<ippl::detail::ParticleLayout<double, Dim>, double, Dim>;
+            IndependentParticles<ParticleTreeLayout<double,Dim>,double>;
         std::unique_ptr<bunch_type> P;
 
         // create mesh and layout objects for this problem domain
@@ -394,20 +451,16 @@ int main(int argc, char* argv[]) {
 
         const double t_0 = 0.0;
 
-        // TODO: Define Proper Particle Layout
-        //    Mesh_t<Dim> mesh(domain, hr, origin);
-        //    FieldLayout_t<Dim> FL(MPI_COMM_WORLD, domain, isParallel, isAllPeriodic);
-        //    PLayout_t<double, Dim> PL(FL, mesh);
-
         // Initialize Particle Bunch
-        ippl::detail::ParticleLayout<double, Dim> PL;
+        ParticleTreeLayout<double, Dim> PL;
         P = std::make_unique<bunch_type>(PL, rmin, rmax);
 
         // Create Particles on each Rank
-        size_type nloc = 1000;
+        size_type nloc = 10;
         P->create(nloc);
-
+        P->getLayout().loadbalance(*P);
         // Sample Particle Initial Locations
+        /*
         Kokkos::Random_XorShift64_Pool<> rand_pool64((size_type)(42 + 100 * ippl::Comm->rank()));
         Kokkos::parallel_for(
             nloc, generate_random<Vector_t<double, Dim>, Kokkos::Random_XorShift64_Pool<>, Dim>(
@@ -433,11 +486,11 @@ int main(int argc, char* argv[]) {
                 rand_pool.free_state(steps_generator);
             }
         );
-        
+        */
         // TODO: MPI WaitAll
         // TODO: Load Balancing
         // TODO: Restart Loop with new Particles
-        */
+        
         msg << "Independent Particles Test: End." << endl;
         IpplTimings::stopTimer(mainTimer);
         IpplTimings::print();
