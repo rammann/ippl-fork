@@ -117,8 +117,8 @@ public: // constructors
     Tree(size_type numNodes): numNodes_m(numNodes){
         determineBinDepth();
         determineNumLeaves();    
-        std::cout << "Calculated binDepth = " << binDepth_m << std::endl;
-        std::cout << "Calculated numLeafNodes_to_distribute for root = " << numLeafNodes_m << std::endl;
+        //std::cout << "Calculated binDepth = " << binDepth_m << std::endl;
+        //std::cout << "Calculated numLeafNodes_to_distribute for root = " << numLeafNodes_m << std::endl;
         root_m = std::make_shared<Node<size_type>>(0, nullptr, numLeafNodes_m);
         createChildren(root_m);
         determineOrder(root_m); 
@@ -295,24 +295,29 @@ private: // tree variables
 template <typename T, unsigned Dim, typename... PositionProperties>
 class ParticleTreeLayout : public ippl::detail::ParticleLayout<T, Dim, PositionProperties...> {
 
-public:
+public: // types
     using Base = ippl::detail::ParticleLayout<T, Dim, PositionProperties...>;
-
+    using typename Base::position_memory_space, typename Base::position_execution_space;
+    using hash_type   = ippl::detail::hash_type<position_memory_space>;
+    using bool_type   = typename ippl::detail::ViewType<bool, 1, position_memory_space>::view_type;
+    
 public: // constructor
     ParticleTreeLayout()
             : ippl::detail::ParticleLayout<T, Dim, PositionProperties...>() 
             {
                 Tree commTree(ippl::Comm->size());
-                commTree.generateGraphvizOutput(commTree.getRoot(), "tree.dot");
+                //commTree.generateGraphvizOutput(commTree.getRoot(), "tree.dot");
                 parentRank_m=commTree.getGlobalParent();
                 childrenRanks_m=commTree.getGlobalChildren();
                 numChildren_m=commTree.getGlobalNumChildren();
+                /*
                 std::cout<<"Rank "<<ippl::Comm->rank()<<" has parent "<<parentRank_m
                 <<" and children ";
                 for(size_type i=0; i<numChildren_m;++i){
                     std::cout<<childrenRanks_m[i]<<" ";
                 }
                 std::cout<<std::endl;
+                */
             }
 
 public: // member functions
@@ -321,31 +326,29 @@ public: // member functions
     void loadbalance(ParticleContainer& pc){
         
         // global work reduction
-        int subtreework = 0;
-        std::array<int, 3> childrensubtreework;
-        reduceWorkLoad(pc.getLocalNum(), subtreework, childrensubtreework);
-        
+        int subtreeWork = 0;
+        std::array<int, 3> childrenSubtreeWork;
+        reduceWorkLoad(pc.getLocalNum(), subtreeWork, childrenSubtreeWork);
+       
         // w_avg = data[0]
         // R     = data[1]
         std::array<int,2> data;
         
         if(ippl::Comm->rank()==0){
-            data[0]=subtreework/ippl::Comm->size();
-            data[1]=subtreework%ippl::Comm->size();
-            MPI_Bcast(&data[0], 2, MPI_INT, 0, MPI_COMM_WORLD);
+            data[0]=subtreeWork/ippl::Comm->size();
+            data[1]=subtreeWork%ippl::Comm->size();
         }
-        else{
-            MPI_Status status;
-            MPI_Recv(&data[0],2,MPI_INT,0,0, MPI_COMM_WORLD, &status);
-        }
-       
-        // calculate quotas
+        MPI_Bcast(data.data(), 2, MPI_INT, 0, MPI_COMM_WORLD);
+        
+        // calculate quotas and subtree quotas
         int quota; // q_i
         int subtreeQuota; // Q_i
         std::array<int, 3> childrenSubtreeQuotas; // Q_j where j is child of i
         computeQuota(quota, subtreeQuota, childrenSubtreeQuotas, data); 
         
         // distribute work
+        exchangeWork(subtreeWork, subtreeQuota, childrenSubtreeQuotas, childrenSubtreeWork, pc);
+        std::cout<<"Rank "<<ippl::Comm->rank()<<" has finished" <<std::endl;
     }
 
     void reduceWorkLoad(int localparticles, int& subtreework, auto& childrensubtreework){
@@ -370,12 +373,7 @@ public: // member functions
             quota=data[0];
         }       
         subtreeQuota=quota;
-        /*
-        if(numChildren_m==0){
-            MPI_Request request;
-            MPI_Isend(&subtreeQuota, 1, MPI_INT, parentRank_m, ippl::Comm->rank(),MPI_COMM_WORLD, &request);
-        }
-        */
+
         if(numChildren_m>0){
             for(size_type i=0;i<numChildren_m;++i){
                 MPI_Status status;
@@ -387,7 +385,92 @@ public: // member functions
             MPI_Request request;
             MPI_Isend(&subtreeQuota, 1, MPI_INT, parentRank_m, ippl::Comm->rank(),MPI_COMM_WORLD, &request);
         }
+        return;
+    }
 
+    template <class ParticleContainer>
+    void exchangeWork(int& subtreeWork, int& subtreeQuota, auto& childrenSubtreeQuotas, auto& childrenSubtreeWork, ParticleContainer& pc){
+        
+        //int tag = ippl::Comm->next_tag(mpi::tag::P_SPATIAL_LAYOUT, mpi::tag::P_LAYOUT_CYCLE); 
+        int tag = 0;
+       
+        if(subtreeWork < subtreeQuota && ippl::Comm->rank() != 0){
+            // receive particles from partent
+            size_t nRecvs = subtreeQuota-subtreeWork;
+            std::cout<<"Rank "<<ippl::Comm->rank()<<" starting receive from partent "<< parentRank_m <<std::endl;
+            pc.recvFromRank(parentRank_m, tag, nRecvs);
+            std::cout<<"Rank "<<ippl::Comm->rank()<<" has received from partent "<< parentRank_m <<std::endl;
+        }
+        
+        for(size_type i=0; i<numChildren_m; ++i){
+            if(childrenSubtreeWork[i] > childrenSubtreeQuotas[i]){
+                // receive particles from children
+                std::cout<<"Rank "<<ippl::Comm->rank()<<" starting receive from child "<< childrenRanks_m[i] <<std::endl;
+                size_t nRecvs = childrenSubtreeWork[i] - childrenSubtreeQuotas[i];
+                pc.recvFromRank(childrenRanks_m[i], tag, nRecvs);
+                std::cout<<"Rank "<<ippl::Comm->rank()<<" has received from child "<< childrenRanks_m[i] <<std::endl;
+            }
+        }
+        
+        if(subtreeWork > subtreeQuota){
+            // Number of particles to send away
+            size_t numInvParticles=subtreeWork-subtreeQuota;
+            
+            // Send particles to parent rank
+            std::vector<MPI_Request> requests(0);
+            hash_type hash("hash", numInvParticles);
+            fillHash(numInvParticles, hash, pc);
+            pc.sendToRank(parentRank_m, tag, requests, hash);
+            std::cout<<"Rank "<<ippl::Comm->rank()<<" sent to partent "<< parentRank_m <<std::endl;
+            // Delete invalid particles
+            bool_type invalidParticles("validity of particles", pc.getLocalNum());
+            fillInvalid(numInvParticles, invalidParticles, pc);
+            pc.internalDestroy(invalidParticles, numInvParticles);
+        }
+        for(size_type i=0; i<numChildren_m; ++i){
+            if(childrenSubtreeWork[i] < childrenSubtreeQuotas[i]){
+                // Number of particles to send away
+                size_t numInvParticles=childrenSubtreeQuotas[i]-childrenSubtreeWork[i];
+
+                // Send particles to parent child rank
+                std::vector<MPI_Request> requests(0);
+                hash_type hash("hash", numInvParticles);
+                fillHash(numInvParticles, hash, pc);
+                pc.sendToRank(childrenRanks_m[i], tag, requests, hash);
+                std::cout<<"Rank "<<ippl::Comm->rank()<<" sent to child "<< childrenRanks_m[i] <<std::endl; 
+                // Delete invalid particles
+                bool_type invalidParticles("validity of particles", pc.getLocalNum());
+                fillInvalid(numInvParticles, invalidParticles, pc);
+                pc.internalDestroy(invalidParticles, numInvParticles);
+            }
+        }
+        std::cout<<"Rank "<<ippl::Comm->rank()<<" has sent "<< std::endl;
+
+    }
+
+    /* Fill the hash with the last nParticles particles in the container */
+    template <class ParticleContainer>
+    void fillHash(int nParticles, hash_type& hash, ParticleContainer& pc) {
+        using policy_type = Kokkos::RangePolicy<position_execution_space>;
+        Kokkos::parallel_for(
+            "ParticleTreeLayout::fillHash()", policy_type(pc.getLocalNum()-nParticles, pc.getLocalNum()),
+            KOKKOS_LAMBDA(const size_t i){
+                hash(i-pc.getLocalNum()+nParticles)=i;
+            }
+        );
+    }
+
+    /* Determine invalid particles */
+    template <class ParticleContainer>
+    void fillInvalid(int nParticles, bool_type& invalidParticles, ParticleContainer& pc){
+        using policy_type = Kokkos::RangePolicy<position_execution_space>;
+        Kokkos::parallel_for(
+            "ParticleTreeLayout::fillInvalid()", policy_type(0, pc.getLocalNum()), 
+            KOKKOS_LAMBDA(const size_t i){
+                bool isInvalid = i >= pc.getLocalNum()-nParticles;
+                invalidParticles(i) = 0 + 1 * isInvalid;
+            }
+        );
     }
 private:
     size_type parentRank_m;
@@ -456,9 +539,12 @@ int main(int argc, char* argv[]) {
         P = std::make_unique<bunch_type>(PL, rmin, rmax);
 
         // Create Particles on each Rank
-        size_type nloc = 10;
+        size_type nloc = 10*ippl::Comm->rank();
         P->create(nloc);
+        std::cout<< "Rank "<< ippl::Comm->rank() << " created particles "<< nloc << std::endl;
         P->getLayout().loadbalance(*P);
+        
+        std::cout<<"Rank "<<ippl::Comm->rank()<<" has "<<P->getLocalNum()<<std::endl;
         // Sample Particle Initial Locations
         /*
         Kokkos::Random_XorShift64_Pool<> rand_pool64((size_type)(42 + 100 * ippl::Comm->rank()));
