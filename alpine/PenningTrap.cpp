@@ -42,9 +42,30 @@ const char* TestName   = "PenningTrap";
 #include "Manager/PicManager.h"
 #include "PenningTrapManager.h"
 
+#ifdef IPPL_ENABLE_CATALYST
+#include "CatalystAdaptor.h"
+#endif
+
 int main(int argc, char* argv[]) {
     ippl::initialize(argc, argv);
     {
+        #ifdef IPPL_ENABLE_CATALYST
+        char* script = nullptr;
+        char* proxy = nullptr;
+        for (int i = 1; i < argc; ++i) {
+            if (std::string(argv[i]) == "--pvscript" && i + 1 < argc) {
+                script = argv[i+1]; 
+                i++;
+            }   
+            if (std::string(argv[i]) == "--pvproxy" && i+1 < argc) {
+                proxy = argv[i+1];
+                i++;
+            }
+        }
+        char* reducedArgv[] = { argv[0], script, proxy};
+        CatalystAdaptor::Initialize(2, reducedArgv);
+        #endif
+
         Inform msg(TestName);
         Inform msg2all(TestName, INFORM_ALL_NODES);
 

@@ -14,6 +14,10 @@
 #include "Random/NormalDistribution.h"
 #include "Random/Randn.h"
 
+#ifdef IPPL_ENABLE_CATALYST
+#include "CatalystAdaptor.h"
+#endif
+
 using view_type = typename ippl::detail::ViewType<ippl::Vector<double, Dim>, 1>::view_type;
 
 template <typename T, unsigned Dim>
@@ -23,10 +27,11 @@ public:
     using FieldContainer_t    = FieldContainer<T, Dim>;
     using FieldSolver_t       = FieldSolver<T, Dim>;
     using LoadBalancer_t      = LoadBalancer<T, Dim>;
+    double scaleFactor;
 
     PenningTrapManager(size_type totalP_, int nt_, Vector_t<int, Dim>& nr_, double lbt_,
                        std::string& solver_, std::string& stepMethod_)
-        : AlpineManager<T, Dim>(totalP_, nt_, nr_, lbt_, solver_, stepMethod_) {}
+        : AlpineManager<T, Dim>(totalP_, nt_, nr_, lbt_, solver_, stepMethod_),scaleFactor(30){}
 
     PenningTrapManager(size_type totalP_, int nt_, Vector_t<int, Dim>& nr_, double lbt_,
                        std::string& solver_, std::string& stepMethod_,
@@ -241,7 +246,7 @@ public:
         double alpha                            = this->alpha_m;
         double Bext                             = this->Bext_m;
         double DrInv                            = this->DrInv_m;
-        double V0                               = 30 * this->length_m[2];
+        double V0                               = scaleFactor * this->length_m[2];
         Vector_t<double, Dim> length            = this->length_m;
         Vector_t<double, Dim> origin            = this->origin_m;
         double dt                               = this->dt_m;
@@ -291,11 +296,24 @@ public:
             auto* mesh = &fc->getRho().get_mesh();
             auto* FL   = &fc->getFL();
             this->loadbalancer_m->repartition(FL, mesh, isFirstRepartition);
-            IpplTimings::stopTimer(domainDecomposition);
-        }
+            }
+       
 
         // scatter the charge onto the underlying grid
         this->par2grid();
+
+#ifdef IPPL_ENABLE_CATALYST
+        std::cout<<"IIM IN THE WALLSIM IN THE WALLSIM IN THE WALLSIM IN THE WALLSM IN THE WALLS"
+        std::vector<CatalystAdaptor::ParticlePair<T, Dim>> particles = {
+            {"particle", std::shared_ptr<ParticleContainer<T, Dim> >(pc)},
+        };
+        std::vector<CatalystAdaptor::FieldPair<T, Dim>> fields = {
+            {"E",   CatalystAdaptor::FieldVariant<T, Dim>(&this->fcontainer_m->getE())},
+            {"roh", CatalystAdaptor::FieldVariant<T, Dim>(&this->fcontainer_m->getRho())},
+            //{"phi", CatalystAdaptor::FieldVariant<T, Dim>(&this->fcontainer_m->getPhi())},
+        };
+        CatalystAdaptor::Execute(it, this->time_m, ippl::Comm->rank(), particles, fields, scaleFactor);
+#endif
 
         // Field solve
         IpplTimings::startTimer(SolveTimer);
