@@ -82,6 +82,14 @@ endif ()
 if (IPPL_ENABLE_CATALYST)
     message (STATUS "Adding Catalyst subdirectory")
     add_subdirectory (Stream)
+    #find_package(Conduit REQUIRED)
+    find_package(Catalyst REQUIRED)
+    message (STATUS "Found Conduit and Catalyst")
+    message (STATUS "Linking ippl to Catalyst")
+    target_link_libraries(ippl PUBLIC 
+        #Conduit::conduit   
+        catalyst::catalyst
+    )
 endif ()
 
 include(${PROJECT_SOURCE_DIR}/cmake/PlatformOptions.cmake)

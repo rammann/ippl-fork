@@ -303,7 +303,7 @@ public:
         this->par2grid();
 
 #ifdef IPPL_ENABLE_CATALYST
-        std::cout<<"IIM IN THE WALLSIM IN THE WALLSIM IN THE WALLSIM IN THE WALLSM IN THE WALLS"
+        std::cout<<"IIM IN THE WALLSIM IN THE WALLSIM IN THE WALLSIM IN THE WALLSM IN THE WALLS"<<std::endl;
         std::vector<CatalystAdaptor::ParticlePair<T, Dim>> particles = {
             {"particle", std::shared_ptr<ParticleContainer<T, Dim> >(pc)},
         };

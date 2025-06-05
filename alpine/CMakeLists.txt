@@ -20,6 +20,8 @@ function(add_alpine_example name)
 
     target_compile_options(${name} PRIVATE ${COMMON_FLAGS})
 
+    target_compile_definitions(${name} PUBLIC IPPL_ENABLE_CATALYST)
+
     target_link_libraries(${name}
         PRIVATE ${COMMON_LIBS}
     )
