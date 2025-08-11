@@ -41,7 +41,7 @@ namespace ippl {
          * @param dim the dimension
          * @return 3^n
          */
-        constexpr unsigned int countHypercubes(unsigned int dim) {
+        KOKKOS_INLINE_FUNCTION constexpr unsigned int countHypercubes(unsigned int dim) {
             unsigned int ret = 1;
             for (unsigned int d = 0; d < dim; d++) {
                 ret *= 3;
@@ -245,7 +245,11 @@ namespace ippl {
         // be SERIAL or PARALLEL
         std::array<bool, Dim> isParallel() const { return isParallelDim_m; }
 
-        const NDIndex_t& getLocalNDIndex(int rank = -1) const;
+        // Get the local domain for the current rank.
+        const NDIndex_t& getLocalNDIndex() const;
+
+        // Get the local domain for a specific rank.
+        const NDIndex_t& getLocalNDIndex(int rank) const;
 
         const host_mirror_type getHostLocalDomains() const;
 
