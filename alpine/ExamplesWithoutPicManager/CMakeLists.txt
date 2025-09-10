@@ -35,6 +35,7 @@ endfunction()
 add_alpine_example(UniformPlasmaTest)
 add_alpine_example(LandauDampingMixedPrecision)
 add_alpine_example(LandauDampingParameterList)
+add_alpine_example(ParticleContainerTest)
 
 # LandauDampingMixedExec needs extra Threads lib
 add_executable(LandauDampingMixedExec LandauDampingMixedExec.cpp)
