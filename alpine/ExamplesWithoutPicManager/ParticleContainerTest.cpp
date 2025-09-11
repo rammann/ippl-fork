@@ -1,13 +1,13 @@
 // Particle Container Test
 // Usage:
 //          srun ./ParticleContainerTest
-//              <nsp> <ppsp> <Nt> 
-//     
+//              <nt> <nsp> <ppsp> 
+//
+//          nt    = No. timesteps 
 //          nsp   = No. particle species
 //          ppsp  = No. particles per species
-//          Nt    = No. timesteps
 
-
+#include "Ippl.h"
 
 #include <Kokkos_Random.hpp>
 #include <chrono>
@@ -18,16 +18,29 @@
 #include <vector>
 
 #include "Utility/IpplTimings.h"
-
-#include "ChargedParticles.hpp"
+#include "Utility/TypeUtils.h"
 
 constexpr unsigned Dim = 3;
 
 const char* TestName = "ParticleContainer";
 
 // typedefs
+template <unsigned Dim = 3>
+using Mesh_t = ippl::UniformCartesian<double, Dim>;
+
 template <typename T, unsigned Dim = 3>
 using PLayout_t = typename ippl::ParticleSpatialLayout<T, Dim, Mesh_t<Dim>>;
+
+template <unsigned Dim = 3>
+using FieldLayout_t = ippl::FieldLayout<Dim>;
+
+template <typename T>
+using ParticleAttrib = ippl::ParticleAttrib<T>;
+
+using size_type = ippl::detail::size_type;
+
+template <typename T, unsigned Dim = 3>
+using Vector_t = ippl::Vector<T, Dim>;
 
 // random generator
 template <typename T, class GeneratorPool, unsigned Dim>
@@ -87,17 +100,62 @@ public:
 int main(int argc, char* argv[]) {
     ippl::initialize(argc, argv);
     {
-        setSignalHandler();
-
+        // Message objects
         Inform msg("ParticleContainerTest");
         Inform msg2all(argv[0], INFORM_ALL_NODES);
 
+        // Timers
         auto start = std::chrono::high_resolution_clock::now();
         static IpplTimings::TimerRef mainTimer        = IpplTimings::getTimer("total");
         IpplTimings::startTimer(mainTimer);
+       
+        // Read inputs
+        //const double dt              = 1.0;
+        int arg=1;
+        const unsigned int nt   = std::atoi(argv[arg++]);
+        unsigned int nSp        = std::atoi(argv[arg++]); 
+        size_type ppSp          = std::atoll(argv[arg++]);
+        msg << "Particle Container Test" << endl
+            << "nt " << nt << " nSp= " << nSp << " ppSp = " << ppSp << endl;
         
-        unsigned int nSp = std::atoi(argv[arg++]); 
-        size_type ppSp = std::atoll(argv[arg++]);
+        // Define container pointer
+        using container_type = SecondaryParticleContainer<PLayout_t<double,Dim>, double, Dim>;
+        std::unique_ptr<container_type> PC;
+
+        // Necessary objects for ParticleSpatialLayout
+        Vector_t<int, Dim> nr;
+        for (unsigned d = 0; d < Dim; d++)
+            nr[d] = 32;
+        ippl::NDIndex<Dim> domain;
+        for (unsigned i = 0; i < Dim; i++) {
+            domain[i] = ippl::Index(nr[i]);
+        }
+        Vector_t<double, Dim> rmin(0.0);
+        Vector_t<double, Dim> rmax(20.0);
+        Vector_t<double, Dim> hr     = rmax / nr;
+        Vector_t<double, Dim> origin = rmin;
+        std::array<bool, Dim> isParallel;
+        isParallel.fill(true);
+        const bool isAllPeriodic = true;
+        Mesh_t<Dim> mesh(domain, hr, origin);
+        FieldLayout_t<Dim> FL(MPI_COMM_WORLD, domain, isParallel, isAllPeriodic);
+        PLayout_t<double, Dim> PL(FL, mesh);
+
+        // Construct particle container
+        PC = std::make_unique<container_type>(PL);
+
+        // Create particles
+        PC->create(nSp*ppSp);
+
+        // End Timings
+        msg << "Particle Container Test: End. " << endl;
+        IpplTimings::stopTimer(mainTimer);
+        IpplTimings::print();
+        IpplTimings::print(std::string("timing.dat"));
+        auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> time_chrono =
+            std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
+        std::cout << "Elapsed time: " << time_chrono.count() << std::endl;
     }
     ippl::finalize();
 
