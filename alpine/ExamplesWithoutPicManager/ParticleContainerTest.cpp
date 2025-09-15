@@ -1,7 +1,7 @@
 // Particle Container Test
 // Usage:
 //          srun ./ParticleContainerTest
-//              <nt> <nsp> <ppsp> 
+//              <nt> <nsp> <ppsp> --info 5
 //
 //          nt    = No. timesteps 
 //          nsp   = No. particle species
@@ -19,6 +19,10 @@
 
 #include "Utility/IpplTimings.h"
 #include "Utility/TypeUtils.h"
+#include "Types/IpplTypes.h"
+#include "Particle/ParticleBase.h"
+#include "Particle/ParticleLayout.h"
+
 
 constexpr unsigned Dim = 3;
 
@@ -75,6 +79,22 @@ struct generate_random {
     }
 };
 
+// Particle Layout, since we don't have Fields and don't need ParticleSpatialLayout
+template <typename T, unsigned Dim, typename... PositionProperties>
+class SecondaryParticleLayout : public ippl::detail::ParticleLayout<T, Dim, PositionProperties...>{
+public:
+    SecondaryParticleLayout() : ippl::detail::ParticleLayout<T, Dim, PositionProperties...>() {}
+    ~SecondaryParticleLayout() = default;
+
+public:
+    template <class ParticleContainer>
+    void update(ParticleContainer& pc){
+        // TODO
+    }
+    
+};
+
+
 // Particle Containers
 template <class PLayout, typename T, unsigned Dim = 3>
 class SecondaryParticleContainer : public ippl::ParticleBase<PLayout> {
@@ -119,10 +139,12 @@ int main(int argc, char* argv[]) {
             << "nt " << nt << " nSp= " << nSp << " ppSp = " << ppSp << endl;
         
         // Define container pointer
-        using container_type = SecondaryParticleContainer<PLayout_t<double,Dim>, double, Dim>;
+        //using container_type = SecondaryParticleContainer<PLayout_t<double,Dim>, double, Dim>;
+        using container_type = SecondaryParticleContainer<SecondaryParticleLayout<double,Dim>, double, Dim>;
         std::unique_ptr<container_type> PC;
 
         // Necessary objects for ParticleSpatialLayout
+        /*
         Vector_t<int, Dim> nr;
         for (unsigned d = 0; d < Dim; d++)
             nr[d] = 32;
@@ -140,9 +162,12 @@ int main(int argc, char* argv[]) {
         Mesh_t<Dim> mesh(domain, hr, origin);
         FieldLayout_t<Dim> FL(MPI_COMM_WORLD, domain, isParallel, isAllPeriodic);
         PLayout_t<double, Dim> PL(FL, mesh);
+        */
+        
+        SecondaryParticleLayout<double,Dim> SPL;
 
         // Construct particle container
-        PC = std::make_unique<container_type>(PL);
+        PC = std::make_unique<container_type>(SPL);
 
         // Create particles
         PC->create(nSp*ppSp);
