@@ -22,6 +22,7 @@
 #include "Types/IpplTypes.h"
 #include "Particle/ParticleBase.h"
 #include "Particle/ParticleLayout.h"
+#include "Region/NDRegion.h"
 
 
 constexpr unsigned Dim = 3;
@@ -79,6 +80,36 @@ struct generate_random {
     }
 };
 
+// random int generator
+template <typename T, class GeneratorPool>
+struct generate_random_int {
+    using view_type = typename ippl::detail::ViewType<T, 1>::view_type;
+    // Output View for the random numbers
+    view_type vals;
+
+    // The GeneratorPool
+    GeneratorPool rand_pool;
+
+    T start, end;
+
+    // Initialize all members
+    generate_random_int(view_type vals_, GeneratorPool rand_pool_)
+        : vals(vals_)
+        , rand_pool(rand_pool_) {}
+
+    KOKKOS_INLINE_FUNCTION void operator()(const size_t i) const {
+        // Get a random number state from the pool for the active thread
+        typename GeneratorPool::generator_type rand_gen = rand_pool.get_state();
+
+        // Draw 0 or 1
+        vals(i) = rand_gen.rand_int(2);
+
+        // Give the state back, which will allow another thread to acquire it
+        rand_pool.free_state(rand_gen);
+    }
+};
+
+
 // Particle Layout, since we don't have Fields and don't need ParticleSpatialLayout
 template <typename T, unsigned Dim, typename... PositionProperties>
 class SecondaryParticleLayout : public ippl::detail::ParticleLayout<T, Dim, PositionProperties...>{
@@ -87,10 +118,17 @@ public:
     ~SecondaryParticleLayout() = default;
 
 public:
+    void setDomain(ippl::NDRegion<T,Dim> domain){
+        domain_m=domain;
+    }
     template <class ParticleContainer>
     void update(ParticleContainer& pc){
-        // TODO
+        // Apply BC
+        this->applyBC(pc.R,domain_m);
     }
+
+private:
+    ippl::NDRegion<T,Dim> domain_m;
     
 };
 
@@ -113,6 +151,24 @@ public:
     }
 
     ~SecondaryParticleContainer() {}
+
+    
+    void initialize(Vector_t<T,Dim> rmin, Vector_t<T,Dim> rmax){
+        Kokkos::Random_XorShift64_Pool<> rand_pool64((size_type)(42 + 100 * ippl::Comm->rank()));
+        Kokkos::parallel_for(
+            this->getLocalNum(), generate_random<Vector_t<double, Dim>, Kokkos::Random_XorShift64_Pool<>, Dim>(
+                      this->R.getView(), rand_pool64, rmin, rmax));
+        Kokkos::fence();
+        
+        // Sample use same domain for P as for R
+        Kokkos::parallel_for(
+            this->getLocalNum(), generate_random<Vector_t<double, Dim>, Kokkos::Random_XorShift64_Pool<>, Dim>(
+                      this->P.getView(), rand_pool64, rmin, rmax));
+        Kokkos::fence();
+                
+        // Randomly sample species
+        Kokkos::fill_random(this->Sp.getView(), rand_pool64,2);
+    }
 
 
 };
@@ -160,16 +216,27 @@ int main(int argc, char* argv[]) {
         IpplTimings::startTimer(mainTimer);
        
         // Read inputs
-        //const double dt              = 1.0;
+        
         int arg=1;
         const unsigned int nt   = std::atoi(argv[arg++]);
         unsigned int nSp        = std::atoi(argv[arg++]); 
         size_type ppSp          = std::atoll(argv[arg++]);
+        const double dt              = 1.0;
         msg << "Particle Container Test" << endl
             << "nt " << nt << " nSp= " << nSp << " ppSp = " << ppSp << endl;
+
+        // Define Domain
+        Vector_t<double, Dim> rmin(-1.0);
+        Vector_t<double, Dim> rmax(1.0); 
+        ippl::NDRegion<double,3> domain;
+        for(unsigned int d=0;d<Dim;++d){
+            domain[d] = ippl::PRegion<double>(-1,1);
+        }
         
         // Particle Layout
         SecondaryParticleLayout<double,Dim> PL;
+        PL.setDomain(domain);
+        PL.setParticleBC(ippl::BC::PERIODIC);
 
         // Particle Container Pointer
         using container_type = SecondaryParticleContainer<SecondaryParticleLayout<double,Dim>, double, Dim>;
@@ -178,6 +245,28 @@ int main(int argc, char* argv[]) {
         // Create particles
         PC->create(nSp*ppSp);
 
+        // Initialize particle species, positions and momenta
+        PC->initialize(rmin, rmax);
+
+        // Initialize RNG
+        Kokkos::Random_XorShift64_Pool<> rand_pool64((size_type)(42 + 100 * ippl::Comm->rank()));
+
+        for(unsigned int i=0; i<PC->getLocalNum();++i){
+            std::cout<<PC->R(i)<<std::endl;
+        }
+
+        // Simulation Loop
+        msg << "Starting iterations..." << endl;
+        for(unsigned int it=0; it<nt; it++){
+            Kokkos::parallel_for(
+                PC->getLocalNum(),
+                generate_random<Vector_t<double, Dim>, Kokkos::Random_XorShift64_Pool<>, Dim>(
+                    PC->P.getView(), rand_pool64, rmin, rmax));
+            Kokkos::fence();
+
+            PC->R = PC->R + dt * PC->P;
+            PC->update();
+        }
         // End Timings
         msg << "Particle Container Test: End. " << endl;
         IpplTimings::stopTimer(mainTimer);
@@ -187,6 +276,10 @@ int main(int argc, char* argv[]) {
         std::chrono::duration<double> time_chrono =
             std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
         std::cout << "Elapsed time: " << time_chrono.count() << std::endl;
+
+        for(unsigned int i=0; i<PC->getLocalNum();++i){
+            std::cout<<PC->R(i)<<std::endl;
+        }
     }
     ippl::finalize();
 
