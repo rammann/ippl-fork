@@ -96,12 +96,12 @@ public:
 
 
 // Particle Containers
+// 1. Species given by attribute
 template <class PLayout, typename T, unsigned Dim = 3>
 class SecondaryParticleContainer : public ippl::ParticleBase<PLayout> {
     using Base = ippl::ParticleBase<PLayout>;
 
 public:
-    // Base::particle_position_type R = Positions (already defined in Base)
     typename Base::particle_position_type P; // Momenta
     ParticleAttrib<int> Sp; // Particle Species 
 
@@ -114,6 +114,36 @@ public:
 
     ~SecondaryParticleContainer() {}
 
+
+};
+
+// 2. Species given by sorted containter
+// Assuming only two species for simplicity
+template <class PLayout, typename T, unsigned Dim = 3>
+class SortedParticleContainer : public ippl::ParticleBase<PLayout> {
+    using Base = ippl::ParticleBase<PLayout>;
+
+public:
+    typename Base::particle_position_type P; // Momenta
+    
+    SortedParticleContainer(PLayout& pl)
+        : Base(pl)
+    {
+        this->addAttribute(P);
+    }
+
+    ~SortedParticleContainer() {}
+    
+    // Overwrite the ParticleBase::create(...) function so we can set first_idx
+    void create(unsigned int nsp, size_type ppsp){
+        assert(nsp==2);
+        first_idx=ppsp;
+        Base::create(nsp*ppsp);
+    }
+
+private:
+    // index of the first particle of the second species
+    unsigned int first_idx;
 
 };
 
@@ -138,36 +168,12 @@ int main(int argc, char* argv[]) {
         msg << "Particle Container Test" << endl
             << "nt " << nt << " nSp= " << nSp << " ppSp = " << ppSp << endl;
         
-        // Define container pointer
-        //using container_type = SecondaryParticleContainer<PLayout_t<double,Dim>, double, Dim>;
+        // Particle Layout
+        SecondaryParticleLayout<double,Dim> PL;
+
+        // Particle Container Pointer
         using container_type = SecondaryParticleContainer<SecondaryParticleLayout<double,Dim>, double, Dim>;
-        std::unique_ptr<container_type> PC;
-
-        // Necessary objects for ParticleSpatialLayout
-        /*
-        Vector_t<int, Dim> nr;
-        for (unsigned d = 0; d < Dim; d++)
-            nr[d] = 32;
-        ippl::NDIndex<Dim> domain;
-        for (unsigned i = 0; i < Dim; i++) {
-            domain[i] = ippl::Index(nr[i]);
-        }
-        Vector_t<double, Dim> rmin(0.0);
-        Vector_t<double, Dim> rmax(20.0);
-        Vector_t<double, Dim> hr     = rmax / nr;
-        Vector_t<double, Dim> origin = rmin;
-        std::array<bool, Dim> isParallel;
-        isParallel.fill(true);
-        const bool isAllPeriodic = true;
-        Mesh_t<Dim> mesh(domain, hr, origin);
-        FieldLayout_t<Dim> FL(MPI_COMM_WORLD, domain, isParallel, isAllPeriodic);
-        PLayout_t<double, Dim> PL(FL, mesh);
-        */
-        
-        SecondaryParticleLayout<double,Dim> SPL;
-
-        // Construct particle container
-        PC = std::make_unique<container_type>(SPL);
+        std::unique_ptr<container_type> PC = std::make_unique<container_type>(PL);
 
         // Create particles
         PC->create(nSp*ppSp);
