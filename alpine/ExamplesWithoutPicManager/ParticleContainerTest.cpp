@@ -1,10 +1,9 @@
 // Particle Container Test
 // Usage:
 //          srun ./ParticleContainerTest
-//              <nt> <nsp> <ppsp> --info 5
+//              <nt> <ppsp> --info 5
 //
 //          nt    = No. timesteps 
-//          nsp   = No. particle species
 //          ppsp  = No. particles per species
 
 #include "Ippl.h"
@@ -219,11 +218,11 @@ int main(int argc, char* argv[]) {
         
         int arg=1;
         const unsigned int nt   = std::atoi(argv[arg++]);
-        unsigned int nSp        = std::atoi(argv[arg++]); 
+        //unsigned int nSp        = std::atoi(argv[arg++]); 
         size_type ppSp          = std::atoll(argv[arg++]);
         const double dt              = 1.0;
         msg << "Particle Container Test" << endl
-            << "nt " << nt << " nSp= " << nSp << " ppSp = " << ppSp << endl;
+            << "nt " << nt << " ppSp = " << ppSp << endl;
 
         // Define Domain
         Vector_t<double, Dim> rmin(-1.0);
@@ -240,10 +239,10 @@ int main(int argc, char* argv[]) {
 
         // Particle Container Pointer
         using container_type = SecondaryParticleContainer<SecondaryParticleLayout<double,Dim>, double, Dim>;
-        std::unique_ptr<container_type> PC = std::make_unique<container_type>(PL);
+        std::shared_ptr<container_type> PC = std::make_shared<container_type>(PL);
 
         // Create particles
-        PC->create(nSp*ppSp);
+        PC->create(2*ppSp);
 
         // Initialize particle species, positions and momenta
         PC->initialize(rmin, rmax);
@@ -251,21 +250,91 @@ int main(int argc, char* argv[]) {
         // Initialize RNG
         Kokkos::Random_XorShift64_Pool<> rand_pool64((size_type)(42 + 100 * ippl::Comm->rank()));
 
-        for(unsigned int i=0; i<PC->getLocalNum();++i){
-            std::cout<<PC->R(i)<<std::endl;
-        }
-
         // Simulation Loop
         msg << "Starting iterations..." << endl;
         for(unsigned int it=0; it<nt; it++){
+
+            //  Calculate Muon momenta
             Kokkos::parallel_for(
-                PC->getLocalNum(),
+                PC->getLocalNum(), 
                 generate_random<Vector_t<double, Dim>, Kokkos::Random_XorShift64_Pool<>, Dim>(
                     PC->P.getView(), rand_pool64, rmin, rmax));
             Kokkos::fence();
+        
+            // Muon drift
+            Kokkos::parallel_for(PC->getLocalNum(), 
+            KOKKOS_LAMBDA(const int i){
+                if(PC->Sp(i)==0){
+                    PC->R(i) = PC->R(i) + dt * PC->P(i);
+                }
+            });
+            Kokkos::fence();
+            
+            //  Calculate Electron momenta
+            Kokkos::parallel_for(
+                PC->getLocalNum(), 
+                generate_random<Vector_t<double, Dim>, Kokkos::Random_XorShift64_Pool<>, Dim>(
+                    PC->P.getView(), rand_pool64, rmin, rmax));
+            Kokkos::fence();
+          
+            // Electron drift
+            Kokkos::parallel_for(PC->getLocalNum(), 
+            KOKKOS_LAMBDA(const int i){
+                if(PC->Sp(i)==1){
+                    PC->R(i) = PC->R(i) + dt * PC->P(i);
+                }
+            });
+            Kokkos::fence();
 
-            PC->R = PC->R + dt * PC->P;
+            // Apply BC
             PC->update();
+
+            // Muon -> Electron Decay
+            Kokkos::parallel_for(PC->getLocalNum(),
+            KOKKOS_LAMBDA(const int i){
+                if(PC->Sp(i)==0){
+                    auto rand_gen = rand_pool64.get_state();
+                    if(rand_gen.drand(0.0,1.0)<0.1){
+                        PC->Sp(i)=1;
+                        PC->P(i) = PC->P(i)/2;
+                    }
+                    rand_pool64.free_state(rand_gen);
+                }
+            });
+            Kokkos::fence();
+
+            // Electron births through ionization
+            int new_particles;
+            Kokkos::parallel_reduce(PC->getLocalNum(),
+            KOKKOS_LAMBDA(const int& i, int& sum){
+                if(PC->Sp(i)==1){
+                    auto rand_gen = rand_pool64.get_state();
+                    if(rand_gen.drand(0.0,1.0)<0.1){
+                        sum += 1;
+                    }
+                    rand_pool64.free_state(rand_gen);
+                }
+            }, new_particles);
+            Kokkos::fence();
+            PC->create(new_particles);
+
+            // Set species
+            Kokkos::parallel_for(Kokkos::RangePolicy(PC->getLocalNum()-new_particles-1, PC->getLocalNum()),
+            KOKKOS_LAMBDA(const int i){
+                PC->Sp(i)=0;
+            });
+            
+            // Sample positions and momenta
+            Kokkos::parallel_for(
+                Kokkos::RangePolicy(PC->getLocalNum()-new_particles-1, PC->getLocalNum()), 
+                generate_random<Vector_t<double, Dim>, Kokkos::Random_XorShift64_Pool<>, Dim>(
+                        PC->R.getView(), rand_pool64, rmin, rmax));
+            Kokkos::parallel_for(
+                Kokkos::RangePolicy(PC->getLocalNum()-new_particles-1, PC->getLocalNum()), 
+                generate_random<Vector_t<double, Dim>, Kokkos::Random_XorShift64_Pool<>, Dim>(
+                        PC->P.getView(), rand_pool64, rmin, rmax));
+            Kokkos::fence();
+            
         }
         // End Timings
         msg << "Particle Container Test: End. " << endl;
@@ -277,9 +346,6 @@ int main(int argc, char* argv[]) {
             std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
         std::cout << "Elapsed time: " << time_chrono.count() << std::endl;
 
-        for(unsigned int i=0; i<PC->getLocalNum();++i){
-            std::cout<<PC->R(i)<<std::endl;
-        }
     }
     ippl::finalize();
 
