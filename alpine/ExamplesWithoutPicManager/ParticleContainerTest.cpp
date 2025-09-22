@@ -149,13 +149,16 @@ public:
     {
         this->addAttribute(P);
         this->addAttribute(Sp);
+        rand_pool64=Kokkos::Random_XorShift64_Pool<>((size_type)(42 + 100 * ippl::Comm->rank()));
     }
 
     ~SecondaryParticleContainer() {}
 
     
-    void initialize(Vector_t<T,Dim> rmin, Vector_t<T,Dim> rmax){
-        Kokkos::Random_XorShift64_Pool<> rand_pool64((size_type)(42 + 100 * ippl::Comm->rank()));
+    void initialize(Vector_t<T,Dim> rmin_, Vector_t<T,Dim> rmax_){
+        //Kokkos::Random_XorShift64_Pool<> rand_pool64((size_type)(42 + 100 * ippl::Comm->rank()));
+        rmin=rmin_;
+        rmax=rmax_;
         Kokkos::parallel_for(
             this->getLocalNum(), generate_random<Vector_t<double, Dim>, Kokkos::Random_XorShift64_Pool<>, Dim>(
                       this->R.getView(), rand_pool64, rmin, rmax));
@@ -171,7 +174,110 @@ public:
         Kokkos::fill_random(this->Sp.getView(), rand_pool64,2);
     }
 
+    void getMuonMomenta(){
+        Kokkos::parallel_for(
+        this->getLocalNum(), 
+            generate_random<Vector_t<double, Dim>, Kokkos::Random_XorShift64_Pool<>, Dim>
+            (this->P.getView(), rand_pool64, rmin, rmax));
+        Kokkos::fence();
+    }
 
+    void getElectronMomenta(){
+        Kokkos::parallel_for(
+            this->getLocalNum(), 
+            generate_random<Vector_t<double, Dim>, Kokkos::Random_XorShift64_Pool<>, Dim>
+            (this->P.getView(), rand_pool64, rmin, rmax));
+        Kokkos::fence();
+        
+    }
+
+    void muonDrift(double dt){
+        Kokkos::parallel_for(this->getLocalNum(), 
+        [=,this](const int i){
+            if(this->Sp(i)==0){
+                this->R(i) = this->R(i) + dt * this->P(i);
+            }
+        });
+        Kokkos::fence();
+    }
+
+    void electronDrift(double dt){
+        Kokkos::parallel_for(this->getLocalNum(), 
+        [=,this](const int i){
+            if(this->Sp(i)==1){
+                this->R(i) = this->R(i) + dt * this->P(i);
+            }
+        });
+        Kokkos::fence();
+    }
+
+    void muonDecay(){
+        Kokkos::parallel_for(this->getLocalNum(),
+        [=,this](const int i){
+            if(this->Sp(i)==0){
+                auto rand_gen = rand_pool64.get_state();
+                if(rand_gen.drand(0.0,1.0)<0.1){
+                    this->Sp(i)=1;
+                    this->P(i) = this->P(i)/2;
+                }
+                rand_pool64.free_state(rand_gen);
+            }
+        });
+        Kokkos::fence();
+    }
+
+    void ionization(){
+        int new_particles;
+        Kokkos::parallel_reduce(this->getLocalNum(),
+        [=,this](const int& i, int& sum){
+            if(this->Sp(i)==1){
+                auto rand_gen = rand_pool64.get_state();
+                if(rand_gen.drand(0.0,1.0)<0.1){
+                    sum += 1;
+                }
+                rand_pool64.free_state(rand_gen);
+            }
+        }, new_particles);
+        Kokkos::fence();
+        this->create(new_particles);
+
+        // Set species
+        Kokkos::parallel_for(Kokkos::RangePolicy(this->getLocalNum()-new_particles-1, this->getLocalNum()),
+        [=,this](const int i){
+            this->Sp(i)=0;
+        });
+        
+        // Sample positions and momenta
+        Kokkos::parallel_for(
+            Kokkos::RangePolicy(this->getLocalNum()-new_particles-1, this->getLocalNum()), 
+            generate_random<Vector_t<double, Dim>, Kokkos::Random_XorShift64_Pool<>, Dim>(
+                    this->R.getView(), rand_pool64, rmin, rmax));
+        Kokkos::parallel_for(
+            Kokkos::RangePolicy(this->getLocalNum()-new_particles-1, this->getLocalNum()), 
+            generate_random<Vector_t<double, Dim>, Kokkos::Random_XorShift64_Pool<>, Dim>(
+                    this->P.getView(), rand_pool64, rmin, rmax));
+        Kokkos::fence();
+    }
+
+    void particleLoss(){
+        bool_type lostParticles("lost particles", this->getLocalNum());
+        int nLost;
+        Kokkos::parallel_reduce(this->getLocalNum(),
+        [=,this](const int& i, int&sum){
+            auto rand_gen = rand_pool64.get_state(); 
+            if(rand_gen.drand(0.0,1.0)<0.05){
+                lostParticles(i)=1;
+                sum += 1;
+            }
+        },nLost);
+        this->destroy(lostParticles, nLost);
+ 
+    }
+
+private:
+    Kokkos::Random_XorShift64_Pool<> rand_pool64; 
+    Vector_t<double, Dim> rmin;
+    Vector_t<double, Dim> rmax;
 };
 
 // 2. Species given by sorted containter
@@ -219,10 +325,8 @@ int main(int argc, char* argv[]) {
         static IpplTimings::TimerRef muonDrift          = IpplTimings::getTimer("muonDrift");
         static IpplTimings::TimerRef electronDrift      = IpplTimings::getTimer("electronDrift");
         static IpplTimings::TimerRef muonDecay          = IpplTimings::getTimer("muonDecay");
-        static IpplTimings::TimerRef electronBirth      = IpplTimings::getTimer("electronBirth");
-        static IpplTimings::TimerRef setSpecies         = IpplTimings::getTimer("setSpecies");
-        static IpplTimings::TimerRef samplePos          = IpplTimings::getTimer("samplePos");
-        static IpplTimings::TimerRef particleLoss       = IpplTimings::getTimer("particleLoss");
+        static IpplTimings::TimerRef ionization         = IpplTimings::getTimer("ionization");
+        static IpplTimings::TimerRef particleLoss         = IpplTimings::getTimer("particleLoss");
 
         IpplTimings::startTimer(mainTimer);
        
@@ -260,7 +364,7 @@ int main(int argc, char* argv[]) {
         PC->initialize(rmin, rmax);
 
         // Initialize RNG
-        Kokkos::Random_XorShift64_Pool<> rand_pool64((size_type)(42 + 100 * ippl::Comm->rank()));
+        //Kokkos::Random_XorShift64_Pool<> rand_pool64((size_type)(42 + 100 * ippl::Comm->rank()));
 
         // Simulation Loop
         msg << "Starting iterations..." << endl;
@@ -268,42 +372,22 @@ int main(int argc, char* argv[]) {
 
             //  Calculate Muon momenta
             IpplTimings::startTimer(muonMomenta);
-            Kokkos::parallel_for(
-                PC->getLocalNum(), 
-                generate_random<Vector_t<double, Dim>, Kokkos::Random_XorShift64_Pool<>, Dim>(
-                    PC->P.getView(), rand_pool64, rmin, rmax));
-            Kokkos::fence();
+            PC->getMuonMomenta(); 
             IpplTimings::stopTimer(muonMomenta);
         
             // Muon drift
             IpplTimings::startTimer(muonDrift);
-            Kokkos::parallel_for(PC->getLocalNum(), 
-            KOKKOS_LAMBDA(const int i){
-                if(PC->Sp(i)==0){
-                    PC->R(i) = PC->R(i) + dt * PC->P(i);
-                }
-            });
-            Kokkos::fence();
+            PC->muonDrift(dt); 
             IpplTimings::stopTimer(muonDrift);
             
             //  Calculate Electron momenta
             IpplTimings::startTimer(electronMomenta);
-            Kokkos::parallel_for(
-                PC->getLocalNum(), 
-                generate_random<Vector_t<double, Dim>, Kokkos::Random_XorShift64_Pool<>, Dim>(
-                    PC->P.getView(), rand_pool64, rmin, rmax));
-            Kokkos::fence();
+            PC->getElectronMomenta();
             IpplTimings::stopTimer(electronMomenta); 
             
             // Electron drift
             IpplTimings::startTimer(electronDrift);
-            Kokkos::parallel_for(PC->getLocalNum(), 
-            KOKKOS_LAMBDA(const int i){
-                if(PC->Sp(i)==1){
-                    PC->R(i) = PC->R(i) + dt * PC->P(i);
-                }
-            });
-            Kokkos::fence();
+            PC->electronDrift(dt); 
             IpplTimings::stopTimer(electronDrift);
 
             // Apply BC
@@ -311,71 +395,17 @@ int main(int argc, char* argv[]) {
 
             // Muon -> Electron Decay
             IpplTimings::startTimer(muonDecay);
-            Kokkos::parallel_for(PC->getLocalNum(),
-            KOKKOS_LAMBDA(const int i){
-                if(PC->Sp(i)==0){
-                    auto rand_gen = rand_pool64.get_state();
-                    if(rand_gen.drand(0.0,1.0)<0.1){
-                        PC->Sp(i)=1;
-                        PC->P(i) = PC->P(i)/2;
-                    }
-                    rand_pool64.free_state(rand_gen);
-                }
-            });
-            Kokkos::fence();
+            PC->muonDecay(); 
             IpplTimings::stopTimer(muonDecay);
 
             // Electron births through ionization
-            IpplTimings::startTimer(electronBirth);
-            int new_particles;
-            Kokkos::parallel_reduce(PC->getLocalNum(),
-            KOKKOS_LAMBDA(const int& i, int& sum){
-                if(PC->Sp(i)==1){
-                    auto rand_gen = rand_pool64.get_state();
-                    if(rand_gen.drand(0.0,1.0)<0.1){
-                        sum += 1;
-                    }
-                    rand_pool64.free_state(rand_gen);
-                }
-            }, new_particles);
-            Kokkos::fence();
-            PC->create(new_particles);
-            IpplTimings::stopTimer(electronBirth);
-
-            // Set species
-            IpplTimings::startTimer(setSpecies);
-            Kokkos::parallel_for(Kokkos::RangePolicy(PC->getLocalNum()-new_particles-1, PC->getLocalNum()),
-            KOKKOS_LAMBDA(const int i){
-                PC->Sp(i)=0;
-            });
-            IpplTimings::stopTimer(setSpecies);
-            
-            // Sample positions and momenta
-            IpplTimings::startTimer(samplePos);
-            Kokkos::parallel_for(
-                Kokkos::RangePolicy(PC->getLocalNum()-new_particles-1, PC->getLocalNum()), 
-                generate_random<Vector_t<double, Dim>, Kokkos::Random_XorShift64_Pool<>, Dim>(
-                        PC->R.getView(), rand_pool64, rmin, rmax));
-            Kokkos::parallel_for(
-                Kokkos::RangePolicy(PC->getLocalNum()-new_particles-1, PC->getLocalNum()), 
-                generate_random<Vector_t<double, Dim>, Kokkos::Random_XorShift64_Pool<>, Dim>(
-                        PC->P.getView(), rand_pool64, rmin, rmax));
-            Kokkos::fence();
-            IpplTimings::stopTimer(samplePos);
+            IpplTimings::startTimer(ionization);
+            PC->ionization();
+            IpplTimings::stopTimer(ionization);
             
             // Particle losses
             IpplTimings::startTimer(particleLoss);
-            bool_type lostParticles("lost particles", PC->getLocalNum());
-            int nLost;
-            Kokkos::parallel_reduce(PC->getLocalNum(),
-            KOKKOS_LAMBDA(const int& i, int&sum){
-                auto rand_gen = rand_pool64.get_state(); 
-                if(rand_gen.drand(0.0,1.0)<0.05){
-                    lostParticles(i)=1;
-                    sum += 1;
-                }
-            },nLost);
-            PC->destroy(lostParticles, nLost);
+            PC->particleLoss();
             IpplTimings::stopTimer(particleLoss);
             
         }
