@@ -326,7 +326,7 @@ int main(int argc, char* argv[]) {
         static IpplTimings::TimerRef electronDrift      = IpplTimings::getTimer("electronDrift");
         static IpplTimings::TimerRef muonDecay          = IpplTimings::getTimer("muonDecay");
         static IpplTimings::TimerRef ionization         = IpplTimings::getTimer("ionization");
-        static IpplTimings::TimerRef particleLoss         = IpplTimings::getTimer("particleLoss");
+        static IpplTimings::TimerRef particleLoss       = IpplTimings::getTimer("particleLoss");
 
         IpplTimings::startTimer(mainTimer);
        
