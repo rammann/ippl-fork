@@ -1,7 +1,7 @@
 // Particle Container Test
 // Usage:
 //          srun ./ParticleContainerTest
-//              <nt> <ppsp> --info 5
+//              <nt> <ppsp> --overallocation 2.0 --info 5
 //
 //          nt    = No. timesteps 
 //          ppsp  = No. particles per species
@@ -22,6 +22,7 @@
 #include "Particle/ParticleBase.h"
 #include "Particle/ParticleLayout.h"
 #include "Region/NDRegion.h"
+#include "Communicate/DataTypes.h"
 
 
 constexpr unsigned Dim = 3;
@@ -282,7 +283,7 @@ private:
 
 // 2. Species given by sorted containter
 // Assuming only two species for simplicity
-template <class PLayout, typename T, unsigned Dim = 3>
+template <class PLayout, typename T, unsigned Dim = 3, size_t Sp=2>
 class SortedParticleContainer : public ippl::ParticleBase<PLayout> {
     using Base = ippl::ParticleBase<PLayout>;
 
@@ -293,20 +294,32 @@ public:
         : Base(pl)
     {
         this->addAttribute(P);
+        for(unsigned i=0;i<Sp;++i){
+            start[i]=0; // index of the first
+            end[i]=0;   // index of the last + 1
+        }
     }
 
     ~SortedParticleContainer() {}
     
     // Overwrite the ParticleBase::create(...) function so we can set first_idx
-    void create(unsigned int nsp, size_type ppsp){
-        assert(nsp==2);
-        first_idx=ppsp;
-        Base::create(nsp*ppsp);
+    void create(unsigned int species=0, size_type particles){
+        if(this->localNum_m > 0){
+
+        }
+        else if (this->localNum_m == 0){   
+            start[0]    = 0;
+            end[0]      = particles/2;
+            start[1]    = particles/2 + (particles * Comm->getDefaultOverallocation())/2;
+            end[1]      = start[1] + (particles/2 + 0.5);
+        }
+        
     }
 
 private:
     // index of the first particle of the second species
-    unsigned int first_idx;
+    std::array<size_t,Sp>start;
+    std::array<size_t,Sp>end;
 
 };
 
