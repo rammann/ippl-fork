@@ -302,17 +302,34 @@ public:
 
     ~SortedParticleContainer() {}
     
-    // Overwrite the ParticleBase::create(...) function so we can set first_idx
     void create(unsigned int species=0, size_type particles){
-        if(this->localNum_m > 0){
+        /* 
+        Empty particle container -> create evenly spaced, 
+        evenly sized particle, buffer regions.
 
+        p = particles
+        0 = buffer 
+        _____________________________
+        |ppp|00|ppp|00|ppp|00|ppp|00|
+        –––––––––––––––––––––––––––––
+
+        residual particles (due to integer division) are added to the last species
+
+        */
+        if(this->localNum_m == 0){
+            size_t buffer_size = particles * (Comm->getDefaultOverallocation()-1.0) / Sp;
+            size_t part_per_sp = particles / Sp;
+            size_t res = particles % Sp;
+            size_t ptr = 0;
+            for(unsigned int i=0;i<Sp;++i){
+               start[i] = ptr;
+               end[i] = start[i] + part_per_sp;
+               ptr = end[i] + buffer_size;
+            }
+            end[Sp-1] += res;
         }
-        else if (this->localNum_m == 0){   
-            start[0]    = 0;
-            end[0]      = particles/2;
-            start[1]    = particles/2 + (particles * Comm->getDefaultOverallocation())/2;
-            end[1]      = start[1] + (particles/2 + 0.5);
-        }
+        
+        
         
     }
 
