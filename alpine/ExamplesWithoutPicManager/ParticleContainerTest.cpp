@@ -1,7 +1,7 @@
 // Particle Container Test
 // Usage:
 //          srun ./ParticleContainerTest
-//              <nt> <ppsp> --overallocation 2.0 --info 5
+//              <nt> <ppsp> --overallocate 2.0 --info 5
 //
 //          nt    = No. timesteps 
 //          ppsp  = No. particles per species
@@ -282,16 +282,19 @@ private:
 };
 
 // 2. Species given by sorted containter
-// Assuming only two species for simplicity
-template <class PLayout, typename T, unsigned Dim = 3, size_t Sp=2>
+/* 
+For the moment we consider only the case where the buffer regions are large enough,
+thus no shifting of particle regions occurs
+*/
+template <class PLayout, typename T, unsigned Dim = 3>
 class SortedParticleContainer : public ippl::ParticleBase<PLayout> {
     using Base = ippl::ParticleBase<PLayout>;
 
 public:
     typename Base::particle_position_type P; // Momenta
     
-    SortedParticleContainer(PLayout& pl)
-        : Base(pl)
+    SortedParticleContainer(PLayout& pl, unsigned int sp)
+        : Base(pl), Sp(sp), start(sp+1), end(sp)
     {
         this->addAttribute(P);
         for(unsigned i=0;i<Sp;++i){
@@ -302,7 +305,7 @@ public:
 
     ~SortedParticleContainer() {}
     
-    void create(unsigned int species=0, size_type particles){
+    void create(size_type particles,unsigned int species=0){
         /* 
         Empty particle container -> create evenly spaced, 
         evenly sized particle, buffer regions.
@@ -314,32 +317,171 @@ public:
         –––––––––––––––––––––––––––––
 
         residual particles (due to integer division) are added to the last species
-
         */
-        if(this->localNum_m == 0){
-            size_t buffer_size = particles * (Comm->getDefaultOverallocation()-1.0) / Sp;
-            size_t part_per_sp = particles / Sp;
-            size_t res = particles % Sp;
-            size_t ptr = 0;
+        if(this->getLocalNum() == 0){
+            size_t buffer_size  = particles * (ippl::Comm->getDefaultOverallocation()-1.0) / Sp;
+            size_t buffer_res   = particles * static_cast<size_t>(ippl::Comm->getDefaultOverallocation()-1.0) % Sp; 
+            size_t part_per_sp  = particles / Sp;
+            size_t res          = particles % Sp;
+            size_t ptr          = 0;
             for(unsigned int i=0;i<Sp;++i){
                start[i] = ptr;
                end[i] = start[i] + part_per_sp;
                ptr = end[i] + buffer_size;
             }
             end[Sp-1] += res;
+            // this is the index after the end of the container == size
+            start[Sp] = end[Sp-1] + buffer_size + buffer_res;
+            Base::create(particles);
         }
         
+        /*
+        Filled particle container + small allocation ->
         
+        e.g.
+        species     = 2
+        particles   = 1 
+        _____________________________
+        |ppp|00|ppp|00|ppp|00|ppp|00|
+        –––––––––––––––––––––––––––––
+        ==>
+        _____________________________
+        |ppp|00|ppp|00|pppp|0|ppp|00|
+        –––––––––––––––––––––––––––––
+        */ 
         
+        else if(start[species+1]-end[species]>= particles){
+            end[species] += particles; 
+            Base::create(particles);
+        }
+
+        else{
+            size_t buffer_size = (this->getLocalNum() + particles) * (ippl::Comm->getDefaultOverallocation()-1.0) / Sp;
+            end[species] += particles;
+            size_t newstart = end[species] + buffer_size;
+            size_t diff = newstart - start[species+1];
+            start[species+1] = newstart;
+            create(diff,species+1);
+        }
+
+    }
+
+    void getIndexInfo(){
+        std::cout << "Indices along the container:\n";
+        for(unsigned int i=0;i<Sp; ++i){
+            std::cout << "start[" << i << "] = " << start[i] << "  end[" << i << "] = " << end[i] << "\n";
+        }
+        std::cout << "start[" << Sp << "] = " << start[Sp] << "\n";
+    }
+
+    void generateDiagram(const std::string& python_script_path = "generate_diagram.py") const {
+        const char* data_filename = "container_data.txt";
+        
+        // Step 1: Write index data to a file
+        std::ofstream data_file(data_filename);
+        if (!data_file.is_open()) {
+            std::cerr << "Error: Could not open file to write diagram data." << std::endl;
+            return;
+        }
+
+        data_file << "Indices along the container:\n";
+        for (unsigned int i = 0; i < Sp; ++i) {
+            data_file << "start[" << i << "] = " << start[i] << "  end[" << i << "] = " << end[i] << "\n";
+        }
+        data_file << "start[" << Sp << "] = " << start[Sp] << "\n";
+        data_file.close();
+
+        // Step 2: Construct and execute the command to call the Python script
+        // Note: 'python3' might be needed instead of 'python' on some systems
+        std::string command = "python ";
+        command += python_script_path;
+        command += " ";
+        command += data_filename;
+        
+        std::cout << "Executing command: " << command << std::endl;
+        int result = system(command.c_str());
+
+        if (result != 0) {
+            std::cerr << "Warning: The python script might have failed. Exit code: " << result << std::endl;
+        }
+    }
+
+    void destroy(const Kokkos::View<bool*, Properties...>& invalid,
+                 const size_type destroyNum,
+                 const unsigned int species) {
+        PAssert(destroyNum <= end[species]-start[species]);
+        
+        if(destroyNum == 0){
+            return;
+        }
+
+        if(destroyNum == end[species]-start[species]){
+            end[species] = start[species];
+        }
+        // Resize buffers, if necessary
+        detail::runForAllSpaces([&]<typename MemorySpace>() {
+            if (attributes_m.template get<memory_space>().size() > 0) {
+                int overalloc = Comm->getDefaultOverallocation();
+                auto& del     = deleteIndex_m.get<memory_space>();
+                auto& keep    = keepIndex_m.get<memory_space>();
+                if (del.size() < destroyNum) {
+                    Kokkos::realloc(del, destroyNum * overalloc);
+                    Kokkos::realloc(keep, destroyNum * overalloc);
+                }
+            }
+        });
+
     }
 
 private:
-    // index of the first particle of the second species
-    std::array<size_t,Sp>start;
-    std::array<size_t,Sp>end;
+    const unsigned int Sp;
+    std::vector<size_t>start;
+    std::vector<size_t>end;
 
 };
 
+int main(int argc, char* argv[]) {
+    ippl::initialize(argc, argv);
+    {
+        // Message objects
+        Inform msg("ParticleContainerTest");
+        Inform msg2all(argv[0], INFORM_ALL_NODES);
+
+        int arg=1;
+        unsigned int nSp        = std::atoi(argv[arg++]); 
+        size_type ppSp          = std::atoll(argv[arg++]);
+        msg << "Particle Container Test" << endl
+            << "nSp " << nSp << " ppSp = " << ppSp << endl;
+
+        // Define Domain
+        Vector_t<double, Dim> rmin(-1.0);
+        Vector_t<double, Dim> rmax(1.0); 
+        ippl::NDRegion<double,3> domain;
+        for(unsigned int d=0;d<Dim;++d){
+            domain[d] = ippl::PRegion<double>(-1,1);
+        }
+        
+        // Particle Layout
+        SecondaryParticleLayout<double,Dim> PL;
+        PL.setDomain(domain);
+        PL.setParticleBC(ippl::BC::PERIODIC);
+
+        // Particle Container Pointer
+        using container_type = SortedParticleContainer<SecondaryParticleLayout<double,Dim>, double, Dim>;
+        std::shared_ptr<container_type> PC = std::make_shared<container_type>(PL, nSp);
+
+        PC->create(nSp * ppSp);
+        PC->getIndexInfo();
+        PC->create(10, 0);
+        PC->create(10,3);
+        PC->generateDiagram();
+    }
+    ippl::finalize();
+    return 0;
+}
+
+
+/* Original Main
 int main(int argc, char* argv[]) {
     ippl::initialize(argc, argv);
     {
@@ -454,3 +596,5 @@ int main(int argc, char* argv[]) {
 
     return 0;
 }
+*/
+
