@@ -338,7 +338,8 @@ namespace ippl {
          */
         void unpack(size_type nrecvs);
 
-    private:
+    //private:
+    public:
         //! particle layout
         // cannot use std::unique_ptr due to Kokkos
         Layout_t* layout_m;

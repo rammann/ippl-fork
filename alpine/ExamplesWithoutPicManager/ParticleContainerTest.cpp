@@ -406,6 +406,7 @@ public:
         }
     }
 
+    template <typename... Properties>
     void destroy(const Kokkos::View<bool*, Properties...>& invalid,
                  const size_type destroyNum,
                  const unsigned int species) {
@@ -418,19 +419,89 @@ public:
         if(destroyNum == end[species]-start[species]){
             end[species] = start[species];
         }
+
+        using view_type       = Kokkos::View<bool*, Properties...>;
+        using memory_space    = typename view_type::memory_space;
+        using execution_space = typename view_type::execution_space;
+        using policy_type     = Kokkos::RangePolicy<execution_space>;
+        auto& locDeleteIndex  = Base::deleteIndex_m.template get<memory_space>();
+        auto& locKeepIndex    = Base::keepIndex_m.template get<memory_space>();
+
         // Resize buffers, if necessary
-        detail::runForAllSpaces([&]<typename MemorySpace>() {
-            if (attributes_m.template get<memory_space>().size() > 0) {
-                int overalloc = Comm->getDefaultOverallocation();
-                auto& del     = deleteIndex_m.get<memory_space>();
-                auto& keep    = keepIndex_m.get<memory_space>();
+        ippl::detail::runForAllSpaces([&]<typename MemorySpace>() {
+            if (Base::attributes_m.template get<memory_space>().size() > 0) {
+                int overalloc = ippl::Comm->getDefaultOverallocation();
+                auto& del     = Base::deleteIndex_m.template get<memory_space>();
+                auto& keep    = Base::keepIndex_m.template get<memory_space>();
                 if (del.size() < destroyNum) {
                     Kokkos::realloc(del, destroyNum * overalloc);
                     Kokkos::realloc(keep, destroyNum * overalloc);
                 }
             }
         });
+        
+        // Reset index buffer
+        Kokkos::deep_copy(locDeleteIndex, -1);
 
+        // Find the indices of the invalid particles in the valid region
+        // In this case the invalid view needs to be full size of the conatiner
+        Kokkos::parallel_scan(
+            "Scan in ParticleBase::destroy()", policy_type(start[species], end[species] - destroyNum),
+            KOKKOS_LAMBDA(const size_t i, int& idx, const bool final) {
+                if (final && invalid(i)) {
+                    locDeleteIndex(idx) = i;
+                }
+                if (invalid(i)) {
+                    idx += 1;
+                }
+            });
+        Kokkos::fence();
+
+        // Determine the total number of invalid particles in the valid region
+        size_type maxDeleteIndex = 0;
+        Kokkos::parallel_reduce(
+            "Reduce in ParticleBase::destroy()", policy_type(0, destroyNum),
+            KOKKOS_LAMBDA(const size_t i, size_t& maxIdx) {
+                if (locDeleteIndex(i) >= 0 && i > maxIdx) {
+                    maxIdx = i;
+                }
+            },
+            Kokkos::Max<size_type>(maxDeleteIndex));
+
+        // Find the indices of the valid particles in the invalid region
+        Kokkos::parallel_scan(
+            "Second scan in ParticleBase::destroy()",
+            Kokkos::RangePolicy<size_type, execution_space>(end[species] - destroyNum, end[species]),
+            KOKKOS_LAMBDA(const size_t i, int& idx, const bool final) {
+                if (final && !invalid(i)) {
+                    locKeepIndex(idx) = i;
+                }
+                if (!invalid(i)) {
+                    idx += 1;
+                }
+            });
+
+        Kokkos::fence();
+
+        Base::localNum_m -= destroyNum;
+        end[species] -= destroyNum;
+        
+        auto filter = [&]<typename MemorySpace>() {
+            return Base::attributes_m.template get<MemorySpace>().size() > 0;
+        };
+        Base::deleteIndex_m.template copyToOtherSpaces<memory_space>(filter);
+        Base::keepIndex_m.template copyToOtherSpaces<memory_space>(filter);
+
+        // Partition the attributes into valid and invalid regions
+        // NOTE: The vector elements are pointers, but we want to extract
+        // the memory space from the class type, so we explicitly
+        // make the lambda argument a pointer to the template parameter
+        Base::forAllAttributes([&]<typename Attribute>(Attribute*& attribute) {
+            using att_memory_space = typename Attribute::memory_space;
+            auto& del              = Base::deleteIndex_m.template get<att_memory_space>();
+            auto& keep             = Base::keepIndex_m.template get<att_memory_space>();
+            attribute->destroy(del, keep, maxDeleteIndex + 1);
+        });
     }
 
 private:
@@ -473,7 +544,20 @@ int main(int argc, char* argv[]) {
         PC->create(nSp * ppSp);
         PC->getIndexInfo();
         PC->create(10, 0);
-        PC->create(10,3);
+        Kokkos::View<bool*> flags("flags", 100);
+
+        // 2. Use a parallel_for to initialize the view's elements.
+        // This loop will be executed in parallel by the default execution space.
+        Kokkos::parallel_for("InitFlags", 100, KOKKOS_LAMBDA(const int i) {
+            // The lambda function is executed for each index 'i' from 0 to 99.
+            if (i < 10) {
+                flags(i) = true;
+            } else {
+                flags(i) = false;
+            }
+        });
+
+        PC->destroy(flags, 10,0); 
         PC->generateDiagram();
     }
     ippl::finalize();
