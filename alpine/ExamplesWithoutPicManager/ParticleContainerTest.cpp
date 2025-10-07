@@ -25,7 +25,6 @@
 #include "Region/NDRegion.h"
 #include "Communicate/DataTypes.h"
 
-
 constexpr unsigned Dim = 3;
 
 const char* TestName = "ParticleContainer";
@@ -112,7 +111,6 @@ struct generate_random_int {
     }
 };
 
-
 // Particle Layout, since we don't have Fields and don't need ParticleSpatialLayout
 template <typename T, unsigned Dim, typename... PositionProperties>
 class SecondaryParticleLayout : public ippl::detail::ParticleLayout<T, Dim, PositionProperties...>{
@@ -135,8 +133,6 @@ private:
     
 };
 
-
-// Particle Containers
 // 1. Species given by attribute
 template <class PLayout, typename T, unsigned Dim = 3>
 class SecondaryParticleContainer : public ippl::ParticleBase<PLayout> {
@@ -156,7 +152,6 @@ public:
 
     ~SecondaryParticleContainer() {}
 
-    
     void initialize(Vector_t<T,Dim> rmin_, Vector_t<T,Dim> rmax_){
         //Kokkos::Random_XorShift64_Pool<> rand_pool64((size_type)(42 + 100 * ippl::Comm->rank()));
         rmin=rmin_;
@@ -176,6 +171,12 @@ public:
         Kokkos::fill_random(this->Sp.getView(), rand_pool64,2);
     }
 
+public: // physics
+    void spUpdate(double dt, unsigned int sp=0){
+        
+    }
+
+public: // old functions
     void getMuonMomenta(){
         Kokkos::parallel_for(
         this->getLocalNum(), 
@@ -283,10 +284,6 @@ private:
 };
 
 // 2. Species given by sorted containter
-/* 
-For the moment we consider only the case where the buffer regions are large enough,
-thus no shifting of particle regions occurs
-*/
 template <class PLayout, typename T, unsigned Dim = 3>
 class SortedParticleContainer : public ippl::ParticleBase<PLayout> {
     
@@ -429,6 +426,7 @@ public:
     void destroy(const Kokkos::View<bool*>& invalid,
                  const size_type destroyNum,
                  const unsigned int species) {
+        
         PAssert(destroyNum <= end[species]-start[species]);
         
         if(destroyNum == 0){
@@ -531,7 +529,7 @@ public: // physics
 
     void death(double freq, unsigned int sp=0){
         
-        bool_type lostParticles("lost particles", end[Sp]);
+        bool_type lostParticles("lost particles", start[Sp]);
         size_type nLost = 0;
 
         Kokkos::parallel_reduce(policy_type(start[sp], end[sp]),
@@ -543,14 +541,14 @@ public: // physics
             }
         },nLost);
         Kokkos::fence();
-
-        destroy(lostParticles, nLost, sp);
+        this->destroy(lostParticles, nLost, sp);
     }
     
     void birth(double freq, unsigned int sp=0){
+
         size_type new_particles;
         Kokkos::parallel_reduce(policy_type(start[sp], end[sp]),
-        [=,this](const int& i, size_type& sum){
+        [=,this](const int& , size_type& sum){
             auto rand_gen = rand_pool64.get_state();
             if(rand_gen.drand(0.0,1.0)<freq){
                 sum += 1;
@@ -569,6 +567,8 @@ private:
     Vector_t<double, Dim> rmin;
     Vector_t<double, Dim> rmax; 
 
+    //Vector_t<bool, 1> lost_particles; 
+
     Kokkos::Random_XorShift64_Pool<> rand_pool64; 
 };
 
@@ -581,14 +581,13 @@ int main(int argc, char* argv[]) {
 
         auto start = std::chrono::high_resolution_clock::now();
 
+        // Parse arguments: 
         int arg=1;
         unsigned int nSp        = std::atoi(argv[arg++]); 
         size_type ppSp          = std::atoll(argv[arg++]);
-        double b_freq          = std::atof(argv[arg++]);
-        double d_freq          = std::atof(argv[arg++]);
+        double b_freq           = std::atof(argv[arg++]);
+        double d_freq           = std::atof(argv[arg++]);
         const double dt         = 1.0;
-        msg << "Particle Container Test" << endl
-            << "nSp " << nSp << " ppSp = " << ppSp << endl;
 
         // Define Domain
         Vector_t<double, Dim> rmin(-1.0);
@@ -614,38 +613,43 @@ int main(int argc, char* argv[]) {
         PC->create(nSp * ppSp);
         PC->initialize(rmin,rmax);
         
-
-        static IpplTimings::TimerRef allParticle          = IpplTimings::getTimer("allParticle");
-        static IpplTimings::TimerRef spSpecific        = IpplTimings::getTimer("spSpecific");
-        static IpplTimings::TimerRef birthdeath    = IpplTimings::getTimer("birthdeath");
-        static IpplTimings::TimerRef create    = IpplTimings::getTimer("create");
-
-
+        // Timers
+        static IpplTimings::TimerRef mainTimer          = IpplTimings::getTimer("total");
+        static IpplTimings::TimerRef allUpdate          = IpplTimings::getTimer("allUpdate");
+        static IpplTimings::TimerRef specific           = IpplTimings::getTimer("specific");
+        static IpplTimings::TimerRef birth              = IpplTimings::getTimer("birth");
+        static IpplTimings::TimerRef death              = IpplTimings::getTimer("death");
+        
+        // Main iteration loop
+        IpplTimings::startTimer(mainTimer);
         msg << "Starting iterations..." << endl;
-        for(unsigned int it=0; it<10; it++){ 
+        for(unsigned int it=0; it<5; it++){ 
             std::cout << "Iteration " << it << std::endl;
+            
             // All particle update
-            IpplTimings::startTimer(allParticle);
+            IpplTimings::startTimer(allUpdate);
             PC->initialize(rmin,rmax);
-            IpplTimings::stopTimer(allParticle);
+            IpplTimings::stopTimer(allUpdate);
 
             // Species-specific deterministic
-            IpplTimings::startTimer(spSpecific);
             for(unsigned i=0;i<nSp;++i){
+                IpplTimings::startTimer(specific);
                 PC->spUpdate(dt, i);
+                IpplTimings::stopTimer(specific);
             }
-            IpplTimings::stopTimer(spSpecific);
             
             // birth/death
-            IpplTimings::startTimer(birthdeath);
             for(unsigned i=0;i<nSp;++i){
+                IpplTimings::startTimer(death);
                 PC->death(d_freq, i);
-                IpplTimings::startTimer(create);
+                IpplTimings::stopTimer(death);
+                IpplTimings::startTimer(birth);
                 PC->birth(b_freq, i);
-                IpplTimings::stopTimer(create);
+                IpplTimings::stopTimer(birth);
             }
-            IpplTimings::stopTimer(birthdeath);
         }
+        IpplTimings::stopTimer(mainTimer);
+
         msg << "Particle Container Test: End. " << endl;
         IpplTimings::print();
         IpplTimings::print(std::string("timing.dat"));
@@ -661,120 +665,4 @@ int main(int argc, char* argv[]) {
 }
 
 
-/* Original Main
-int main(int argc, char* argv[]) {
-    ippl::initialize(argc, argv);
-    {
-        // Message objects
-        Inform msg("ParticleContainerTest");
-        Inform msg2all(argv[0], INFORM_ALL_NODES);
-
-        // Timers
-        auto start = std::chrono::high_resolution_clock::now();
-        static IpplTimings::TimerRef mainTimer          = IpplTimings::getTimer("total");
-        static IpplTimings::TimerRef muonMomenta        = IpplTimings::getTimer("muonMomenta");
-        static IpplTimings::TimerRef electronMomenta    = IpplTimings::getTimer("electronMomenta");
-        static IpplTimings::TimerRef muonDrift          = IpplTimings::getTimer("muonDrift");
-        static IpplTimings::TimerRef electronDrift      = IpplTimings::getTimer("electronDrift");
-        static IpplTimings::TimerRef muonDecay          = IpplTimings::getTimer("muonDecay");
-        static IpplTimings::TimerRef ionization         = IpplTimings::getTimer("ionization");
-        static IpplTimings::TimerRef particleLoss       = IpplTimings::getTimer("particleLoss");
-
-        IpplTimings::startTimer(mainTimer);
-       
-        // Read inputs
-        
-        int arg=1;
-        const unsigned int nt   = std::atoi(argv[arg++]);
-        //unsigned int nSp        = std::atoi(argv[arg++]); 
-        size_type ppSp          = std::atoll(argv[arg++]);
-        const double dt              = 1.0;
-        msg << "Particle Container Test" << endl
-            << "nt " << nt << " ppSp = " << ppSp << endl;
-
-        // Define Domain
-        Vector_t<double, Dim> rmin(-1.0);
-        Vector_t<double, Dim> rmax(1.0); 
-        ippl::NDRegion<double,3> domain;
-        for(unsigned int d=0;d<Dim;++d){
-            domain[d] = ippl::PRegion<double>(-1,1);
-        }
-        
-        // Particle Layout
-        SecondaryParticleLayout<double,Dim> PL;
-        PL.setDomain(domain);
-        PL.setParticleBC(ippl::BC::PERIODIC);
-
-        // Particle Container Pointer
-        using container_type = SecondaryParticleContainer<SecondaryParticleLayout<double,Dim>, double, Dim>;
-        std::shared_ptr<container_type> PC = std::make_shared<container_type>(PL);
-
-        // Create particles
-        PC->create(2*ppSp);
-
-        // Initialize particle species, positions and momenta
-        PC->initialize(rmin, rmax);
-
-        // Initialize RNG
-        //Kokkos::Random_XorShift64_Pool<> rand_pool64((size_type)(42 + 100 * ippl::Comm->rank()));
-
-        // Simulation Loop
-        msg << "Starting iterations..." << endl;
-        for(unsigned int it=0; it<nt; it++){
-
-            //  Calculate Muon momenta
-            IpplTimings::startTimer(muonMomenta);
-            PC->getMuonMomenta(); 
-            IpplTimings::stopTimer(muonMomenta);
-        
-            // Muon drift
-            IpplTimings::startTimer(muonDrift);
-            PC->muonDrift(dt); 
-            IpplTimings::stopTimer(muonDrift);
-            
-            //  Calculate Electron momenta
-            IpplTimings::startTimer(electronMomenta);
-            PC->getElectronMomenta();
-            IpplTimings::stopTimer(electronMomenta); 
-            
-            // Electron drift
-            IpplTimings::startTimer(electronDrift);
-            PC->electronDrift(dt); 
-            IpplTimings::stopTimer(electronDrift);
-
-            // Apply BC
-            PC->update();
-
-            // Muon -> Electron Decay
-            IpplTimings::startTimer(muonDecay);
-            PC->muonDecay(); 
-            IpplTimings::stopTimer(muonDecay);
-
-            // Electron births through ionization
-            IpplTimings::startTimer(ionization);
-            PC->ionization();
-            IpplTimings::stopTimer(ionization);
-            
-            // Particle losses
-            IpplTimings::startTimer(particleLoss);
-            PC->particleLoss();
-            IpplTimings::stopTimer(particleLoss);
-            
-        }
-        // End Timings
-        msg << "Particle Container Test: End. " << endl;
-        IpplTimings::stopTimer(mainTimer);
-        IpplTimings::print();
-        IpplTimings::print(std::string("timing.dat"));
-        auto end = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double> time_chrono =
-            std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
-        std::cout << "Elapsed time: " << time_chrono.count() << std::endl;
-
-    }
-    ippl::finalize();
-
-    return 0;
-}
-*/
 
