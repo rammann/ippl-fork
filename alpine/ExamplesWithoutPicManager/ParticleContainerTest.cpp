@@ -1,10 +1,11 @@
 // Particle Container Test
 // Usage:
 //          srun ./ParticleContainerTest
-//              <nt> <ppsp> --overallocate 2.0 --info 5
+//              <nSp> <ppsp> <bdfreq> --overallocate 2.0 --info 5
 //
-//          nt    = No. timesteps 
-//          ppsp  = No. particles per species
+//          nSp     = No. species 
+//          ppsp    = No. particles per species
+//          bdfreq  = birth/death frequency
 
 #include "Ippl.h"
 
@@ -288,7 +289,12 @@ thus no shifting of particle regions occurs
 */
 template <class PLayout, typename T, unsigned Dim = 3>
 class SortedParticleContainer : public ippl::ParticleBase<PLayout> {
+    
     using Base = ippl::ParticleBase<PLayout>;
+    using view_type       = Kokkos::View<bool*>;
+    using memory_space    = typename view_type::memory_space;
+    using execution_space = typename view_type::execution_space;
+    using policy_type     = Kokkos::RangePolicy<execution_space>;
 
 public:
     typename Base::particle_position_type P; // Momenta
@@ -301,10 +307,24 @@ public:
             start[i]=0; // index of the first
             end[i]=0;   // index of the last + 1
         }
+        rand_pool64=Kokkos::Random_XorShift64_Pool<>((size_type)(42 + 100 * ippl::Comm->rank()));
     }
 
     ~SortedParticleContainer() {}
     
+    void initialize(Vector_t<T,Dim> rmin_, Vector_t<T,Dim> rmax_){
+        rmin=rmin_;
+        rmax=rmax_;
+        Kokkos::parallel_for(
+            Base::attributes_m.template get<memory_space>().size(), generate_random<Vector_t<double, Dim>, Kokkos::Random_XorShift64_Pool<>, Dim>(
+                      this->R.getView(), rand_pool64, rmin, rmax));
+        
+        Kokkos::parallel_for(
+            Base::attributes_m.template get<memory_space>().size(), generate_random<Vector_t<double, Dim>, Kokkos::Random_XorShift64_Pool<>, Dim>(
+                      this->P.getView(), rand_pool64, rmin, rmax));
+        Kokkos::fence();
+    }
+
     void create(size_type particles,unsigned int species=0){
         /* 
         Empty particle container -> create evenly spaced, 
@@ -406,8 +426,7 @@ public:
         }
     }
 
-    template <typename... Properties>
-    void destroy(const Kokkos::View<bool*, Properties...>& invalid,
+    void destroy(const Kokkos::View<bool*>& invalid,
                  const size_type destroyNum,
                  const unsigned int species) {
         PAssert(destroyNum <= end[species]-start[species]);
@@ -420,10 +439,6 @@ public:
             end[species] = start[species];
         }
 
-        using view_type       = Kokkos::View<bool*, Properties...>;
-        using memory_space    = typename view_type::memory_space;
-        using execution_space = typename view_type::execution_space;
-        using policy_type     = Kokkos::RangePolicy<execution_space>;
         auto& locDeleteIndex  = Base::deleteIndex_m.template get<memory_space>();
         auto& locKeepIndex    = Base::keepIndex_m.template get<memory_space>();
 
@@ -504,11 +519,57 @@ public:
         });
     }
 
+public: // physics
+
+    void spUpdate(double dt, unsigned int sp=0){
+        Kokkos::parallel_for(policy_type(start[sp], end[sp]), 
+        [=,this](const int i){
+            this->R(i) = this->R(i) + dt * this->P(i);
+        });
+        Kokkos::fence();
+    }
+
+    void death(double freq, unsigned int sp=0){
+        
+        bool_type lostParticles("lost particles", end[Sp]);
+        size_type nLost = 0;
+
+        Kokkos::parallel_reduce(policy_type(start[sp], end[sp]),
+        [=,this](const int& i, size_type&sum){
+            auto rand_gen = rand_pool64.get_state(); 
+            if(rand_gen.drand(0.0,1.0)<freq){
+                lostParticles(i)=1;
+                sum += 1;
+            }
+        },nLost);
+        Kokkos::fence();
+
+        destroy(lostParticles, nLost, sp);
+    }
+    
+    void birth(double freq, unsigned int sp=0){
+        size_type new_particles;
+        Kokkos::parallel_reduce(policy_type(start[sp], end[sp]),
+        [=,this](const int& i, size_type& sum){
+            auto rand_gen = rand_pool64.get_state();
+            if(rand_gen.drand(0.0,1.0)<freq){
+                sum += 1;
+            }
+            rand_pool64.free_state(rand_gen);
+        }, new_particles);
+        Kokkos::fence();
+        this->create(new_particles,sp); 
+    }
+
 private:
     const unsigned int Sp;
     std::vector<size_t>start;
     std::vector<size_t>end;
 
+    Vector_t<double, Dim> rmin;
+    Vector_t<double, Dim> rmax; 
+
+    Kokkos::Random_XorShift64_Pool<> rand_pool64; 
 };
 
 int main(int argc, char* argv[]) {
@@ -518,9 +579,14 @@ int main(int argc, char* argv[]) {
         Inform msg("ParticleContainerTest");
         Inform msg2all(argv[0], INFORM_ALL_NODES);
 
+        auto start = std::chrono::high_resolution_clock::now();
+
         int arg=1;
         unsigned int nSp        = std::atoi(argv[arg++]); 
         size_type ppSp          = std::atoll(argv[arg++]);
+        double b_freq          = std::atof(argv[arg++]);
+        double d_freq          = std::atof(argv[arg++]);
+        const double dt         = 1.0;
         msg << "Particle Container Test" << endl
             << "nSp " << nSp << " ppSp = " << ppSp << endl;
 
@@ -541,23 +607,53 @@ int main(int argc, char* argv[]) {
         using container_type = SortedParticleContainer<SecondaryParticleLayout<double,Dim>, double, Dim>;
         std::shared_ptr<container_type> PC = std::make_shared<container_type>(PL, nSp);
 
+        // RNG
+        Kokkos::Random_XorShift64_Pool<> rand_pool64((size_type)(42 + 100 * ippl::Comm->rank()));
+        
+        // Initialize Particles
         PC->create(nSp * ppSp);
-        PC->getIndexInfo();
-        PC->create(10, 0);
-        Kokkos::View<bool*> flags("flags", 100);
+        PC->initialize(rmin,rmax);
+        
 
-        // 2. Use a parallel_for to initialize the view's elements.
-        // This loop will be executed in parallel by the default execution space.
-        Kokkos::parallel_for("InitFlags", 100, KOKKOS_LAMBDA(const int i) {
-            // The lambda function is executed for each index 'i' from 0 to 99.
-            if (i < 10) {
-                flags(i) = true;
-            } else {
-                flags(i) = false;
+        static IpplTimings::TimerRef allParticle          = IpplTimings::getTimer("allParticle");
+        static IpplTimings::TimerRef spSpecific        = IpplTimings::getTimer("spSpecific");
+        static IpplTimings::TimerRef birthdeath    = IpplTimings::getTimer("birthdeath");
+        static IpplTimings::TimerRef create    = IpplTimings::getTimer("create");
+
+
+        msg << "Starting iterations..." << endl;
+        for(unsigned int it=0; it<10; it++){ 
+            std::cout << "Iteration " << it << std::endl;
+            // All particle update
+            IpplTimings::startTimer(allParticle);
+            PC->initialize(rmin,rmax);
+            IpplTimings::stopTimer(allParticle);
+
+            // Species-specific deterministic
+            IpplTimings::startTimer(spSpecific);
+            for(unsigned i=0;i<nSp;++i){
+                PC->spUpdate(dt, i);
             }
-        });
+            IpplTimings::stopTimer(spSpecific);
+            
+            // birth/death
+            IpplTimings::startTimer(birthdeath);
+            for(unsigned i=0;i<nSp;++i){
+                PC->death(d_freq, i);
+                IpplTimings::startTimer(create);
+                PC->birth(b_freq, i);
+                IpplTimings::stopTimer(create);
+            }
+            IpplTimings::stopTimer(birthdeath);
+        }
+        msg << "Particle Container Test: End. " << endl;
+        IpplTimings::print();
+        IpplTimings::print(std::string("timing.dat"));
+        auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> time_chrono =
+            std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
+        std::cout << "Elapsed time: " << time_chrono.count() << std::endl;
 
-        PC->destroy(flags, 10,0); 
         PC->generateDiagram();
     }
     ippl::finalize();
