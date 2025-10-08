@@ -1,7 +1,7 @@
 // Particle Container Test
 // Usage:
 //          srun ./ParticleContainerTest
-//              <nSp> <ppsp> <bdfreq> --overallocate 2.0 --info 5
+//              <nSp> <ppsp> <bfreq> <dfreq> --overallocate 2.0 --info 5
 //
 //          nSp     = No. species 
 //          ppsp    = No. particles per species
@@ -140,7 +140,7 @@ class SecondaryParticleContainer : public ippl::ParticleBase<PLayout> {
 
 public:
     typename Base::particle_position_type P; // Momenta
-    ParticleAttrib<int> Sp; // Particle Species 
+    ParticleAttrib<unsigned int> Sp; // Particle Species 
 
     SecondaryParticleContainer(PLayout& pl, unsigned int nsp)
         : Base(pl), nSp(nsp)
@@ -156,20 +156,15 @@ public:
     ~SecondaryParticleContainer() {}
 
     void initialize(Vector_t<T,Dim> rmin_, Vector_t<T,Dim> rmax_){
-        //Kokkos::Random_XorShift64_Pool<> rand_pool64((size_type)(42 + 100 * ippl::Comm->rank()));
         rmin=rmin_;
         rmax=rmax_;
         Kokkos::parallel_for(
             this->getLocalNum(), generate_random<Vector_t<double, Dim>, Kokkos::Random_XorShift64_Pool<>, Dim>(
                       this->R.getView(), rand_pool64, rmin, rmax));
-        Kokkos::fence();
-        
-        // Sample use same domain for P as for R
         Kokkos::parallel_for(
             this->getLocalNum(), generate_random<Vector_t<double, Dim>, Kokkos::Random_XorShift64_Pool<>, Dim>(
                       this->P.getView(), rand_pool64, rmin, rmax));
         Kokkos::fence();
-                
     }
 
 public: // physics
@@ -556,7 +551,8 @@ int main(int argc, char* argv[]) {
         PL.setParticleBC(ippl::BC::PERIODIC);
 
         // Particle Container Pointer
-        using container_type = SortedParticleContainer<SecondaryParticleLayout<double,Dim>, double, Dim>;
+        //using container_type = SecondaryParticleContainer<SecondaryParticleLayout<double,Dim>, double, Dim>;
+        //using container_type = SortedParticleContainer<SecondaryParticleLayout<double,Dim>, double, Dim>;
         std::shared_ptr<container_type> PC = std::make_shared<container_type>(PL, nSp);
 
         // RNG
@@ -611,7 +607,7 @@ int main(int argc, char* argv[]) {
             std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
         std::cout << "Elapsed time: " << time_chrono.count() << std::endl;
 
-        PC->generateDiagram();
+        //PC->generateDiagram();
     }
     ippl::finalize();
     return 0;
