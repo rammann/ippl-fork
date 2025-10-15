@@ -673,7 +673,7 @@ int main(int argc, char* argv[]) {
 
         // Particle Container Pointer
         //using container_type = SecondaryParticleContainer<SecondaryParticleLayout<double,Dim>, double, Dim>; 
-        //using container_type = SecondaryParticleContainer<SecondaryParticleLayout<double,Dim>, double, Dim>; 
+        //using container_type = SortedParticleContainer<SecondaryParticleLayout<double,Dim>, double, Dim>; 
         using container_type = SuperContainer<SecondaryParticleLayout<double,Dim>, double, Dim>; 
         std::shared_ptr<container_type> PC = std::make_shared<container_type>(PL, nSp);
 
