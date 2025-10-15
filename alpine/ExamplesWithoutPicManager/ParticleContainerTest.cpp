@@ -670,19 +670,6 @@ int main(int argc, char* argv[]) {
         SecondaryParticleLayout<double,Dim> PL;
         PL.setDomain(domain);
         PL.setParticleBC(ippl::BC::PERIODIC);
-
-        // Particle Container Pointer
-        //using container_type = SecondaryParticleContainer<SecondaryParticleLayout<double,Dim>, double, Dim>; 
-        //using container_type = SortedParticleContainer<SecondaryParticleLayout<double,Dim>, double, Dim>; 
-        using container_type = SuperContainer<SecondaryParticleLayout<double,Dim>, double, Dim>; 
-        std::shared_ptr<container_type> PC = std::make_shared<container_type>(PL, nSp);
-
-        // RNG
-        Kokkos::Random_XorShift64_Pool<> rand_pool64((size_type)(42 + 100 * ippl::Comm->rank()));
-        
-        // Initialize Particles
-        PC->create(nSp * ppSp);
-        PC->initialize(rmin,rmax);
         
         // Timers
         static IpplTimings::TimerRef mainTimer          = IpplTimings::getTimer("total");
@@ -690,37 +677,56 @@ int main(int argc, char* argv[]) {
         static IpplTimings::TimerRef specific           = IpplTimings::getTimer("specific");
         static IpplTimings::TimerRef birth              = IpplTimings::getTimer("birth");
         static IpplTimings::TimerRef death              = IpplTimings::getTimer("death");
-        
-        // Main iteration loop
-        IpplTimings::startTimer(mainTimer);
+       
+        // Particle Container Pointer
+        //using container_type = SecondaryParticleContainer<SecondaryParticleLayout<double,Dim>, double, Dim>; 
+        //using container_type = SortedParticleContainer<SecondaryParticleLayout<double,Dim>, double, Dim>; 
+        using container_type = SuperContainer<SecondaryParticleLayout<double,Dim>, double, Dim>; 
+       
         msg << "Starting iterations..." << endl;
-        for(unsigned int it=0; it<5; it++){ 
-            std::cout << "Iteration " << it << std::endl;
-            
-            // All particle update
-            IpplTimings::startTimer(allUpdate);
-            PC->initialize(rmin,rmax);
-            IpplTimings::stopTimer(allUpdate);
+        for(unsigned rep=0;rep<10;++rep){
+            std::shared_ptr<container_type> PC = std::make_shared<container_type>(PL, nSp);
 
-            // Species-specific deterministic
-            IpplTimings::startTimer(specific);
-            for(unsigned i=0;i<nSp;++i){
-                PC->spUpdate(dt, i);
-            }
-            Kokkos::fence(); 
-            IpplTimings::stopTimer(specific);
+            // RNG
+            Kokkos::Random_XorShift64_Pool<> rand_pool64((size_type)(42 + 100 * ippl::Comm->rank()));
             
-            // birth/death
-            for(unsigned i=0;i<nSp;++i){
-                IpplTimings::startTimer(death);
-                PC->death(d_freq, i);
-                IpplTimings::stopTimer(death);
-                IpplTimings::startTimer(birth);
-                PC->birth(b_freq, i);
-                IpplTimings::stopTimer(birth);
+            // Initialize Particles
+            PC->create(nSp * ppSp);
+            PC->initialize(rmin,rmax);
+            
+            
+            // Main iteration loop
+            IpplTimings::startTimer(mainTimer);
+            for(unsigned int it=0; it<20; it++){ 
+                std::cout << "Iteration " << it << std::endl;
+                
+                // All particle update
+                IpplTimings::startTimer(allUpdate);
+                PC->initialize(rmin,rmax);
+                IpplTimings::stopTimer(allUpdate);
+
+                // Species-specific deterministic
+                IpplTimings::startTimer(specific);
+                for(unsigned i=0;i<nSp;++i){
+                    PC->spUpdate(dt, i);
+                }
+                Kokkos::fence(); 
+                IpplTimings::stopTimer(specific);
+                
+                // birth/death
+                for(unsigned i=0;i<nSp;++i){
+                    IpplTimings::startTimer(death);
+                    PC->death(d_freq, i);
+                    IpplTimings::stopTimer(death);
+                    IpplTimings::startTimer(birth);
+                    PC->birth(b_freq, i);
+                    IpplTimings::stopTimer(birth);
+                }
             }
+            IpplTimings::stopTimer(mainTimer);
         }
-        IpplTimings::stopTimer(mainTimer);
+        
+        
 
         msg << "Particle Container Test: End. " << endl;
         IpplTimings::print();
