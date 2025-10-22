@@ -143,70 +143,68 @@ public:
     ParticleAttrib<unsigned int> Sp; // Particle Species 
 
     SecondaryParticleContainer(PLayout& pl, unsigned int nsp)
-        : Base(pl), nSp(nsp)
+        : Base(pl), nSp(nsp), rand_pool64((size_type)(42 + 100 * ippl::Comm->rank()))
     {
         this->addAttribute(P);
         this->addAttribute(Sp);
 
         //randomly sample species
-        Kokkos::Random_XorShift64_Pool<> rand_pool64=Kokkos::Random_XorShift64_Pool<>((size_type)(42 + 100 * ippl::Comm->rank()));  
+          
         Kokkos::fill_random(this->Sp.getView(), rand_pool64, nSp);
     }
 
     ~SecondaryParticleContainer() {}
 
     void initialize(Vector_t<T,Dim> rmin_, Vector_t<T,Dim> rmax_, unsigned int work){
-        Kokkos::Random_XorShift64_Pool<> rand_pool64=Kokkos::Random_XorShift64_Pool<>((size_type)(42 + 100 * ippl::Comm->rank()));  
         rmin=rmin_;
         rmax=rmax_;
+        auto rand_pool64_local_copy = this->rand_pool64;
         for(unsigned int w=0;w<work;++w){
             Kokkos::parallel_for(
                 this->getLocalNum(), generate_random<Vector_t<double, Dim>, Kokkos::Random_XorShift64_Pool<>, Dim>(
-                        this->R.getView(), rand_pool64, rmin, rmax));
+                        this->R.getView(), rand_pool64_local_copy, rmin, rmax));
             Kokkos::parallel_for(
                 this->getLocalNum(), generate_random<Vector_t<double, Dim>, Kokkos::Random_XorShift64_Pool<>, Dim>(
-                        this->P.getView(), rand_pool64, rmin, rmax));
+                        this->P.getView(), rand_pool64_local_copy, rmin, rmax));
         }
         Kokkos::fence();
     }
 
 public: // physics
     void spUpdate(double dt, unsigned int sp, unsigned int work){
-        Kokkos::Random_XorShift64_Pool<> rand_pool64=Kokkos::Random_XorShift64_Pool<>((size_type)(42 + 100 * ippl::Comm->rank()));
         auto Rview = this->R.getView();
         auto Pview = this->P.getView();
         auto Spview = this->Sp.getView();
+        auto rand_pool64_local_copy = this->rand_pool64;
         Kokkos::parallel_for(this->getLocalNum(), 
         KOKKOS_LAMBDA(const int& i){
             if(Spview(i)==sp){
-                auto rand_gen = rand_pool64.get_state();
+                auto rand_gen = rand_pool64_local_copy.get_state();
                 for(unsigned int w=0;w<work;++w){
                     Rview(i) = Rview(i) + dt * Pview(i);
                     Pview(i) = rand_gen.drand(0.0,1.0); 
                 }
-                rand_pool64.free_state(rand_gen); 
+                rand_pool64_local_copy.free_state(rand_gen); 
             }
         });    
         //Kokkos::fence();
     }
 
     void death(double freq, unsigned int sp=0){
-        
-        Kokkos::Random_XorShift64_Pool<> rand_pool64=Kokkos::Random_XorShift64_Pool<>((size_type)(42 + 100 * ippl::Comm->rank()));  
         auto Spview = this->Sp.getView();
-        
+        auto rand_pool64_local_copy = this->rand_pool64; 
         bool_type lostParticles("lost particles", this->getLocalNum());
         size_type nLost = 0;
 
         Kokkos::parallel_reduce(this->getLocalNum(),
         KOKKOS_LAMBDA(const int& i, size_type&sum){
             if(Spview(i)==sp){
-                auto rand_gen = rand_pool64.get_state(); 
+                auto rand_gen = rand_pool64_local_copy.get_state(); 
                 if(rand_gen.drand(0.0,1.0)<freq){
                     lostParticles(i)=1;
                     sum += 1;
                 }
-                rand_pool64.free_state(rand_gen);
+                rand_pool64_local_copy.free_state(rand_gen);
             }
         },nLost);
         Kokkos::fence();
@@ -214,20 +212,18 @@ public: // physics
     }
 
     void birth(double freq, unsigned int sp=0){
-
+        auto rand_pool64_local_copy = this->rand_pool64;
         auto Spview = this->Sp.getView();
-        Kokkos::Random_XorShift64_Pool<> rand_pool64=Kokkos::Random_XorShift64_Pool<>((size_type)(42 + 100 * ippl::Comm->rank()));;  
-
         size_type new_particles;
        
         Kokkos::parallel_reduce(this->getLocalNum(),
         KOKKOS_LAMBDA(const int& i, size_type& sum){
             if(Spview(i)==sp){
-                auto rand_gen = rand_pool64.get_state();
+                auto rand_gen = rand_pool64_local_copy.get_state();
                 if(rand_gen.drand(0.0,1.0)<freq){
                     sum += 1;
                 }
-                rand_pool64.free_state(rand_gen);
+                rand_pool64_local_copy.free_state(rand_gen);
             }
             
         }, new_particles);
@@ -245,6 +241,7 @@ private:
     Vector_t<double, Dim> rmin;
     Vector_t<double, Dim> rmax;
     unsigned int nSp;
+    Kokkos::Random_XorShift64_Pool<> rand_pool64;
 };
 
 // 2. Species given by sorted containter
@@ -261,7 +258,7 @@ public:
     typename Base::particle_position_type P; // Momenta
     
     SortedParticleContainer(PLayout& pl, unsigned int sp)
-        : Base(pl), Sp(sp), start(sp+1), end(sp)
+        : Base(pl), Sp(sp), start(sp+1), end(sp), rand_pool64((size_type)(42 + 100 * ippl::Comm->rank()))
     {
         this->addAttribute(P);
         for(unsigned i=0;i<Sp;++i){
@@ -273,18 +270,18 @@ public:
     ~SortedParticleContainer() {}
     
     void initialize(Vector_t<T,Dim> rmin_, Vector_t<T,Dim> rmax_, unsigned int work){
-        Kokkos::Random_XorShift64_Pool<> rand_pool64=Kokkos::Random_XorShift64_Pool<>((size_type)(42 + 100 * ippl::Comm->rank()));  
+        auto rand_pool64_local_copy = this->rand_pool64;
         rmin=rmin_;
         rmax=rmax_;
         for(unsigned i=0;i<Sp;++i){
             for(unsigned int w=0;w<work;++w){
                 Kokkos::parallel_for(policy_type(start[i], end[i]), 
                     generate_random<Vector_t<double, Dim>, Kokkos::Random_XorShift64_Pool<>, Dim>(
-                        this->R.getView(), rand_pool64, rmin, rmax));
+                        this->R.getView(), rand_pool64_local_copy, rmin, rmax));
             
                 Kokkos::parallel_for(policy_type(start[i], end[i]), 
                     generate_random<Vector_t<double, Dim>, Kokkos::Random_XorShift64_Pool<>, Dim>(
-                        this->P.getView(), rand_pool64, rmin, rmax));
+                        this->P.getView(), rand_pool64_local_copy, rmin, rmax));
             }
         }
         Kokkos::fence();
@@ -488,36 +485,34 @@ public:
 public: // physics
 
     void spUpdate(double dt, unsigned int sp, unsigned int work){
-        Kokkos::Random_XorShift64_Pool<> rand_pool64=Kokkos::Random_XorShift64_Pool<>((size_type)(42 + 100 * ippl::Comm->rank()));
+        auto rand_pool64_local_copy = this->rand_pool64;
         auto Rview = this->R.getView();
         auto Pview = this->P.getView();
         Kokkos::parallel_for(policy_type(start[sp], end[sp]), 
         KOKKOS_LAMBDA(const int i){
-            auto rand_gen = rand_pool64.get_state();
+            auto rand_gen = rand_pool64_local_copy.get_state();
             for(unsigned int w=0; w<work; ++w){
                 Rview(i) = Rview(i) + dt * Pview(i);
                 Pview(i) = rand_gen.drand(0.0,1.0);
             }
-            rand_pool64.free_state(rand_gen); 
+            rand_pool64_local_copy.free_state(rand_gen); 
         });
         //Kokkos::fence();
     }
 
     void death(double freq, unsigned int sp=0){
-
-        Kokkos::Random_XorShift64_Pool<> rand_pool64=Kokkos::Random_XorShift64_Pool<>((size_type)(42 + 100 * ippl::Comm->rank()));  
-
+        auto rand_pool64_local_copy = this->rand_pool64;
         bool_type lostParticles("lost particles", start[Sp]);
         size_type nLost = 0;
 
         Kokkos::parallel_reduce(policy_type(start[sp], end[sp]),
         KOKKOS_LAMBDA(const int& i, size_type&sum){
-            auto rand_gen = rand_pool64.get_state(); 
+            auto rand_gen = rand_pool64_local_copy.get_state(); 
             if(rand_gen.drand(0.0,1.0)<freq){
                 lostParticles(i)=1;
                 sum += 1;
             }
-            rand_pool64.free_state(rand_gen);
+            rand_pool64_local_copy.free_state(rand_gen);
         },nLost);
         Kokkos::fence();
         this->destroy(lostParticles, nLost, sp);
@@ -525,16 +520,15 @@ public: // physics
     
     void birth(double freq, unsigned int sp=0){
 
-        Kokkos::Random_XorShift64_Pool<> rand_pool64=Kokkos::Random_XorShift64_Pool<>((size_type)(42 + 100 * ippl::Comm->rank()));  
-
+        auto rand_pool64_local_copy = this->rand_pool64;
         size_type new_particles;
         Kokkos::parallel_reduce(policy_type(start[sp], end[sp]),
         KOKKOS_LAMBDA(const int& , size_type& sum){
-            auto rand_gen = rand_pool64.get_state();
+            auto rand_gen = rand_pool64_local_copy.get_state();
             if(rand_gen.drand(0.0,1.0)<freq){
                 sum += 1;
             }
-            rand_pool64.free_state(rand_gen);
+            rand_pool64_local_copy.free_state(rand_gen);
         }, new_particles);
         Kokkos::fence();
         this->create(new_particles,sp); 
@@ -547,6 +541,7 @@ private:
 
     Vector_t<double, Dim> rmin;
     Vector_t<double, Dim> rmax; 
+    Kokkos::Random_XorShift64_Pool<> rand_pool64;
 
     //Vector_t<bool, 1> lost_particles; 
 };
@@ -574,7 +569,7 @@ class SuperContainer{
 
 public:
     SuperContainer(PLayout& pl, unsigned int nsp)
-        : nSp(nsp)
+        : nSp(nsp), rand_pool64((size_type)(42 + 100 * ippl::Comm->rank()))
     {
         for(unsigned i=0;i<nSp;++i){
             species_m.push_back(std::make_unique<ParticleContainer>(pl));
@@ -592,49 +587,47 @@ public: // physics
     }
 
     void initialize(Vector_t<T,Dim> rmin_, Vector_t<T,Dim> rmax_, unsigned int work){
-        Kokkos::Random_XorShift64_Pool<> rand_pool64=Kokkos::Random_XorShift64_Pool<>((size_type)(42 + 100 * ippl::Comm->rank()));
+        auto rand_pool64_local_copy = this->rand_pool64;
         for(unsigned i=0;i<nSp;++i){
             for(unsigned int w=0;w<work;++w){
                 Kokkos::parallel_for(species_m[i]->getLocalNum(), generate_random<Vector_t<double, Dim>, Kokkos::Random_XorShift64_Pool<>, Dim>(
-                        species_m[i]->R.getView(), rand_pool64, rmin_, rmax_));
+                        species_m[i]->R.getView(), rand_pool64_local_copy, rmin_, rmax_));
                 Kokkos::parallel_for(species_m[i]->getLocalNum(), generate_random<Vector_t<double, Dim>, Kokkos::Random_XorShift64_Pool<>, Dim>(
-                        species_m[i]->P.getView(), rand_pool64, rmin_, rmax_));
+                        species_m[i]->P.getView(), rand_pool64_local_copy, rmin_, rmax_));
             }
        }
         Kokkos::fence();
     }
 
     void spUpdate(double dt, unsigned int sp, unsigned int work){
-        Kokkos::Random_XorShift64_Pool<> rand_pool64=Kokkos::Random_XorShift64_Pool<>((size_type)(42 + 100 * ippl::Comm->rank()));
+        auto rand_pool64_local_copy = this->rand_pool64;
         auto Rview = species_m[sp]->R.getView();
         auto Pview = species_m[sp]->P.getView();
         Kokkos::parallel_for(species_m[sp]->getLocalNum(), 
         KOKKOS_LAMBDA(const int& i){
-            auto rand_gen = rand_pool64.get_state();
+            auto rand_gen = rand_pool64_local_copy.get_state();
             for(unsigned int w=0; w<work; ++w){
                 Rview(i) = Rview(i) + dt * Pview(i);
                 Pview(i) = rand_gen.drand(0.0,1.0);
             }
-            rand_pool64.free_state(rand_gen);
+            rand_pool64_local_copy.free_state(rand_gen);
         });    
         //Kokkos::fence();
     }
 
     void death(double freq, unsigned int sp){
-        
-        Kokkos::Random_XorShift64_Pool<> rand_pool64=Kokkos::Random_XorShift64_Pool<>((size_type)(42 + 100 * ippl::Comm->rank()));
-
+        auto rand_pool64_local_copy = this->rand_pool64;
         bool_type lostParticles("lost particles", species_m[sp]->getLocalNum());
         size_type nLost = 0;
 
         Kokkos::parallel_reduce(species_m[sp]->getLocalNum(),
         KOKKOS_LAMBDA(const int& i, size_type&sum){
-            auto rand_gen = rand_pool64.get_state(); 
+            auto rand_gen = rand_pool64_local_copy.get_state(); 
             if(rand_gen.drand(0.0,1.0)<freq){
                 lostParticles(i)=1;
                 sum += 1;
             }
-            rand_pool64.free_state(rand_gen);
+            rand_pool64_local_copy.free_state(rand_gen);
             
         },nLost);
         Kokkos::fence();
@@ -642,17 +635,15 @@ public: // physics
     }
 
     void birth(double freq, unsigned int sp){
-
-        Kokkos::Random_XorShift64_Pool<> rand_pool64=Kokkos::Random_XorShift64_Pool<>((size_type)(42 + 100 * ippl::Comm->rank()));
-
+        auto rand_pool64_local_copy = this->rand_pool64;
         size_type new_particles;
         Kokkos::parallel_reduce(species_m[sp]->getLocalNum(),
         KOKKOS_LAMBDA(const int&, size_type& sum){
-            auto rand_gen = rand_pool64.get_state();
+            auto rand_gen = rand_pool64_local_copy.get_state();
             if(rand_gen.drand(0.0,1.0)<freq){
                 sum += 1;
             }
-            rand_pool64.free_state(rand_gen);
+            rand_pool64_local_copy.free_state(rand_gen);
             
         }, new_particles);
         Kokkos::fence();
@@ -662,6 +653,7 @@ public: // physics
 private:
     unsigned int nSp;
     std::vector<std::unique_ptr<ParticleContainer>> species_m;
+    Kokkos::Random_XorShift64_Pool<> rand_pool64;
 };
 
 int main(int argc, char* argv[]) {
@@ -709,9 +701,6 @@ int main(int argc, char* argv[]) {
         msg << "Starting iterations..." << endl;
         for(unsigned rep=0;rep<10;++rep){
             std::shared_ptr<container_type> PC = std::make_shared<container_type>(PL, nSp);
-
-            // RNG
-            Kokkos::Random_XorShift64_Pool<> rand_pool64((size_type)(42 + 100 * ippl::Comm->rank()));
             
             // Initialize Particles
             PC->create(nSp * ppSp);
@@ -725,13 +714,13 @@ int main(int argc, char* argv[]) {
                 
                 // All particle update
                 IpplTimings::startTimer(allUpdate);
-                PC->initialize(rmin,rmax,100);
+                PC->initialize(rmin,rmax,20);
                 IpplTimings::stopTimer(allUpdate);
 
                 // Species-specific deterministic
                 IpplTimings::startTimer(specific);
                 for(unsigned i=0;i<nSp;++i){
-                    PC->spUpdate(dt, i,100);
+                    PC->spUpdate(dt, i,20);
                 }
                 Kokkos::fence(); 
                 IpplTimings::stopTimer(specific);
