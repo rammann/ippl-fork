@@ -147,10 +147,6 @@ public:
     {
         this->addAttribute(P);
         this->addAttribute(Sp);
-
-        //randomly sample species
-          
-        Kokkos::fill_random(this->Sp.getView(), rand_pool64, nSp);
     }
 
     ~SecondaryParticleContainer() {}
@@ -168,6 +164,10 @@ public:
                         this->P.getView(), rand_pool64_local_copy, rmin, rmax));
         }
         Kokkos::fence();
+    }
+    
+    void sampleSp(){
+        Kokkos::fill_random(this->Sp.getView(), rand_pool64, nSp);
     }
 
 public: // physics
@@ -285,6 +285,10 @@ public:
             }
         }
         Kokkos::fence();
+    }
+
+    void sampleSp(){
+        return;
     }
 
     void create(size_type particles,unsigned int species=0){
@@ -575,6 +579,10 @@ public:
             species_m.push_back(std::make_unique<ParticleContainer>(pl));
         }
     }
+
+    void sampleSp(){
+        return;
+    }
 public: // physics
     void create(size_type particles){
         for(unsigned i=0;i<nSp;++i){
@@ -705,7 +713,7 @@ int main(int argc, char* argv[]) {
             // Initialize Particles
             PC->create(nSp * ppSp);
             PC->initialize(rmin,rmax,1);
-            
+            PC->sampleSp();
             
             // Main iteration loop
             IpplTimings::startTimer(mainTimer);
