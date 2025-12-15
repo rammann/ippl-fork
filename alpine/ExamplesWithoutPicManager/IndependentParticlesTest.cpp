@@ -1,6 +1,6 @@
 // IndependentParticlesTest
 // //   Usage:
-//     srun ./IndependentParticlesTest
+// mpirun -n <num_ranks> ./IndependentParticlesTest
 
 #include <Kokkos_Random.hpp>
 #include <chrono>
@@ -23,8 +23,12 @@ constexpr unsigned Dim = 3;
 
 const char* TestName = "IndependentParticleTest";
 
+/**
+ * @brief Random number generation
+ */ 
 template <typename T, class GeneratorPool, unsigned Dim>
-struct generate_random {
+struct generate_random 
+{
     using view_type = typename ippl::detail::ViewType<T, 1>::view_type;
     // Output View for the random numbers
     view_type vals;
@@ -55,15 +59,32 @@ struct generate_random {
     }
 };
 
+/**
+ * @class Node
+ * @brief A class representing a node in a tree structure.
+ * 
+ * @tparam size_type The type used for sizes and indices.
+ */
 template <typename size_type>
 class Node {
 public:
+/* ============================ Constructors ================================ */
     Node() = default; 
-    Node(size_type depth, std::shared_ptr<Node<size_type>> parent, size_type numleaves): 
+    /** 
+     * @brief Construct a new Node object
+     * 
+     * @param depth The depth of the node in the tree.
+     * @param parent A shared pointer to the parent node.
+     * @param numleaves The number of leaves to distribute from this node.
+     */
+    Node(
+        size_type depth, 
+        std::shared_ptr<Node<size_type>> parent, 
+        size_type numleaves): 
         depth_m(depth), 
-        numLeaves_m(numleaves){
+        numLeaves_m(numleaves)
+        {
             if(depth!=0){
-                //parent_m=std::make_shared<Node<size_type>>(*parent);
                 parent_m=parent;
             }
             else{
@@ -75,13 +96,22 @@ public:
             }
             
         } 
+/* ========================================================================== */
 private:
+/* ============================ Variables =================================== */
+    // Order of the node in the tree (id)
     size_type order_m;
+    // Depth of the node in the tree
     size_type depth_m;
+    // Number of leaves to distribute from this node
     size_type numLeaves_m;
+    // Pointer to the parent node
     std::shared_ptr<Node<size_type>> parent_m;
+    // Array of pointers to child nodes (max 3 children)
     std::array<std::shared_ptr<Node<size_type>>, 3> children_m;
+    // Number of children this node has
     size_type numChildren_m;
+/* ========================================================================== */
 public:
     size_type getDepth(){
         return this->depth_m;
@@ -110,22 +140,35 @@ public:
     }
 };
 
-//template <typename size_type=size_type>
+/**
+ * @class Tree
+ * @brief A class representing a tree structure.
+ * 
+ * @tparam size_type The type used for sizes and indices.
+ */
 class Tree{
 public: // constructors
     Tree() = default;
-    Tree(size_type numNodes): numNodes_m(numNodes){
+    Tree(size_type numNodes): numNodes_m(numNodes)
+    {
+        // Determine tree structure
         determineBinDepth();
         determineNumLeaves();    
-        //std::cout << "Calculated binDepth = " << binDepth_m << std::endl;
-        //std::cout << "Calculated numLeafNodes_to_distribute for root = " << numLeafNodes_m << std::endl;
+        // Create roots
         root_m = std::make_shared<Node<size_type>>(0, nullptr, numLeafNodes_m);
+        // Create children recursively
         createChildren(root_m);
         determineOrder(root_m); 
+
+        generateGraphvizOutput(root_m, "tree.dot");
     }
 
 public: // member functions
-    void determineBinDepth(){
+    /**
+     * @brief Determine the depths of the binary part of the tree.
+     */
+    void determineBinDepth()
+    {
         size_type depth=0;
         size_type count=0;
         while(count<this->numNodes_m){
@@ -134,21 +177,35 @@ public: // member functions
         }
         this->binDepth_m = depth-1;
     }
-    void determineNumLeaves(){
+    /**
+     * @brief Determines the number of leaves in the tree.
+     */
+    void determineNumLeaves()
+    {
         this->numLeafNodes_m=this->numNodes_m-(2<<this->binDepth_m)+1;
     }
-    void createChildren(std::shared_ptr<Node<size_type>> parent){
+
+    /**
+     * @brief Recursively create children for a given parent node.
+     */
+    void createChildren(std::shared_ptr<Node<size_type>> parent)
+    {
+        // Binary part of the tree
         if(parent->getDepth()<this->binDepth_m){
             std::shared_ptr<Node<size_type>> rChild_ptr;
             std::shared_ptr<Node<size_type>> lChild_ptr;
             size_type temp=3<<(this->binDepth_m-parent->getDepth()-1);
             if(temp >= parent->getNumLeaves()){
-                rChild_ptr = std::make_shared<Node<size_type>>(parent->getDepth()+1, parent, parent->getNumLeaves());
-                lChild_ptr = std::make_shared<Node<size_type>>(parent->getDepth()+1, parent, 0);
+                rChild_ptr = std::make_shared<Node<size_type>>
+                    (parent->getDepth()+1, parent, parent->getNumLeaves());
+                lChild_ptr = std::make_shared<Node<size_type>>
+                    (parent->getDepth()+1, parent, 0);
             }
             else if(temp < parent->getNumLeaves()){
-                rChild_ptr = std::make_shared<Node<size_type>>(parent->getDepth()+1, parent, temp);
-                lChild_ptr = std::make_shared<Node<size_type>>(parent->getDepth()+1, parent, parent->getNumLeaves()-temp);
+                rChild_ptr = std::make_shared<Node<size_type>>
+                    (parent->getDepth()+1, parent, temp);
+                lChild_ptr = std::make_shared<Node<size_type>>
+                    (parent->getDepth()+1, parent, parent->getNumLeaves()-temp);
             }
             else{
                 assert(false && "error");
@@ -159,9 +216,12 @@ public: // member functions
             createChildren(rChild_ptr);    
             return;
         }
+        // Leaf level of the tree
         else if(parent->getDepth()==this->binDepth_m){
             for (size_type i = 0; i < parent->getNumLeaves(); i++){
-                std::shared_ptr<Node<size_type>> leafNode_ptr=std::make_shared<Node<size_type>>(parent->getDepth()+1, parent, 0);
+                std::shared_ptr<Node<size_type>> leafNode_ptr
+                    =std::make_shared<Node<size_type>>
+                    (parent->getDepth()+1, parent, 0);
                 parent->addChild(leafNode_ptr);
             }
             return;
@@ -171,6 +231,9 @@ public: // member functions
         }
     }
     
+    /**
+     * @brief Recursively determine the order of nodes in the tree (set ids).
+     */
     void determineOrder(std::shared_ptr<Node<size_type>> node){
         static size_type current=0;
         node->setOrder(current);
