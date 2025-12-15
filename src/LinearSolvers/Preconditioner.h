@@ -312,7 +312,7 @@ namespace ippl {
                 // due to the matrix-free evaluation.
                 // Therefore, we need this if to differentiate
                 // the two cases.
-                if constexpr (std::is_same_v<InvDiagF, double>) {
+                if constexpr (std::is_same_v<InvDiagF, std::function<double(Field)>>) {
                     g = inverse_diagonal_m(g) * g;
                 } else {
                     g = inverse_diagonal_m(g);
@@ -333,6 +333,70 @@ namespace ippl {
         InvDiagF inverse_diagonal_m;
         unsigned innerloops_m;
         Field ULg_m;
+    };
+
+    /*!
+     * Alternative Richardson preconditioner
+     * Given the linear system of equations Ax=b the update steps are performed as follows:
+     * x_{k+1} = x_k + D^{-1}*(b-A*x_k)
+     * A derivation of this preconditioner can be found at:
+     * https://jschoeberl.github.io/iFEM/iterative/preconditioning.html
+     */
+    template <typename Field, typename OperatorF, typename InvDiagF>
+    struct richardson_preconditioner_alt : public preconditioner<Field> {
+        constexpr static unsigned Dim = Field::dim;
+        using mesh_type               = typename Field::Mesh_t;
+        using layout_type             = typename Field::Layout_t;
+
+        richardson_preconditioner_alt(OperatorF&& op, InvDiagF&& inverse_diagonal,
+                                  unsigned innerloops = 5)
+            : preconditioner<Field>("Richardson_alt")
+            , innerloops_m(innerloops) {
+            op_m  = std::move(op);
+            inverse_diagonal_m = std::move(inverse_diagonal);
+        }
+
+        Field operator()(Field& r) override {
+            mesh_type& mesh     = r.get_mesh();
+            layout_type& layout = r.getLayout();
+            Field g(mesh, layout);
+            Field g_old(mesh, layout);
+            g = 0;
+            g_old = 0;
+
+            for (unsigned int j = 0; j < innerloops_m; ++j) {
+                Ag_m = op_m(g);
+                g     = r - Ag_m;
+
+                // The inverse diagonal is applied to the
+                // vector itself to return the result usually.
+                // However, the operator for FEM already
+                // returns the result of inv_diag * itself
+                // due to the matrix-free evaluation.
+                // Therefore, we need this if to differentiate
+                // the two cases.
+                if constexpr (std::is_same_v<InvDiagF, std::function<double(Field)>>) {
+                    g = g_old + inverse_diagonal_m(g) * g;
+                } else {
+                    g = g_old + inverse_diagonal_m(g);
+                }
+                g_old = g.deepCopy();
+            }
+            return g;
+        }
+
+        void init_fields(Field& b) override {
+            layout_type& layout = b.getLayout();
+            mesh_type& mesh     = b.get_mesh();
+
+            Ag_m = Field(mesh, layout);
+        }
+
+    protected:
+        OperatorF op_m;
+        InvDiagF inverse_diagonal_m;
+        unsigned innerloops_m;
+        Field Ag_m;
     };
 
     /*!
@@ -375,7 +439,7 @@ namespace ippl {
                     // due to the matrix-free evaluation.
                     // Therefore, we need this if to differentiate
                     // the two cases.
-                    if constexpr (std::is_same_v<InvDiagF, double>) {
+                    if constexpr (std::is_same_v<InvDiagF, std::function<double(Field)>>) {
                         x = inverse_diagonal_m(x) * x;
                     } else {
                         x = inverse_diagonal_m(x);
@@ -393,7 +457,7 @@ namespace ippl {
                     // due to the matrix-free evaluation.
                     // Therefore, we need this if to differentiate
                     // the two cases.
-                    if constexpr (std::is_same_v<InvDiagF, double>) {
+                    if constexpr (std::is_same_v<InvDiagF, std::function<double(Field)>>) {
                         x = inverse_diagonal_m(x) * x;
                     } else {
                         x = inverse_diagonal_m(x);
@@ -469,7 +533,7 @@ namespace ippl {
             // Therefore, we need this if to differentiate
             // the two cases.
             for (unsigned int k = 0; k < outerloops_m; ++k) {
-                if constexpr (std::is_same_v<DiagF, double>) {
+                if constexpr (std::is_same_v<InvDiagF, std::function<double(Field)>>) {
                     UL_m = upper_m(x);
                     D    = diagonal_m(x);
                     r_m  = omega_m * (b - UL_m) + (1.0 - omega_m) * D * x;

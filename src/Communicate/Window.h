@@ -33,7 +33,8 @@ namespace ippl {
             class Window {
             public:
                 Window()
-                    : count_m(-1)
+                    : win_m(MPI_WIN_NULL)
+                    , count_m(-1)
                     , attached_m(false)
                     , allocated_m(false) {}
 
@@ -59,17 +60,11 @@ namespace ippl {
                          Request* request = nullptr);
 
                 template <typename T>
-                void put(const T& value, int dest, unsigned int pos, Request* request = nullptr);
-
-                template <typename T>
                 void put(const T* value, int dest, unsigned int pos, Request* request = nullptr);
 
                 template <std::contiguous_iterator Iter>
                 void get(Iter first, Iter last, int source, unsigned int pos,
                          Request* request = nullptr);
-
-                template <typename T>
-                void get(T& value, int source, unsigned int pos, Request* request = nullptr);
 
                 template <typename T>
                 void get(T* value, int source, unsigned int pos, Request* request = nullptr);

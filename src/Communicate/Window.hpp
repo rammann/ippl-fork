@@ -11,7 +11,10 @@ namespace ippl {
 
             template <TargetComm Target>
             Window<Target>::~Window() {
-                MPI_Win_free(&win_m);
+                if (win_m != MPI_WIN_NULL) {
+                    MPI_Win_free(&win_m);
+                    win_m = MPI_WIN_NULL;
+                }
             }
 
             template <TargetComm Target>
@@ -91,12 +94,6 @@ namespace ippl {
 
             template <TargetComm Target>
             template <typename T>
-            void Window<Target>::put(const T& value, int dest, unsigned int pos, Request* request) {
-                this->put(&value, dest, pos, request);
-            }
-
-            template <TargetComm Target>
-            template <typename T>
             void Window<Target>::put(const T* value, int dest, unsigned int pos, Request* request) {
                 MPI_Datatype datatype = get_mpi_datatype<T>(*value);
                 if (request == nullptr) {
@@ -122,12 +119,6 @@ namespace ippl {
                     MPI_Rget(&(*first), count, datatype, source, (MPI_Aint)pos, count, datatype,
                              win_m, *request);
                 }
-            }
-
-            template <TargetComm Target>
-            template <typename T>
-            void Window<Target>::get(T& value, int source, unsigned int pos, Request* request) {
-                this->get(&value, source, pos, request);
             }
 
             template <TargetComm Target>
