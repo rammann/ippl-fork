@@ -172,6 +172,71 @@ namespace ippl {
     }
 
     template <typename T, class... Properties>
+    template <typename Field, class PT, typename policy_type>
+    void ParticleAttrib<T, Properties...>::scatterConstValue(
+        Field& f, const ParticleAttrib<Vector<PT, Field::dim>, Properties...>& pp,
+        policy_type iteration_policy, hash_type hash_array, value_type const_value) const {
+        constexpr unsigned Dim = Field::dim;
+        using PositionType     = typename Field::Mesh_t::value_type;
+
+        static IpplTimings::TimerRef scatterConstValueTimer = 
+            IpplTimings::getTimer("scatterConstValue");
+        IpplTimings::startTimer(scatterConstValueTimer);
+        using view_type = typename Field::view_type;
+        view_type view  = f.getView();
+
+        using mesh_type       = typename Field::Mesh_t;
+        const mesh_type& mesh = f.get_mesh();
+
+        using vector_type = typename mesh_type::vector_type;
+        using value_type  = typename ParticleAttrib<T, Properties...>::value_type;
+
+        const vector_type& dx     = mesh.getMeshSpacing();
+        const vector_type& origin = mesh.getOrigin();
+        const vector_type invdx   = 1.0 / dx;
+
+        const FieldLayout<Dim>& layout = f.getLayout();
+        const NDIndex<Dim>& lDom       = layout.getLocalNDIndex();
+        const int nghost               = f.getNghost();
+
+        //using policy_type = Kokkos::RangePolicy<execution_space>;
+        const bool useHashView = hash_array.extent(0) > 0;
+        if (useHashView && (iteration_policy.end() > hash_array.extent(0))) {
+            Inform m("scatter");
+            m << "Hash array was passed to scatter, but size does not match iteration policy." << endl;
+            ippl::Comm->abort();
+        }
+
+        value_type cvalue = const_value;
+        auto ppview = pp.getView();
+        Kokkos::parallel_for(
+            "ParticleAttrib::scatter", iteration_policy,
+            KOKKOS_LAMBDA(const size_t idx) {
+                // map index to possible hash_map
+                size_t mapped_idx = useHashView ? hash_array(idx) : idx;
+
+                // find nearest grid point
+                vector_type l                        = (ppview(mapped_idx) - origin) * invdx + 0.5;
+                Vector<int, Field::dim> index        = l;
+                Vector<PositionType, Field::dim> whi = l - index;
+                Vector<PositionType, Field::dim> wlo = 1.0 - whi;
+
+                Vector<size_t, Field::dim> args = index - lDom.first() + nghost;
+
+                // scatter
+                const value_type& val = cvalue;
+                detail::scatterToField(std::make_index_sequence<1 << Field::dim>{}, view, wlo, whi,
+                                       args, val);
+            });
+        IpplTimings::stopTimer(scatterConstValueTimer);
+
+        static IpplTimings::TimerRef accumulateHaloTimer = IpplTimings::getTimer("accumulateHalo");
+        IpplTimings::startTimer(accumulateHaloTimer);
+        f.accumulateHalo();
+        IpplTimings::stopTimer(accumulateHaloTimer);
+    }
+
+    template <typename T, class... Properties>
     template <typename Field, typename P2>
     void ParticleAttrib<T, Properties...>::gather(
         Field& f, const ParticleAttrib<Vector<P2, Field::dim>, Properties...>& pp,
@@ -316,6 +381,11 @@ namespace ippl {
                         policy_type iteration_policy, typename Attrib1::hash_type hash_array = {}) {
         attrib.scatter(f, pp, iteration_policy, hash_array);
     }
+
+    template <typename T, typename Field, typename Attrib,
+    inline void scatterConstValue(T const_value, Field& f, const Attrib& pp) {
+        pp.scatterConstValue(f, const_value);
+    } 
 
     /**
      * @brief Non-class interface for gathering field data into a particle attribute.

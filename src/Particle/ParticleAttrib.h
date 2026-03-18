@@ -162,6 +162,38 @@ namespace ippl {
                      policy_type iteration_policy, hash_type hash_array = {}) const;
 
         /**
+         * @brief Scatter a constant value onto a field.
+         *
+         * This function scatters a const value onto the given field,
+         * using the given position attribute.
+         * The function can be used together with a custom iteration policy to iterate
+         * over a specified range and, optionally, an `ippl::hash_type` array to remap
+         * iteration indices.
+         *
+         * When a non-empty `hash_array` is provided, the function:
+         *  - Checks that the iteration policy's range does not exceed the size of `hash_array`.
+         *  - Maps the current index to the appropriate index using the `hash_array`.
+         *  - Careful: access pattern optimization might be lost when using `hash_array`.
+         *
+         * @note This custom iteration functionality is needed to support energy binning
+         * in the field solver of OPAL-X, allowing only particles within a specific bin
+         * to be scattered.
+         *
+         * @tparam Field The type of the field.
+         * @tparam P2 The type for the position attribute.
+         * @tparam policy_type The type of the Kokkos iteration policy when using `hash_array`.
+         * @param f The field onto which the particle data is scattered.
+         * @param pp The ParticleAttrib representing particle positions.
+         * @param iteration_policy A custom `Kokkos::range_policy` defining the iteration range.
+         * @param hash_array An optional `ippl::hash_type` array for index mapping. If empty, no map
+         * is used.
+         * @param const_value The constant value to be scattered onto the field
+         */
+        template <typename Field, typename P2, typename policy_type>
+        void scatterConstValue(Field& f, const ParticleAttrib<Vector<P2, Field::dim>, Properties...>& pp,
+                     policy_type iteration_policy, hash_type hash_array = {}, value_type const_value=0) const;
+        
+        /**
          * @brief Gather field data into the particle attribute.
          *
          * This function gathers data from the given field into the particle attribute

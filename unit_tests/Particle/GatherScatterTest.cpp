@@ -339,6 +339,90 @@ TYPED_TEST(GatherScatterTest, ScatterCustomHashTest) {
     ASSERT_NEAR(Q_total, Total_charge_field, 1e-6);
 }
 
+//
+// ScatterConstValueCustomRangeTest:
+// Scatter a constant value for only a subset defined by a custom range policy.
+// Then compare the total value in the field to the expected \(N_\text{scattered} \times c\).
+//
+TYPED_TEST(GatherScatterTest, ScatterConstValueCustomRangeTest) {
+    const size_t n = this->nScatter;
+    if (n % ippl::Comm->size() != 0) {
+        GTEST_SKIP() << "nScatter not divisible by number of ranks.";
+    }
+    this->fillRandomPositions(n);
+
+    using Mesh_t    = typename TestFixture::mesh_type;
+    using FieldType = ippl::Field<typename TestFixture::scalar_type, TestFixture::dim, Mesh_t,
+                                  typename Mesh_t::DefaultCentering, typename TestFixture::exec_space>;
+    FieldType field;
+    field.initialize(this->mesh, this->layout);
+    field = 0.0;
+
+    const size_t rank = ippl::Comm->rank();
+    const size_t nLoc = this->bunch->getLocalNum();
+    const size_t NScattered = nLoc / 2 + rank;
+
+    const typename TestFixture::scalar_type cvalue = 2.5;
+    double expected_total = static_cast<double>(cvalue) * static_cast<double>(NScattered);
+    ippl::Comm->allreduce(expected_total, 1, std::plus<double>());
+
+    Kokkos::RangePolicy<typename TestFixture::exec_space> policy(0, NScattered);
+    // Note: scatterConstValue is a member on the attribute; the attribute itself is not used,
+    // but provides the templated entry point and execution space.
+    this->bunch->Q.scatterConstValue(field, this->bunch->R, policy, {}, cvalue);
+
+    const double total_field = field.sum();
+    ASSERT_NEAR(expected_total, total_field, 1e-6);
+}
+
+//
+// ScatterConstValueCustomHashTest:
+// Scatter a constant value for the first NScattered particles as determined by a shuffled hash map.
+// Then compare the field’s total to the expected \(N_\text{scattered} \times c\).
+//
+TYPED_TEST(GatherScatterTest, ScatterConstValueCustomHashTest) {
+    const size_t n = this->nScatter / ippl::Comm->size();
+    if (this->nScatter % ippl::Comm->size() > 0) {
+        GTEST_SKIP() << "nScatter not divisible by number of ranks.";
+    }
+    this->fillRandomPositions(n);
+
+    const size_t rank = ippl::Comm->rank();
+    const size_t nLoc = this->bunch->getLocalNum();
+    const size_t NScattered = nLoc / 2 + rank;
+
+    using Mesh_t    = typename TestFixture::mesh_type;
+    using FieldType = ippl::Field<typename TestFixture::scalar_type, TestFixture::dim, Mesh_t,
+                                  typename Mesh_t::DefaultCentering, typename TestFixture::exec_space>;
+    FieldType field;
+    field.initialize(this->mesh, this->layout);
+    field = 0.0;
+
+    // Create a custom hash using a shuffled index array
+    using hash_type = typename TestFixture::bunch_type::charge_container_type::hash_type;
+    hash_type hash("indexArray", nLoc);
+    std::mt19937_64 eng(42);
+    std::vector<int> host_indices(nLoc);
+    std::iota(host_indices.begin(), host_indices.end(), 0);
+    std::shuffle(host_indices.begin(), host_indices.end(), eng);
+
+    auto hash_host = Kokkos::create_mirror_view(hash);
+    for (size_t i = 0; i < nLoc; ++i) {
+        hash_host(i) = host_indices[i];
+    }
+    Kokkos::deep_copy(hash, hash_host);
+
+    const typename TestFixture::scalar_type cvalue = 3.0;
+    double expected_total = static_cast<double>(cvalue) * static_cast<double>(NScattered);
+    ippl::Comm->allreduce(expected_total, 1, std::plus<double>());
+
+    Kokkos::RangePolicy<typename TestFixture::exec_space> policy(0, NScattered);
+    this->bunch->Q.scatterConstValue(field, this->bunch->R, policy, hash, cvalue);
+
+    const double total_field = field.sum();
+    ASSERT_NEAR(expected_total, total_field, 1e-6);
+}
+
 int main(int argc, char* argv[]) {
     ippl::initialize(argc, argv);
     int result = 1;
